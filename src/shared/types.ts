@@ -1,6 +1,25 @@
 export type ProxyType = "ss" | "ssr" | "vmess" | "vless" | "trojan" | "snell" | "socks5" | "http" | "hysteria2" | "tuic" | "wireguard";
 export type TargetFormat = "mihomo" | "sing-box";
 
+export interface SessionUser {
+  username: string;
+  isAdmin: boolean;
+}
+
+export interface UserAccount extends SessionUser {
+  id: string;
+  disabled: boolean;
+  projectCount: number;
+  createdAt: string;
+}
+
+export interface KernelValidationResult {
+  available: boolean;
+  valid?: boolean;
+  engine: TargetFormat;
+  output: string;
+}
+
 export interface ProxyNode {
   id: string;
   name: string;

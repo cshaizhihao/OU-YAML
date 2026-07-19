@@ -16,6 +16,8 @@ db.exec(`
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    is_disabled INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS sessions (
@@ -61,6 +63,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_versions_project ON project_versions(project_id, created_at DESC);
 `);
 
+const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+if (!userColumns.some((column) => column.name === "is_admin")) db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
+if (!userColumns.some((column) => column.name === "is_disabled")) db.exec("ALTER TABLE users ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0");
+db.prepare("UPDATE users SET is_admin = 1 WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1) AND NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)").run();
+
 const projectColumns = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
 if (!projectColumns.some((column) => column.name === "target_format")) db.exec("ALTER TABLE projects ADD COLUMN target_format TEXT NOT NULL DEFAULT 'mihomo'");
 
@@ -73,7 +80,7 @@ export async function ensureAdmin() {
   if (existing) return;
   if (!password || password.length < 10) throw new Error("首次启动必须设置至少 10 位的 ADMIN_PASSWORD");
   const now = new Date().toISOString();
-  db.prepare("INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)")
+  db.prepare("INSERT INTO users (id, username, password_hash, is_admin, is_disabled, created_at) VALUES (?, ?, ?, 1, 0, ?)")
     .run(randomUUID(), username, await bcrypt.hash(password, 12), now);
 }
 

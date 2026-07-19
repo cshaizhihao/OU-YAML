@@ -1,4 +1,4 @@
-import type { MihomoConfig, Project, ProjectSummary, ProjectVersion, Subscription, TargetFormat, ValidationIssue } from "./shared/types";
+import type { KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -17,9 +17,14 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  me: () => request<{ username: string | null }>("/api/auth/me"),
-  login: (username: string, password: string) => request<{ username: string }>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  me: () => request<{ username: string | null; isAdmin: boolean }>("/api/auth/me"),
+  login: (username: string, password: string) => request<SessionUser>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+  changePassword: (currentPassword: string, newPassword: string) => request<void>("/api/account/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+  listUsers: () => request<UserAccount[]>("/api/admin/users"),
+  createUser: (username: string, password: string, isAdmin: boolean) => request<UserAccount>("/api/admin/users", { method: "POST", body: JSON.stringify({ username, password, isAdmin }) }),
+  updateUser: (id: string, data: { isAdmin: boolean; disabled: boolean; password?: string }) => request<UserAccount>(`/api/admin/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteUser: (id: string) => request<void>(`/api/admin/users/${id}`, { method: "DELETE" }),
   listProjects: () => request<ProjectSummary[]>("/api/projects"),
   createProject: (name = "我的配置") => request<Project>("/api/projects", { method: "POST", body: JSON.stringify({ name }) }),
   getProject: (id: string) => request<Project>(`/api/projects/${id}`),
@@ -28,6 +33,7 @@ export const api = {
   parseContent: (content: string, format: "auto" | "links" | TargetFormat = "auto") => request<{ config?: MihomoConfig; nodes: MihomoConfig["proxies"]; format: TargetFormat | "links"; warnings: string[]; issues: ValidationIssue[] }>("/api/tools/parse", { method: "POST", body: JSON.stringify({ content, format }) }),
   parseYaml: (yaml: string) => request<{ config: MihomoConfig; issues: ValidationIssue[] }>("/api/tools/parse", { method: "POST", body: JSON.stringify({ content: yaml, format: "mihomo" }) }),
   validate: (config: MihomoConfig) => request<{ issues: ValidationIssue[] }>("/api/tools/validate", { method: "POST", body: JSON.stringify({ config }) }),
+  kernelValidate: (config: MihomoConfig, format: TargetFormat) => request<KernelValidationResult>("/api/tools/kernel-validate", { method: "POST", body: JSON.stringify({ config, format }) }),
   exportConfig: async (config: MihomoConfig, format: TargetFormat) => {
     const response = await fetch("/api/tools/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config, format }) });
     if (!response.ok) {
@@ -46,4 +52,15 @@ export const api = {
   listVersions: (projectId: string) => request<ProjectVersion[]>(`/api/projects/${projectId}/versions`),
   createVersion: (projectId: string, label = "手动快照") => request<ProjectVersion>(`/api/projects/${projectId}/versions`, { method: "POST", body: JSON.stringify({ label }) }),
   restoreVersion: (projectId: string, id: string) => request<Project>(`/api/projects/${projectId}/versions/${id}/restore`, { method: "POST" }),
+  downloadBackup: async () => {
+    const response = await fetch("/api/account/backup");
+    if (!response.ok) throw new Error("备份下载失败");
+    return response.blob();
+  },
+  restoreBackup: async (content: string, mode: "merge" | "replace") => {
+    const response = await fetch(`/api/account/restore?mode=${mode}`, { method: "POST", headers: { "Content-Type": "text/plain" }, body: content });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "恢复失败");
+    return body as { projects: number };
+  },
 };

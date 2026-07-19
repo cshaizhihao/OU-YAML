@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Braces, CheckCircle2, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, History, LogOut, Menu, Network, Rss, Save, ScrollText, Settings, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, Braces, CheckCircle2, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, History, LoaderCircle, LogOut, Menu, Network, Rss, Save, ScrollText, Settings, ShieldCheck, TerminalSquare, Upload, XCircle } from "lucide-react";
 import { api } from "../api";
 import { exportMihomoYaml, validateConfig } from "../shared/mihomo";
 import { exportSingBoxJson } from "../shared/singbox";
-import type { MihomoConfig, Project, ProjectSummary, TargetFormat, ValidationIssue } from "../shared/types";
+import type { KernelValidationResult, MihomoConfig, Project, ProjectSummary, SessionUser, TargetFormat, ValidationIssue } from "../shared/types";
 import { ImportCenter } from "./ImportCenter";
 import { NodesView } from "./views/NodesView";
 import { GroupsView } from "./views/GroupsView";
@@ -12,9 +12,10 @@ import { SettingsView } from "./views/SettingsView";
 import { SourceView } from "./views/SourceView";
 import { SubscriptionsView } from "./views/SubscriptionsView";
 import { HistoryView } from "./views/HistoryView";
+import { AdminView } from "./views/AdminView";
 
-type View = "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source";
-const nav: { id: View; label: string; icon: typeof Network }[] = [
+type View = "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
+const baseNav: { id: View; label: string; icon: typeof Network }[] = [
   { id: "nodes", label: "节点", icon: Network },
   { id: "groups", label: "策略组", icon: Group },
   { id: "rules", label: "规则", icon: ScrollText },
@@ -24,7 +25,7 @@ const nav: { id: View; label: string; icon: typeof Network }[] = [
   { id: "source", label: "源码", icon: FileCode2 },
 ];
 
-export function Workspace({ username, onLogout }: { username: string; onLogout: () => void }) {
+export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [view, setView] = useState<View>("nodes");
@@ -33,6 +34,8 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
   const [showIssues, setShowIssues] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [kernelBusy, setKernelBusy] = useState(false);
+  const [kernelResult, setKernelResult] = useState<KernelValidationResult | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
 
   const loadProjects = useCallback(async () => {
@@ -48,6 +51,7 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
 
   const issues = useMemo(() => project ? validateConfig(project.config) : [], [project]);
   const errors = issues.filter((issue) => issue.level === "error").length;
+  const nav = useMemo(() => user.isAdmin ? [...baseNav, { id: "admin" as View, label: "系统", icon: ShieldCheck }] : baseNav, [user.isAdmin]);
 
   const updateProject = useCallback((updater: (current: Project) => Project) => {
     setProject((current) => current ? updater(current) : current);
@@ -106,6 +110,13 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
     }
   }
 
+  async function kernelValidate() {
+    if (!project) return; setKernelBusy(true); setKernelResult(null);
+    try { setKernelResult(await api.kernelValidate(project.config, project.targetFormat)); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "内核检查失败"); }
+    finally { setKernelBusy(false); }
+  }
+
   if (!project) return <div className="app-loading"><Gauge className="spin" size={24} /><span>正在打开工作台</span></div>;
   const active = nav.find((item) => item.id === view)!;
 
@@ -113,7 +124,7 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
     <aside className={mobileNav ? "sidebar mobile-open" : "sidebar"}>
       <div className="sidebar-brand"><div className="brand-mark"><Braces size={20} /></div><strong>OU-YAML</strong><button className="icon-button mobile-only" onClick={() => setMobileNav(false)} aria-label="关闭导航"><XCircle size={20} /></button></div>
       <nav aria-label="主要导航">{nav.map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "nav-item active" : "nav-item"} onClick={() => { setView(id); setMobileNav(false); }}><Icon size={19} /><span>{label}</span>{id === "nodes" && <b>{project.config.proxies.length}</b>}{id === "groups" && <b>{project.config.proxyGroups.length}</b>}{id === "rules" && <b>{project.config.rules.length}</b>}</button>)}</nav>
-      <div className="sidebar-foot"><div className="user-chip"><span>{username.slice(0, 1).toUpperCase()}</span><div><strong>{username}</strong><small>管理员</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={async () => { await api.logout(); onLogout(); }}><LogOut size={18} /></button></div>
+      <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={async () => { await api.logout(); onLogout(); }}><LogOut size={18} /></button></div>
     </aside>
 
     <main className="main-shell">
@@ -129,9 +140,9 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
         </div>
       </header>
 
-      <div className="page-heading"><div><div className="eyebrow">{project.targetFormat.toUpperCase()} / {project.config.mode.toUpperCase()}</div><h1>{active.label}</h1></div><button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button></div>
+      <div className="page-heading"><div><div className="eyebrow">{view === "admin" ? "OU-YAML / ADMIN" : `${project.targetFormat.toUpperCase()} / ${project.config.mode.toUpperCase()}`}</div><h1>{active.label}</h1></div><button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button></div>
 
-      {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}</section>}
+      {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={kernelValidate}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
 
       <section className="content-area">
         {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
@@ -139,8 +150,9 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "subscriptions" && <SubscriptionsView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onMessage={setMessage} />}
         {view === "history" && <HistoryView project={project} onRestore={(restored) => { setProject(restored); setStatus("saved"); }} onMessage={setMessage} />}
-        {view === "settings" && <SettingsView project={project} onChange={updateProject} />}
+        {view === "settings" && <SettingsView project={project} onChange={updateProject} onReload={loadProjects} onMessage={setMessage} />}
         {view === "source" && <SourceView config={project.config} format={project.targetFormat} source={project.targetFormat === "sing-box" ? exportSingBoxJson(project.config) : exportMihomoYaml(project.config)} onApply={(config) => updateProject((current) => ({ ...current, config }))} />}
+        {view === "admin" && user.isAdmin && <AdminView currentUser={user} onMessage={setMessage} />}
       </section>
       <ImportCenter open={showImport} onClose={() => setShowImport(false)} onImport={importContent} />
       {message && <div className="toast" role="status"><CircleHelp size={18} /><span>{message}</span><button className="icon-button compact" onClick={() => setMessage("")} aria-label="关闭"><XCircle size={17} /></button></div>}

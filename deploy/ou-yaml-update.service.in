@@ -1,0 +1,9 @@
+[Unit]
+Description=OU-YAML automatic update
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -n /run/ou-yaml-update.lock /usr/bin/nice -n 10 /bin/bash @INSTALL_DIR@/update.sh
+

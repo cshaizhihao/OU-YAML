@@ -74,3 +74,26 @@ else
   port="$(sed -n 's/^OU_YAML_PORT=//p' .env)"
   echo "OU-YAML 已启动：http://<服务器IP>:${port}"
 fi
+
+auto_update="${OU_YAML_AUTO_UPDATE:-}"
+if [ -z "${auto_update}" ] && command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet ou-yaml-update.timer 2>/dev/null; then
+  auto_update=1
+fi
+if [ -z "${auto_update}" ] && [ -r /dev/tty ]; then
+  read -r -p "是否启用每日自动更新？[y/N]: " auto_update </dev/tty || true
+fi
+case "${auto_update,,}" in
+  1|y|yes)
+    OU_YAML_INSTALL_DIR="${INSTALL_DIR}" "${INSTALL_DIR}/install-auto-update.sh"
+    ;;
+  0|n|no)
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet ou-yaml-update.timer 2>/dev/null; then
+      "${INSTALL_DIR}/uninstall-auto-update.sh"
+    else
+      echo "自动更新未启用。"
+    fi
+    ;;
+  *)
+    echo "自动更新未启用，可稍后运行 ${INSTALL_DIR}/install-auto-update.sh 启用。"
+    ;;
+esac

@@ -9,12 +9,14 @@ import { z } from "zod";
 import { db, ensureAdmin, hashToken, readProject, snapshotProject } from "./db";
 import { exportMihomoYaml, validateConfig } from "../src/shared/mihomo";
 import { exportSingBoxJson } from "../src/shared/singbox";
-import { createEmptyConfig, type MihomoConfig, type Subscription, type TargetFormat } from "../src/shared/types";
+import { createEmptyConfig, type MihomoConfig, type SessionUser, type Subscription, type TargetFormat, type UserAccount } from "../src/shared/types";
 import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from "./importer";
 import { safeFetchText } from "./safeFetch";
+import { validateWithKernel } from "./kernelValidator";
+import { exportUserBackup, restoreUserBackup } from "./backup";
 
 declare global {
-  namespace Express { interface Request { user?: { id: string; username: string } } }
+  namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
 }
 
 await ensureAdmin();
@@ -30,6 +32,11 @@ app.use(cookieParser());
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
 const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(256) });
+const userSchema = z.object({
+  username: z.string().trim().regex(/^[a-zA-Z0-9._-]{3,64}$/),
+  password: z.string().min(10).max(256),
+  isAdmin: z.boolean().default(false),
+});
 const subscriptionSchema = z.object({
   name: z.string().trim().min(1).max(80),
   url: z.string().url().max(2048).refine((value) => {
@@ -76,34 +83,129 @@ async function refreshSubscription(subscriptionId: string, userId: string) {
 app.post("/api/auth/login", loginLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "请输入账号和密码" });
-  const user = db.prepare("SELECT id, username, password_hash FROM users WHERE username = ?").get(parsed.data.username) as { id: string; username: string; password_hash: string } | undefined;
-  if (!user || !await bcrypt.compare(parsed.data.password, user.password_hash)) return res.status(401).json({ error: "账号或密码错误" });
+  const user = db.prepare("SELECT id, username, password_hash, is_admin, is_disabled FROM users WHERE username = ?").get(parsed.data.username) as { id: string; username: string; password_hash: string; is_admin: number; is_disabled: number } | undefined;
+  if (!user || user.is_disabled || !await bcrypt.compare(parsed.data.password, user.password_hash)) return res.status(401).json({ error: "账号或密码错误" });
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(new Date().toISOString());
   db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)").run(hashToken(token), user.id, expires.toISOString());
   res.cookie("ou_session", token, { httpOnly: true, sameSite: "strict", secure: process.env.COOKIE_SECURE === "true" || req.secure, expires, path: "/" });
-  return res.json({ username: user.username });
+  return res.json({ username: user.username, isAdmin: !!user.is_admin } satisfies SessionUser);
 });
 
 function authenticatedUser(req: Request) {
   const token = req.cookies.ou_session;
   if (!token) return undefined;
-  return db.prepare(`SELECT users.id, users.username FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.expires_at > ?`)
-    .get(hashToken(token), new Date().toISOString()) as { id: string; username: string } | undefined;
+  return db.prepare(`SELECT users.id, users.username, users.is_admin FROM sessions JOIN users ON users.id = sessions.user_id
+    WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND users.is_disabled = 0`)
+    .get(hashToken(token), new Date().toISOString()) as { id: string; username: string; is_admin: number } | undefined;
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const row = authenticatedUser(req);
   if (!row) return res.status(401).json({ error: "登录已过期" });
-  req.user = row;
+  req.user = { id: row.id, username: row.username, isAdmin: !!row.is_admin };
   next();
 }
 
-app.get("/api/auth/me", (req, res) => res.json({ username: authenticatedUser(req)?.username || null }));
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: "需要管理员权限" });
+  next();
+}
+
+function readUser(row: Record<string, unknown>): UserAccount {
+  return {
+    id: String(row.id), username: String(row.username), isAdmin: !!row.is_admin, disabled: !!row.is_disabled,
+    projectCount: Number(row.project_count || 0), createdAt: String(row.created_at),
+  };
+}
+
+app.get("/api/auth/me", (req, res) => {
+  const user = authenticatedUser(req);
+  res.json(user ? { username: user.username, isAdmin: !!user.is_admin } : { username: null, isAdmin: false });
+});
 app.post("/api/auth/logout", requireAuth, (req, res) => {
   db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(req.cookies.ou_session));
   res.clearCookie("ou_session", { path: "/" });
+  res.status(204).end();
+});
+
+app.post("/api/account/password", requireAuth, async (req, res) => {
+  const parsed = z.object({ currentPassword: z.string().min(1).max(256), newPassword: z.string().min(10).max(256) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "新密码至少需要 10 位" });
+  const user = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(req.user!.id) as { password_hash: string };
+  if (!await bcrypt.compare(parsed.data.currentPassword, user.password_hash)) return res.status(401).json({ error: "当前密码错误" });
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+  db.transaction(() => {
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, req.user!.id);
+    db.prepare("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?").run(req.user!.id, hashToken(req.cookies.ou_session));
+  })();
+  res.status(204).end();
+});
+
+app.get("/api/account/backup", requireAuth, (req, res) => {
+  const filename = `ou-yaml-${new Date().toISOString().slice(0, 10)}.oubackup.json`;
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.type("application/json").send(exportUserBackup(req.user!.id, req.user!.username));
+});
+
+app.post("/api/account/restore", requireAuth, express.text({ type: "text/plain", limit: "10mb" }), (req, res) => {
+  const mode = req.query.mode === "replace" ? "replace" : "merge";
+  if (typeof req.body !== "string") return res.status(400).json({ error: "备份内容无效" });
+  try { res.json(restoreUserBackup(req.user!.id, req.body, mode)); }
+  catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "恢复失败" }); }
+});
+
+app.get("/api/admin/users", requireAuth, requireAdmin, (_req, res) => {
+  const rows = db.prepare(`SELECT users.*, COUNT(projects.id) AS project_count FROM users
+    LEFT JOIN projects ON projects.user_id = users.id GROUP BY users.id ORDER BY users.created_at ASC`).all() as Record<string, unknown>[];
+  res.json(rows.map(readUser));
+});
+
+app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
+  const parsed = userSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "账号需为 3-64 位字母、数字或 ._-，密码至少 10 位" });
+  const now = new Date().toISOString();
+  try {
+    const id = randomUUID();
+    db.prepare("INSERT INTO users (id, username, password_hash, is_admin, is_disabled, created_at) VALUES (?, ?, ?, ?, 0, ?)")
+      .run(id, parsed.data.username, await bcrypt.hash(parsed.data.password, 12), parsed.data.isAdmin ? 1 : 0, now);
+    res.status(201).json(readUser(db.prepare("SELECT users.*, 0 AS project_count FROM users WHERE id = ?").get(id) as Record<string, unknown>));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE")) return res.status(409).json({ error: "账号已存在" });
+    throw error;
+  }
+});
+
+app.put("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
+  const parsed = z.object({ isAdmin: z.boolean(), disabled: z.boolean(), password: z.string().min(10).max(256).optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "用户设置或密码无效" });
+  const target = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as Record<string, unknown> | undefined;
+  if (!target) return res.status(404).json({ error: "用户不存在" });
+  if (String(target.id) === req.user!.id && (parsed.data.disabled || !parsed.data.isAdmin)) return res.status(400).json({ error: "不能禁用自己或移除自己的管理员权限" });
+  if (!!target.is_admin && !parsed.data.isAdmin) {
+    const count = Number((db.prepare("SELECT COUNT(*) AS count FROM users WHERE is_admin = 1 AND is_disabled = 0").get() as { count: number }).count);
+    if (count <= 1) return res.status(400).json({ error: "至少需要保留一名可用管理员" });
+  }
+  const passwordHash = parsed.data.password ? await bcrypt.hash(parsed.data.password, 12) : String(target.password_hash);
+  db.transaction(() => {
+    db.prepare("UPDATE users SET is_admin = ?, is_disabled = ?, password_hash = ? WHERE id = ?")
+      .run(parsed.data.isAdmin ? 1 : 0, parsed.data.disabled ? 1 : 0, passwordHash, req.params.id);
+    if (parsed.data.disabled || parsed.data.password) db.prepare("DELETE FROM sessions WHERE user_id = ?").run(req.params.id);
+  })();
+  const row = db.prepare("SELECT users.*, (SELECT COUNT(*) FROM projects WHERE user_id = users.id) AS project_count FROM users WHERE id = ?").get(req.params.id) as Record<string, unknown>;
+  res.json(readUser(row));
+});
+
+app.delete("/api/admin/users/:id", requireAuth, requireAdmin, (req, res) => {
+  if (String(req.params.id) === req.user!.id) return res.status(400).json({ error: "不能删除当前登录账号" });
+  const target = db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.params.id) as { is_admin: number } | undefined;
+  if (!target) return res.status(404).json({ error: "用户不存在" });
+  if (target.is_admin) {
+    const count = Number((db.prepare("SELECT COUNT(*) AS count FROM users WHERE is_admin = 1 AND is_disabled = 0").get() as { count: number }).count);
+    if (count <= 1) return res.status(400).json({ error: "至少需要保留一名可用管理员" });
+  }
+  db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
   res.status(204).end();
 });
 
@@ -233,6 +335,12 @@ app.post("/api/tools/parse", requireAuth, (req, res) => {
 });
 
 app.post("/api/tools/validate", requireAuth, (req, res) => res.json({ issues: validateConfig(req.body.config as MihomoConfig) }));
+app.post("/api/tools/kernel-validate", requireAuth, async (req, res) => {
+  const config = req.body?.config as MihomoConfig | undefined;
+  if (!config || config.version !== 1) return res.status(400).json({ error: "配置数据无效" });
+  const format: TargetFormat = req.body.format === "sing-box" ? "sing-box" : "mihomo";
+  res.json(await validateWithKernel(config, format));
+});
 app.post("/api/tools/export", requireAuth, (req, res) => {
   const config = req.body.config as MihomoConfig;
   const issues = validateConfig(config);

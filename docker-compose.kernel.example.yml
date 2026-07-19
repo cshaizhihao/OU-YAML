@@ -1,0 +1,10 @@
+# Optional: copy this file, adjust the host paths, then add it to docker compose.
+services:
+  ou-yaml:
+    environment:
+      MIHOMO_BINARY: /opt/ou-yaml-kernels/mihomo
+      SING_BOX_BINARY: /opt/ou-yaml-kernels/sing-box
+    volumes:
+      - /usr/local/bin/mihomo:/opt/ou-yaml-kernels/mihomo:ro
+      - /usr/local/bin/sing-box:/opt/ou-yaml-kernels/sing-box:ro
+

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Braces, Eye, EyeOff, LoaderCircle, LockKeyhole } from "lucide-react";
 import { api } from "../api";
+import type { SessionUser } from "../shared/types";
 
-export function Login({ onLogin }: { onLogin: (username: string) => void }) {
+export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -11,7 +12,7 @@ export function Login({ onLogin }: { onLogin: (username: string) => void }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
-    try { const result = await api.login(username, password); onLogin(result.username); }
+    try { const result = await api.login(username, password); onLogin(result); }
     catch (value) { setError(value instanceof Error ? value.message : "登录失败"); }
     finally { setBusy(false); }
   }

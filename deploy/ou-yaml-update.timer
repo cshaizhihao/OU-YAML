@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for OU-YAML updates every day
+
+[Timer]
+OnCalendar=*-*-* 04:20:00
+RandomizedDelaySec=40m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
