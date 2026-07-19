@@ -1,0 +1,20 @@
+{
+  "log": { "level": "info" },
+  "inbounds": [
+    { "type": "mixed", "tag": "mixed-in", "listen": "127.0.0.1", "listen_port": 7890 }
+  ],
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "示例-VLESS",
+      "server": "example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-4000-8000-000000000000",
+      "tls": { "enabled": true, "server_name": "example.com" }
+    },
+    { "type": "selector", "tag": "节点选择", "outbounds": ["示例-VLESS", "DIRECT"] },
+    { "type": "direct", "tag": "DIRECT" },
+    { "type": "block", "tag": "REJECT" }
+  ],
+  "route": { "rules": [], "final": "节点选择" }
+}

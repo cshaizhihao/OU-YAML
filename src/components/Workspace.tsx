@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Braces, CheckCircle2, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, LogOut, Menu, Network, Plus, Save, ScrollText, Settings, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, Braces, CheckCircle2, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, History, LogOut, Menu, Network, Rss, Save, ScrollText, Settings, Upload, XCircle } from "lucide-react";
 import { api } from "../api";
 import { exportMihomoYaml, validateConfig } from "../shared/mihomo";
-import type { MihomoConfig, Project, ProjectSummary, ValidationIssue } from "../shared/types";
+import { exportSingBoxJson } from "../shared/singbox";
+import type { MihomoConfig, Project, ProjectSummary, TargetFormat, ValidationIssue } from "../shared/types";
+import { ImportCenter } from "./ImportCenter";
 import { NodesView } from "./views/NodesView";
 import { GroupsView } from "./views/GroupsView";
 import { RulesView } from "./views/RulesView";
 import { SettingsView } from "./views/SettingsView";
 import { SourceView } from "./views/SourceView";
+import { SubscriptionsView } from "./views/SubscriptionsView";
+import { HistoryView } from "./views/HistoryView";
 
-type View = "nodes" | "groups" | "rules" | "settings" | "source";
+type View = "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source";
 const nav: { id: View; label: string; icon: typeof Network }[] = [
   { id: "nodes", label: "节点", icon: Network },
   { id: "groups", label: "策略组", icon: Group },
   { id: "rules", label: "规则", icon: ScrollText },
+  { id: "subscriptions", label: "订阅", icon: Rss },
+  { id: "history", label: "历史", icon: History },
   { id: "settings", label: "基础设置", icon: Settings },
   { id: "source", label: "源码", icon: FileCode2 },
 ];
@@ -26,7 +32,7 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
   const [message, setMessage] = useState("");
   const [showIssues, setShowIssues] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const [showImport, setShowImport] = useState(false);
   const saveTimer = useRef<number | undefined>(undefined);
 
   const loadProjects = useCallback(async () => {
@@ -72,23 +78,28 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
     setProjects((current) => [created, ...current]); setProject(created); setView("nodes");
   }
 
-  async function importFile(file?: File) {
-    if (!file || !project) return;
-    try {
-      const yaml = await file.text();
-      const parsed = await api.parseYaml(yaml);
-      updateProject((current) => ({ ...current, name: file.name.replace(/\.ya?ml$/i, "") || current.name, config: parsed.config }));
+  async function importContent(content: string, format: "auto" | "links" | TargetFormat, filename?: string) {
+    const parsed = await api.parseContent(content, format);
+    if (parsed.config) {
+      updateProject((current) => ({ ...current, name: filename ? filename.replace(/\.(ya?ml|json|txt)$/i, "") || current.name : current.name, config: parsed.config!, targetFormat: parsed.format as TargetFormat }));
       setMessage(`已导入 ${parsed.config.proxies.length} 个节点、${parsed.config.proxyGroups.length} 个策略组`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "导入失败"); }
-    if (fileInput.current) fileInput.current.value = "";
+    } else {
+      updateProject((current) => {
+        const used = new Set(current.config.proxies.map((node) => node.name));
+        const nodes = parsed.nodes.map((node) => { const base = node.name; let name = base; let suffix = 2; while (used.has(name)) name = `${base} ${suffix++}`; used.add(name); return { ...node, name }; });
+        return { ...current, config: { ...current.config, proxies: [...current.config.proxies, ...nodes] } };
+      });
+      setMessage(`已导入 ${parsed.nodes.length} 个节点${parsed.warnings.length ? `，${parsed.warnings.length} 行未识别` : ""}`);
+    }
+    return parsed;
   }
 
   async function download() {
     if (!project) return;
     try {
-      const yaml = await api.exportYaml(project.config);
-      const url = URL.createObjectURL(new Blob([yaml], { type: "application/yaml" }));
-      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${project.name || "config"}.yaml`; anchor.click(); URL.revokeObjectURL(url);
+      const content = await api.exportConfig(project.config, project.targetFormat);
+      const url = URL.createObjectURL(new Blob([content], { type: project.targetFormat === "sing-box" ? "application/json" : "application/yaml" }));
+      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${project.name || "config"}.${project.targetFormat === "sing-box" ? "json" : "yaml"}`; anchor.click(); URL.revokeObjectURL(url);
     } catch (error) {
       const value = error as Error & { issues?: ValidationIssue[] };
       setMessage(value.message); if (value.issues) setShowIssues(true);
@@ -112,13 +123,13 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
         <button className="icon-button" onClick={createProject} title="新建配置" aria-label="新建配置"><FolderPlus size={18} /></button>
         <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />保存中</> : status === "error" ? <><XCircle size={15} />保存失败</> : <><CheckCircle2 size={15} />已保存</>}</div>
         <div className="top-actions">
-          <input ref={fileInput} hidden type="file" accept=".yaml,.yml,text/yaml" onChange={(e) => importFile(e.target.files?.[0])} />
-          <button className="secondary-button" onClick={() => fileInput.current?.click()}><Upload size={17} /><span>导入</span></button>
-          <button className="primary-button" onClick={download} disabled={errors > 0}><Download size={17} /><span>导出 YAML</span></button>
+          <button className="secondary-button" onClick={() => setShowImport(true)}><Upload size={17} /><span>导入</span></button>
+          <select className="format-select" value={project.targetFormat} onChange={(event) => updateProject((current) => ({ ...current, targetFormat: event.target.value as TargetFormat }))} aria-label="导出格式"><option value="mihomo">YAML</option><option value="sing-box">JSON</option></select>
+          <button className="primary-button" onClick={download} disabled={errors > 0}><Download size={17} /><span>导出</span></button>
         </div>
       </header>
 
-      <div className="page-heading"><div><div className="eyebrow">MIHOMO / {project.config.mode.toUpperCase()}</div><h1>{active.label}</h1></div><button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button></div>
+      <div className="page-heading"><div><div className="eyebrow">{project.targetFormat.toUpperCase()} / {project.config.mode.toUpperCase()}</div><h1>{active.label}</h1></div><button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button></div>
 
       {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}</section>}
 
@@ -126,9 +137,12 @@ export function Workspace({ username, onLogout }: { username: string; onLogout: 
         {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
+        {view === "subscriptions" && <SubscriptionsView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onMessage={setMessage} />}
+        {view === "history" && <HistoryView project={project} onRestore={(restored) => { setProject(restored); setStatus("saved"); }} onMessage={setMessage} />}
         {view === "settings" && <SettingsView project={project} onChange={updateProject} />}
-        {view === "source" && <SourceView config={project.config} source={exportMihomoYaml(project.config)} onApply={(config) => updateProject((current) => ({ ...current, config }))} />}
+        {view === "source" && <SourceView config={project.config} format={project.targetFormat} source={project.targetFormat === "sing-box" ? exportSingBoxJson(project.config) : exportMihomoYaml(project.config)} onApply={(config) => updateProject((current) => ({ ...current, config }))} />}
       </section>
+      <ImportCenter open={showImport} onClose={() => setShowImport(false)} onImport={importContent} />
       {message && <div className="toast" role="status"><CircleHelp size={18} /><span>{message}</span><button className="icon-button compact" onClick={() => setMessage("")} aria-label="关闭"><XCircle size={17} /></button></div>}
     </main>
   </div>;

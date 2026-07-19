@@ -1,8 +1,8 @@
 # OU-YAML
 
-OU-YAML 是面向非技术用户的 Mihomo / Clash Meta 配置可视化编辑器。第一阶段提供节点、策略组、规则、基础设置与 YAML 源码的双向编辑，并包含账号登录、SQLite 持久化和 VPS 部署支持。
+OU-YAML 是面向非技术用户的 Mihomo / Clash Meta 与 sing-box 配置可视化编辑器，包含节点、策略组、规则、订阅、版本历史、账号登录、SQLite 持久化和 VPS 部署支持。
 
-## 第一阶段功能
+## 功能
 
 - 导入、解析、校验和导出 Mihomo YAML
 - 图形化编辑常见节点字段与 WebSocket、gRPC、TLS 参数
@@ -12,8 +12,13 @@ OU-YAML 是面向非技术用户的 Mihomo / Clash Meta 配置可视化编辑器
 - 自动保存多个配置项目
 - 管理员账号登录、会话过期和登录限速
 - Docker、IP 端口访问与 Caddy HTTPS 部署
+- 批量导入 SS、SSR、VMess、VLESS、Trojan、Hysteria2、TUIC、Snell、SOCKS 和 HTTP 分享链接
+- 导入整段 Base64 分享订阅
+- 管理远程订阅，支持手动更新和定时更新
+- 导入、编辑和导出 sing-box JSON，并保留格式专属字段
+- 自动与手动配置快照，恢复前自动备份当前版本
 
-分享链接和远程订阅导入属于第二阶段。目前可以导入包含相应协议节点的 Mihomo YAML。
+远程订阅抓取会拒绝本机、内网、链路本地、云元数据及非 HTTP(S) 地址，并限制重定向、超时和响应大小。
 
 ## 本地开发
 

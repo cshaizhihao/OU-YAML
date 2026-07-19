@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { MihomoConfig, Project } from "../src/shared/types";
+import type { MihomoConfig, Project, TargetFormat } from "../src/shared/types";
 
 const dataDir = process.env.DATA_DIR || path.resolve("data");
 fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -29,10 +29,40 @@ db.exec(`
     name TEXT NOT NULL,
     config_json TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    target_format TEXT NOT NULL DEFAULT 'mihomo'
+  );
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    format TEXT NOT NULL DEFAULT 'auto',
+    interval_minutes INTEGER NOT NULL DEFAULT 0,
+    last_updated_at TEXT,
+    last_error TEXT,
+    node_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS project_versions (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    target_format TEXT NOT NULL,
+    proxy_count INTEGER NOT NULL,
+    group_count INTEGER NOT NULL,
+    rule_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_subscriptions_project ON subscriptions(project_id);
+  CREATE INDEX IF NOT EXISTS idx_versions_project ON project_versions(project_id, created_at DESC);
 `);
+
+const projectColumns = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
+if (!projectColumns.some((column) => column.name === "target_format")) db.exec("ALTER TABLE projects ADD COLUMN target_format TEXT NOT NULL DEFAULT 'mihomo'");
 
 export async function ensureAdmin() {
   const username = process.env.ADMIN_USERNAME || "admin";
@@ -55,5 +85,22 @@ export function readProject(row: Record<string, unknown>): Project {
     name: String(row.name),
     updatedAt: String(row.updated_at),
     config: JSON.parse(String(row.config_json)) as MihomoConfig,
+    targetFormat: (row.target_format === "sing-box" ? "sing-box" : "mihomo") as TargetFormat,
   };
+}
+
+export function snapshotProject(projectId: string, userId: string, label: string, force = true) {
+  const project = db.prepare("SELECT * FROM projects WHERE id = ? AND user_id = ?").get(projectId, userId) as Record<string, unknown> | undefined;
+  if (!project) return false;
+  if (!force) {
+    const recent = db.prepare("SELECT created_at FROM project_versions WHERE project_id = ? ORDER BY created_at DESC LIMIT 1").get(projectId) as { created_at: string } | undefined;
+    if (recent && Date.now() - new Date(recent.created_at).getTime() < 10 * 60 * 1000) return false;
+  }
+  const config = JSON.parse(String(project.config_json)) as MihomoConfig;
+  db.prepare(`INSERT INTO project_versions (id, project_id, label, config_json, target_format, proxy_count, group_count, rule_count, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(randomUUID(), projectId, label.slice(0, 80), project.config_json, project.target_format || "mihomo", config.proxies.length, config.proxyGroups.length, config.rules.length, new Date().toISOString());
+  const oldVersions = db.prepare("SELECT id FROM project_versions WHERE project_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET 50").all(projectId) as { id: string }[];
+  if (oldVersions.length) db.prepare(`DELETE FROM project_versions WHERE id IN (${oldVersions.map(() => "?").join(",")})`).run(...oldVersions.map((item) => item.id));
+  return true;
 }

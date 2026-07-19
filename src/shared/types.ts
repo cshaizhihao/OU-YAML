@@ -1,4 +1,5 @@
-export type ProxyType = "ss" | "vmess" | "vless" | "trojan" | "snell" | "socks5" | "http" | "hysteria2" | "tuic" | "wireguard";
+export type ProxyType = "ss" | "ssr" | "vmess" | "vless" | "trojan" | "snell" | "socks5" | "http" | "hysteria2" | "tuic" | "wireguard";
+export type TargetFormat = "mihomo" | "sing-box";
 
 export interface ProxyNode {
   id: string;
@@ -18,6 +19,8 @@ export interface ProxyNode {
   wsHost?: string;
   grpcServiceName?: string;
   extra: Record<string, unknown>;
+  formatExtra?: { singBox?: Record<string, unknown> };
+  source?: { kind: "subscription"; id: string };
 }
 
 export type GroupType = "select" | "url-test" | "fallback" | "load-balance" | "relay";
@@ -32,6 +35,7 @@ export interface ProxyGroup {
   tolerance?: number;
   lazy?: boolean;
   extra: Record<string, unknown>;
+  formatExtra?: { singBox?: Record<string, unknown> };
 }
 
 export interface RuleItem {
@@ -56,6 +60,7 @@ export interface MihomoConfig {
   proxyGroups: ProxyGroup[];
   rules: RuleItem[];
   extra: Record<string, unknown>;
+  metadata?: { singBox?: Record<string, unknown> };
 }
 
 export interface ValidationIssue {
@@ -73,6 +78,31 @@ export interface ProjectSummary {
 
 export interface Project extends ProjectSummary {
   config: MihomoConfig;
+  targetFormat: TargetFormat;
+}
+
+export interface Subscription {
+  id: string;
+  projectId: string;
+  name: string;
+  url: string;
+  format: "auto" | "links" | "mihomo" | "sing-box";
+  intervalMinutes: number;
+  lastUpdatedAt?: string;
+  lastError?: string;
+  nodeCount: number;
+  createdAt: string;
+}
+
+export interface ProjectVersion {
+  id: string;
+  projectId: string;
+  label: string;
+  targetFormat: TargetFormat;
+  proxyCount: number;
+  groupCount: number;
+  ruleCount: number;
+  createdAt: string;
 }
 
 export const createEmptyConfig = (): MihomoConfig => ({

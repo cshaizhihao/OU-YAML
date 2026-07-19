@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Copy, KeyRound, MoreHorizontal, Network, Pencil, Pl
 import type { MihomoConfig, ProxyNode, ProxyType } from "../../shared/types";
 import { ConfirmDialog, Drawer } from "../Dialog";
 
-const types: ProxyType[] = ["ss", "vmess", "vless", "trojan", "snell", "socks5", "http", "hysteria2", "tuic", "wireguard"];
+const types: ProxyType[] = ["ss", "ssr", "vmess", "vless", "trojan", "snell", "socks5", "http", "hysteria2", "tuic", "wireguard"];
 const blankNode = (): ProxyNode => ({ id: crypto.randomUUID(), name: "新节点", type: "ss", server: "", port: 443, udp: true, cipher: "aes-128-gcm", extra: {} });
 
 export function NodesView({ config, onChange }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void }) {
