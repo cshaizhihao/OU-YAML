@@ -1,0 +1,19 @@
+services:
+  ou-yaml:
+    build: .
+    image: ou-yaml:local
+    container_name: ou-yaml
+    restart: unless-stopped
+    ports:
+      - "${OU_YAML_PORT:-8787}:8787"
+    environment:
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD_B64: "${ADMIN_PASSWORD_B64:?ADMIN_PASSWORD_B64 is required}"
+      TRUST_PROXY: "${TRUST_PROXY:-0}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+    volumes:
+      - ./data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

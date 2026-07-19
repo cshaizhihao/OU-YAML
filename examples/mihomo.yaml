@@ -1,0 +1,23 @@
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+external-controller: 127.0.0.1:9090
+proxies:
+  - name: 示例-SS
+    type: ss
+    server: example.com
+    port: 443
+    cipher: aes-128-gcm
+    password: replace-me
+    udp: true
+proxy-groups:
+  - name: 节点选择
+    type: select
+    proxies:
+      - 示例-SS
+      - DIRECT
+rules:
+  - DOMAIN-SUFFIX,example.cn,DIRECT
+  - MATCH,节点选择

@@ -1,0 +1,28 @@
+services:
+  ou-yaml:
+    ports: []
+    expose:
+      - "8787"
+    environment:
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: "true"
+  caddy:
+    image: caddy:2-alpine
+    container_name: ou-yaml-caddy
+    restart: unless-stopped
+    depends_on:
+      - ou-yaml
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: "${DOMAIN:?DOMAIN is required}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
