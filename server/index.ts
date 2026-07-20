@@ -23,10 +23,14 @@ await ensureAdmin();
 const app = express();
 const port = Number(process.env.PORT || 8787);
 const isProduction = process.env.NODE_ENV === "production";
+const usesHttps = process.env.COOKIE_SECURE === "true";
 
 app.disable("x-powered-by");
 app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
-app.use(helmet({ contentSecurityPolicy: isProduction ? undefined : false }));
+app.use(helmet({
+  contentSecurityPolicy: isProduction ? { directives: { upgradeInsecureRequests: usesHttps ? [] : null } } : false,
+  ...(!usesHttps ? { strictTransportSecurity: false, crossOriginOpenerPolicy: false, originAgentCluster: false } : {}),
+}));
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 
