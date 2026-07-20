@@ -1,4 +1,4 @@
-import type { KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
+import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -33,6 +33,7 @@ export const api = {
   parseContent: (content: string, format: "auto" | "links" | TargetFormat = "auto") => request<{ config?: MihomoConfig; nodes: MihomoConfig["proxies"]; format: TargetFormat | "links"; warnings: string[]; issues: ValidationIssue[] }>("/api/tools/parse", { method: "POST", body: JSON.stringify({ content, format }) }),
   parseYaml: (yaml: string) => request<{ config: MihomoConfig; issues: ValidationIssue[] }>("/api/tools/parse", { method: "POST", body: JSON.stringify({ content: yaml, format: "mihomo" }) }),
   validate: (config: MihomoConfig) => request<{ issues: ValidationIssue[] }>("/api/tools/validate", { method: "POST", body: JSON.stringify({ config }) }),
+  kernelInfo: () => request<KernelInfo[]>("/api/tools/kernels"),
   kernelValidate: (config: MihomoConfig, format: TargetFormat) => request<KernelValidationResult>("/api/tools/kernel-validate", { method: "POST", body: JSON.stringify({ config, format }) }),
   exportConfig: async (config: MihomoConfig, format: TargetFormat) => {
     const response = await fetch("/api/tools/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config, format }) });

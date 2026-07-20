@@ -12,7 +12,7 @@ import { exportSingBoxJson } from "../src/shared/singbox";
 import { createEmptyConfig, type MihomoConfig, type SessionUser, type Subscription, type TargetFormat, type UserAccount } from "../src/shared/types";
 import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from "./importer";
 import { safeFetchText } from "./safeFetch";
-import { validateWithKernel } from "./kernelValidator";
+import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
 
 declare global {
@@ -339,6 +339,7 @@ app.post("/api/tools/parse", requireAuth, (req, res) => {
 });
 
 app.post("/api/tools/validate", requireAuth, (req, res) => res.json({ issues: validateConfig(req.body.config as MihomoConfig) }));
+app.get("/api/tools/kernels", requireAuth, async (_req, res) => res.json(await readKernelInfo()));
 app.post("/api/tools/kernel-validate", requireAuth, async (req, res) => {
   const config = req.body?.config as MihomoConfig | undefined;
   if (!config || config.version !== 1) return res.status(400).json({ error: "配置数据无效" });

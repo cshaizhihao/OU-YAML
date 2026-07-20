@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, LoaderCircle, Pencil, Plus, RefreshCw, Rss, Trash2 } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { AlertTriangle, CheckCircle2, Clock3, Link2, LoaderCircle, Pencil, Plus, RefreshCw, Rss, Settings2, Trash2 } from "lucide-react";
 import { api } from "../../api";
 import type { MihomoConfig, Project, Subscription } from "../../shared/types";
 import { ConfirmDialog, Drawer } from "../Dialog";
@@ -12,6 +12,7 @@ export function SubscriptionsView({ project, onConfig, onMessage }: { project: P
   const [editing, setEditing] = useState<Subscription | null>(null);
   const [deleting, setDeleting] = useState<Subscription | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [quickUrl, setQuickUrl] = useState("");
   const load = () => api.listSubscriptions(project.id).then(setItems).catch((error) => onMessage(error.message));
   useEffect(() => { load(); }, [project.id]);
   async function save(subscription: Subscription) {
@@ -26,7 +27,8 @@ export function SubscriptionsView({ project, onConfig, onMessage }: { project: P
         onMessage(payload.error || `已导入 ${payload.subscription.nodeCount} 个节点`);
       }
       setEditing(null);
-    } catch (error) { onMessage(error instanceof Error ? error.message : "保存订阅失败"); }
+      return true;
+    } catch (error) { onMessage(error instanceof Error ? error.message : "保存订阅失败"); return false; }
     finally { setBusy(null); }
   }
   async function refresh(subscription: Subscription) {
@@ -35,9 +37,16 @@ export function SubscriptionsView({ project, onConfig, onMessage }: { project: P
     catch (error) { onMessage(error instanceof Error ? error.message : "订阅更新失败"); load(); }
     finally { setBusy(null); }
   }
+  async function quickAdd(event: FormEvent) {
+    event.preventDefault();
+    const draft = emptySubscription();
+    draft.url = quickUrl.trim();
+    try { draft.name = new URL(draft.url).hostname || "我的订阅"; } catch { draft.name = "我的订阅"; }
+    if (await save(draft)) setQuickUrl("");
+  }
   return <>
-    <div className="view-toolbar"><div className="summary-inline"><span><strong>{items.length}</strong> 个订阅</span><i /><span><strong>{items.reduce((sum, item) => sum + item.nodeCount, 0)}</strong> 个节点</span></div><button className="primary-button" onClick={() => setEditing(emptySubscription())}><Plus size={17} />添加订阅</button></div>
-    {items.length ? <div className="subscription-list">{items.map((item) => <article className="subscription-row" key={item.id}><span className="subscription-icon"><Rss size={20} /></span><div className="subscription-main"><h2>{item.name}</h2><span>{displayHost(item.url)}</span></div><span className="type-badge">{item.format === "auto" ? "自动识别" : item.format}</span><div className="subscription-stats"><strong>{item.nodeCount}</strong><span>节点</span></div><div className={item.lastError ? "subscription-status error" : "subscription-status"}>{item.lastError ? <><AlertTriangle size={15} /><span title={item.lastError}>更新失败</span></> : item.lastUpdatedAt ? <><CheckCircle2 size={15} /><span>{new Date(item.lastUpdatedAt).toLocaleString("zh-CN")}</span></> : <><Clock3 size={15} /><span>等待更新</span></>}</div><div className="row-actions"><button className="secondary-button compact-button" disabled={busy === item.id} onClick={() => refresh(item)}>{busy === item.id ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}更新</button><button className="icon-button compact" onClick={() => setEditing({ ...item })} aria-label={`编辑 ${item.name}`}><Pencil size={16} /></button><button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button></div></article>)}</div> : <div className="empty-state"><div><Rss size={24} /></div><h2>还没有订阅</h2><button className="primary-button" onClick={() => setEditing(emptySubscription())}><Plus size={17} />添加订阅</button></div>}
+    <div className="view-toolbar"><div className="summary-inline"><span><strong>{items.length}</strong> 个订阅</span><i /><span><strong>{items.reduce((sum, item) => sum + item.nodeCount, 0)}</strong> 个节点</span></div><button className="primary-button" onClick={() => setEditing(emptySubscription())}><Plus size={17} />添加订阅 URL</button></div>
+    {items.length ? <div className="subscription-list">{items.map((item) => <article className="subscription-row" key={item.id}><span className="subscription-icon"><Rss size={20} /></span><div className="subscription-main"><h2>{item.name}</h2><span>{displayHost(item.url)}</span></div><span className="type-badge">{item.format === "auto" ? "自动识别" : item.format}</span><div className="subscription-stats"><strong>{item.nodeCount}</strong><span>节点</span></div><div className={item.lastError ? "subscription-status error" : "subscription-status"}>{item.lastError ? <><AlertTriangle size={15} /><span title={item.lastError}>更新失败</span></> : item.lastUpdatedAt ? <><CheckCircle2 size={15} /><span>{new Date(item.lastUpdatedAt).toLocaleString("zh-CN")}</span></> : <><Clock3 size={15} /><span>等待更新</span></>}</div><div className="row-actions"><button className="secondary-button compact-button" disabled={busy === item.id} onClick={() => refresh(item)}>{busy === item.id ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}更新</button><button className="icon-button compact" onClick={() => setEditing({ ...item })} aria-label={`编辑 ${item.name}`}><Pencil size={16} /></button><button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button></div></article>)}</div> : <div className="subscription-empty"><span className="subscription-empty-icon"><Rss size={24} /></span><div><h2>添加第一个订阅</h2><form onSubmit={quickAdd}><label>订阅 URL<input type="url" required value={quickUrl} onChange={(event) => setQuickUrl(event.target.value)} placeholder="https://example.com/subscription" /></label><button className="primary-button" disabled={!!busy || !quickUrl.trim()}>{busy ? <LoaderCircle className="spin" size={17} /> : <Link2 size={17} />}导入节点</button></form><button className="text-button" onClick={() => setEditing(emptySubscription())}><Settings2 size={15} />格式与自动更新设置</button></div></div>}
     <SubscriptionEditor key={editing?.id || (editing ? "new" : "closed")} subscription={editing} busy={!!busy} onClose={() => setEditing(null)} onSave={save} />
     <ConfirmDialog open={!!deleting} title="删除订阅" message={`确定删除“${deleting?.name}”及其导入的节点吗？删除前会自动创建快照。`} onClose={() => setDeleting(null)} onConfirm={async () => { if (!deleting) return; try { await api.deleteSubscription(project.id, deleting.id, true); setDeleting(null); await load(); const updated = await api.getProject(project.id); onConfig(updated.config); onMessage("订阅已删除"); } catch (error) { onMessage(error instanceof Error ? error.message : "删除失败"); } }} />
   </>;

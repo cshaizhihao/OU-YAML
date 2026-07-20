@@ -20,6 +20,12 @@ export interface KernelValidationResult {
   output: string;
 }
 
+export interface KernelInfo {
+  engine: TargetFormat;
+  available: boolean;
+  version: string;
+}
+
 export interface ProxyNode {
   id: string;
   name: string;

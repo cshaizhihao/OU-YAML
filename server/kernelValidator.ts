@@ -5,7 +5,7 @@ import path from "node:path";
 import { constants } from "node:fs";
 import { exportMihomoYaml } from "../src/shared/mihomo";
 import { exportSingBoxJson } from "../src/shared/singbox";
-import type { KernelValidationResult, MihomoConfig, TargetFormat } from "../src/shared/types";
+import type { KernelInfo, KernelValidationResult, MihomoConfig, TargetFormat } from "../src/shared/types";
 
 async function executable(candidates: (string | undefined)[]) {
   for (const candidate of candidates) {
@@ -13,6 +13,12 @@ async function executable(candidates: (string | undefined)[]) {
     try { await fs.access(candidate, constants.X_OK); return candidate; } catch { /* Try the next fixed path. */ }
   }
   return undefined;
+}
+
+async function kernelBinary(format: TargetFormat) {
+  return format === "sing-box"
+    ? executable([process.env.SING_BOX_BINARY, "/usr/local/bin/sing-box", "/usr/bin/sing-box"])
+    : executable([process.env.MIHOMO_BINARY, "/usr/local/bin/mihomo", "/usr/bin/mihomo"]);
 }
 
 function run(binary: string, args: string[], cwd: string) {
@@ -26,9 +32,7 @@ function run(binary: string, args: string[], cwd: string) {
 
 export async function validateWithKernel(config: MihomoConfig, format: TargetFormat): Promise<KernelValidationResult> {
   const isSingBox = format === "sing-box";
-  const binary = isSingBox
-    ? await executable([process.env.SING_BOX_BINARY, "/usr/local/bin/sing-box", "/usr/bin/sing-box"])
-    : await executable([process.env.MIHOMO_BINARY, "/usr/local/bin/mihomo", "/usr/bin/mihomo"]);
+  const binary = await kernelBinary(format);
   if (!binary) return { available: false, engine: format, output: `未找到 ${isSingBox ? "sing-box" : "Mihomo"} 内核` };
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ou-yaml-check-"));
   const file = path.join(directory, isSingBox ? "config.json" : "config.yaml");
@@ -39,4 +43,15 @@ export async function validateWithKernel(config: MihomoConfig, format: TargetFor
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
+}
+
+export async function readKernelInfo(): Promise<KernelInfo[]> {
+  const result: KernelInfo[] = [];
+  for (const engine of ["mihomo", "sing-box"] as const) {
+    const binary = await kernelBinary(engine);
+    if (!binary) { result.push({ engine, available: false, version: "未安装" }); continue; }
+    const version = await run(binary, engine === "sing-box" ? ["version"] : ["-v"], os.tmpdir());
+    result.push({ engine, available: version.valid, version: version.output.split("\n")[0].slice(0, 160) || "已安装" });
+  }
+  return result;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Braces, CheckCircle2, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, History, LoaderCircle, LogOut, Menu, Network, Rss, Save, ScrollText, Settings, ShieldCheck, TerminalSquare, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, Braces, CheckCircle2, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, History, ListChecks, LoaderCircle, LogOut, Menu, Network, Rss, Save, ScrollText, Settings, ShieldCheck, TerminalSquare, Upload, XCircle } from "lucide-react";
 import { api } from "../api";
 import { exportMihomoYaml, validateConfig } from "../shared/mihomo";
 import { exportSingBoxJson } from "../shared/singbox";
@@ -13,9 +13,11 @@ import { SourceView } from "./views/SourceView";
 import { SubscriptionsView } from "./views/SubscriptionsView";
 import { HistoryView } from "./views/HistoryView";
 import { AdminView } from "./views/AdminView";
+import { QuickStartView, type GuideTarget } from "./views/QuickStartView";
 
-type View = "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
+type View = "start" | "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
 const baseNav: { id: View; label: string; icon: typeof Network }[] = [
+  { id: "start", label: "开始", icon: ListChecks },
   { id: "nodes", label: "节点", icon: Network },
   { id: "groups", label: "策略组", icon: Group },
   { id: "rules", label: "规则", icon: ScrollText },
@@ -28,7 +30,7 @@ const baseNav: { id: View; label: string; icon: typeof Network }[] = [
 export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [project, setProject] = useState<Project | null>(null);
-  const [view, setView] = useState<View>("nodes");
+  const [view, setView] = useState<View>("start");
   const [status, setStatus] = useState<"saved" | "saving" | "dirty" | "error">("saved");
   const [message, setMessage] = useState("");
   const [showIssues, setShowIssues] = useState(false);
@@ -134,17 +136,19 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
         <button className="icon-button" onClick={createProject} title="新建配置" aria-label="新建配置"><FolderPlus size={18} /></button>
         <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />保存中</> : status === "error" ? <><XCircle size={15} />保存失败</> : <><CheckCircle2 size={15} />已保存</>}</div>
         <div className="top-actions">
+          <button className="icon-button guide-button" onClick={() => setView("start")} title="打开新手流程" aria-label="打开新手流程"><CircleHelp size={19} /></button>
           <button className="secondary-button" onClick={() => setShowImport(true)}><Upload size={17} /><span>导入</span></button>
           <select className="format-select" value={project.targetFormat} onChange={(event) => updateProject((current) => ({ ...current, targetFormat: event.target.value as TargetFormat }))} aria-label="导出格式"><option value="mihomo">YAML</option><option value="sing-box">JSON</option></select>
           <button className="primary-button" onClick={download} disabled={errors > 0}><Download size={17} /><span>导出</span></button>
         </div>
       </header>
 
-      <div className="page-heading"><div><div className="eyebrow">{view === "admin" ? "OU-YAML / ADMIN" : `${project.targetFormat.toUpperCase()} / ${project.config.mode.toUpperCase()}`}</div><h1>{active.label}</h1></div><button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button></div>
+      <div className="page-heading"><div><div className="eyebrow">{view === "admin" ? "OU-YAML / ADMIN" : view === "start" ? "OU-YAML / QUICK START" : `${project.targetFormat.toUpperCase()} / ${project.config.mode.toUpperCase()}`}</div><h1>{active.label}</h1></div><button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button></div>
 
       {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={kernelValidate}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
 
       <section className="content-area">
+        {view === "start" && <QuickStartView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onNavigate={(target: GuideTarget) => setView(target)} onOpenImport={() => setShowImport(true)} onDownload={download} />}
         {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}

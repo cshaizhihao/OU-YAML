@@ -24,6 +24,8 @@ export function parseImportedContent(content: string, format: ImportFormat = "au
 }
 
 export function mergeSubscriptionNodes(config: MihomoConfig, subscriptionId: string, incoming: ProxyNode[]) {
+  const previous = config.proxies.filter((node) => node.source?.id === subscriptionId);
+  const previousNames = new Set(previous.map((node) => node.name));
   const retained = config.proxies.filter((node) => node.source?.id !== subscriptionId);
   const used = new Set(retained.map((node) => node.name));
   const nodes = incoming.map((node) => {
@@ -34,5 +36,12 @@ export function mergeSubscriptionNodes(config: MihomoConfig, subscriptionId: str
     used.add(name);
     return { ...node, name, source: { kind: "subscription" as const, id: subscriptionId } };
   });
-  return { ...config, proxies: [...retained, ...nodes] };
+  const starterGroup = config.proxies.length === 0 && config.proxyGroups.length === 1 && config.proxyGroups[0].name === "节点选择";
+  const proxyGroups = config.proxyGroups.map((group, index) => {
+    const referencedPrevious = group.proxies.some((member) => previousNames.has(member));
+    if (!referencedPrevious && !(starterGroup && index === 0)) return group;
+    const retainedMembers = group.proxies.filter((member) => !previousNames.has(member));
+    return { ...group, proxies: [...new Set([...nodes.map((node) => node.name), ...retainedMembers])] };
+  });
+  return { ...config, proxies: [...retained, ...nodes], proxyGroups };
 }
