@@ -1,4 +1,5 @@
 import type { MihomoConfig, RuleItem } from "./types";
+import { createId } from "./id";
 
 interface TemplateRule { type: string; value: string; target: "DIRECT" | "REJECT" | "$TARGET"; options?: string[] }
 export interface RuleTemplate { id: string; name: string; rules: TemplateRule[] }
@@ -19,13 +20,13 @@ export function applyRuleTemplate(config: MihomoConfig, templateId: string, targ
   const template = ruleTemplates.find((item) => item.id === templateId);
   if (!template) throw new Error("规则模板不存在");
   const generated: RuleItem[] = template.rules.map((rule) => ({
-    id: crypto.randomUUID(), type: rule.type, value: rule.value,
+    id: createId(), type: rule.type, value: rule.value,
     target: rule.target === "$TARGET" ? target : rule.target,
     options: rule.options || [], enabled: true,
   }));
   if (mode === "replace" && !generated.some((rule) => rule.type === "MATCH")) {
     const currentMatch = config.rules.find((rule) => rule.enabled && rule.type === "MATCH");
-    generated.push(currentMatch ? { ...currentMatch, id: crypto.randomUUID() } : { id: crypto.randomUUID(), type: "MATCH", value: "", target, options: [], enabled: true });
+    generated.push(currentMatch ? { ...currentMatch, id: createId() } : { id: createId(), type: "MATCH", value: "", target, options: [], enabled: true });
   }
   if (mode === "replace") return { ...config, rules: generated };
   const generatedMatch = generated.find((rule) => rule.type === "MATCH");

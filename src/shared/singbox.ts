@@ -1,4 +1,5 @@
 import type { MihomoConfig, ProxyGroup, ProxyNode, RuleItem } from "./types";
+import { createId } from "./id";
 
 const asObject = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const without = (source: Record<string, unknown>, keys: string[]) => Object.fromEntries(Object.entries(source).filter(([key]) => !keys.includes(key)));
@@ -12,7 +13,7 @@ function parseOutbound(value: unknown): ProxyNode | ProxyGroup | null {
   if (["direct", "block", "dns"].includes(type)) return null;
   if (type === "selector" || type === "urltest") {
     return {
-      id: crypto.randomUUID(), name: tag, type: type === "selector" ? "select" : "url-test",
+      id: createId(), name: tag, type: type === "selector" ? "select" : "url-test",
       proxies: Array.isArray(outbound.outbounds) ? outbound.outbounds.map(String) : [],
       url: text(outbound.url) || undefined,
       interval: typeof outbound.interval === "string" ? Number.parseInt(outbound.interval, 10) : number(outbound.interval, 0) || undefined,
@@ -26,7 +27,7 @@ function parseOutbound(value: unknown): ProxyNode | ProxyGroup | null {
   const headers = asObject(transport.headers);
   const typeMap: Record<string, string> = { shadowsocks: "ss", socks: "socks5", hysteria2: "hysteria2" };
   const node: ProxyNode = {
-    id: crypto.randomUUID(), name: tag, type: typeMap[type] || type,
+    id: createId(), name: tag, type: typeMap[type] || type,
     server: text(outbound.server), port: number(outbound.server_port, 443),
     udp: true, tls: tls.enabled === true, skipCertVerify: tls.insecure === true,
     sni: text(tls.server_name) || undefined, uuid: text(outbound.uuid) || undefined,
@@ -50,7 +51,7 @@ function parseRouteRules(value: unknown): { rules: RuleItem[]; unsupported: unkn
     const mapping = mappings.find(([key]) => rule[key] !== undefined);
     if (!mapping) { unsupported.push(raw); continue; }
     const values = Array.isArray(rule[mapping[0]]) ? rule[mapping[0]] as unknown[] : [rule[mapping[0]]];
-    for (const value of values) rules.push({ id: crypto.randomUUID(), type: mapping[1], value: String(value), target, options: [], enabled: true });
+    for (const value of values) rules.push({ id: createId(), type: mapping[1], value: String(value), target, options: [], enabled: true });
   }
   return { rules, unsupported };
 }
@@ -72,7 +73,7 @@ export function parseSingBoxJson(source: string): MihomoConfig {
   const routeResult = parseRouteRules(route.rules);
   for (const rule of routeResult.rules) rule.target = builtinTags.get(rule.target) || rule.target;
   const final = text(route.final);
-  if (final) routeResult.rules.push({ id: crypto.randomUUID(), type: "MATCH", value: "", target: builtinTags.get(final) || final, options: [], enabled: true });
+  if (final) routeResult.rules.push({ id: createId(), type: "MATCH", value: "", target: builtinTags.get(final) || final, options: [], enabled: true });
   const inbounds = Array.isArray(root.inbounds) ? root.inbounds : [];
   const mixed = inbounds.map(asObject).find((item) => item.type === "mixed");
   const log = asObject(root.log);

@@ -19,7 +19,7 @@ type View = "start" | "nodes" | "groups" | "rules" | "subscriptions" | "history"
 const baseNav: { id: View; label: string; icon: typeof Network }[] = [
   { id: "start", label: "开始", icon: ListChecks },
   { id: "nodes", label: "节点", icon: Network },
-  { id: "groups", label: "策略组", icon: Group },
+  { id: "groups", label: "分组编排", icon: Group },
   { id: "rules", label: "规则", icon: ScrollText },
   { id: "subscriptions", label: "订阅", icon: Rss },
   { id: "history", label: "历史", icon: History },

@@ -1,3 +1,5 @@
+import { createId } from "./id";
+
 export type ProxyType = "ss" | "ssr" | "vmess" | "vless" | "trojan" | "snell" | "socks5" | "http" | "hysteria2" | "tuic" | "wireguard";
 export type TargetFormat = "mihomo" | "sing-box";
 
@@ -141,7 +143,7 @@ export const createEmptyConfig = (): MihomoConfig => ({
   proxies: [],
   proxyGroups: [
     {
-      id: crypto.randomUUID(),
+      id: createId(),
       name: "节点选择",
       type: "select",
       proxies: ["DIRECT"],
@@ -150,7 +152,7 @@ export const createEmptyConfig = (): MihomoConfig => ({
   ],
   rules: [
     {
-      id: crypto.randomUUID(),
+      id: createId(),
       type: "MATCH",
       value: "",
       target: "节点选择",

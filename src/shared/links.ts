@@ -1,4 +1,5 @@
 import type { ProxyNode } from "./types";
+import { createId } from "./id";
 
 export interface LinkParseError { line: number; input: string; message: string }
 export interface LinkParseResult { nodes: ProxyNode[]; errors: LinkParseError[] }
@@ -26,7 +27,7 @@ function hostPort(value: string): { server: string; port: number } {
 }
 
 function common(name: string, type: string, server: string, port: number): ProxyNode {
-  return { id: crypto.randomUUID(), name, type, server, port, udp: true, extra: {} };
+  return { id: createId(), name, type, server, port, udp: true, extra: {} };
 }
 
 function parseSs(input: string): ProxyNode {

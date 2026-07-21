@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, KeyRound, MoreHorizontal, Network, Pencil, Plus, Search, Server, Trash2 } from "lucide-react";
 import type { MihomoConfig, ProxyNode, ProxyType } from "../../shared/types";
+import { createId } from "../../shared/id";
 import { ConfirmDialog, Drawer } from "../Dialog";
 
 const types: ProxyType[] = ["ss", "ssr", "vmess", "vless", "trojan", "snell", "socks5", "http", "hysteria2", "tuic", "wireguard"];
-const blankNode = (): ProxyNode => ({ id: crypto.randomUUID(), name: "新节点", type: "ss", server: "", port: 443, udp: true, cipher: "aes-128-gcm", extra: {} });
+const blankNode = (): ProxyNode => ({ id: createId(), name: "新节点", type: "ss", server: "", port: 443, udp: true, cipher: "aes-128-gcm", extra: {} });
 
 export function NodesView({ config, onChange }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void }) {
   const [query, setQuery] = useState("");
@@ -19,7 +20,7 @@ export function NodesView({ config, onChange }: { config: MihomoConfig; onChange
     setEditing(null);
   }
   function duplicate(node: ProxyNode) {
-    onChange({ ...config, proxies: [...config.proxies, { ...node, id: crypto.randomUUID(), name: `${node.name} 副本` }] });
+    onChange({ ...config, proxies: [...config.proxies, { ...node, id: createId(), name: `${node.name} 副本` }] });
   }
   function move(node: ProxyNode, direction: -1 | 1) {
     const index = config.proxies.findIndex((item) => item.id === node.id);

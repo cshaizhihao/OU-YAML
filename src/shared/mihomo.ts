@@ -1,5 +1,6 @@
 import YAML from "yaml";
 import type { MihomoConfig, ProxyGroup, ProxyNode, RuleItem, ValidationIssue } from "./types";
+import { createId } from "./id";
 
 const TOP_LEVEL_KEYS = new Set(["mixed-port", "allow-lan", "mode", "log-level", "ipv6", "external-controller", "proxies", "proxy-groups", "rules"]);
 const PROXY_KEYS = new Set(["name", "type", "server", "port", "udp", "tls", "skip-cert-verify", "servername", "sni", "uuid", "password", "cipher", "network", "ws-opts", "grpc-opts"]);
@@ -26,7 +27,7 @@ function parseProxy(value: unknown): ProxyNode {
   if (item["ws-opts"]) extra["ws-opts"] = item["ws-opts"];
   if (item["grpc-opts"]) extra["grpc-opts"] = item["grpc-opts"];
   return {
-    id: crypto.randomUUID(),
+    id: createId(),
     name: readString(item.name, "未命名节点"),
     type: readString(item.type, "ss"),
     server: readString(item.server),
@@ -49,7 +50,7 @@ function parseProxy(value: unknown): ProxyNode {
 function parseGroup(value: unknown): ProxyGroup {
   const item = objectValue(value);
   return {
-    id: crypto.randomUUID(),
+    id: createId(),
     name: readString(item.name, "未命名策略组"),
     type: readString(item.type, "select") as ProxyGroup["type"],
     proxies: Array.isArray(item.proxies) ? item.proxies.map((entry) => String(entry)) : [],
@@ -68,11 +69,11 @@ export function parseRule(rawValue: unknown): RuleItem {
   const parts = line.split(",").map((part) => part.trim());
   const type = parts.shift()?.toUpperCase() || "MATCH";
   if (type === "MATCH") {
-    return { id: crypto.randomUUID(), type, value: "", target: parts.shift() || "DIRECT", options: parts, enabled };
+    return { id: createId(), type, value: "", target: parts.shift() || "DIRECT", options: parts, enabled };
   }
   const value = parts.shift() || "";
   const target = parts.shift() || "DIRECT";
-  return { id: crypto.randomUUID(), type, value, target, options: parts, enabled };
+  return { id: createId(), type, value, target, options: parts, enabled };
 }
 
 export function parseMihomoYaml(source: string): MihomoConfig {
