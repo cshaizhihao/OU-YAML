@@ -41,8 +41,9 @@ RUN set -eux; \
     chmod 0755 /out/mihomo /out/sing-box
 
 FROM node:20-bookworm-slim AS runtime
+ARG BUILD_COMMIT=unknown
 WORKDIR /app
-ENV NODE_ENV=production PORT=8787 DATA_DIR=/app/data
+ENV NODE_ENV=production PORT=8787 DATA_DIR=/app/data APP_COMMIT=$BUILD_COMMIT
 RUN groupadd --system --gid 1001 ouyaml && useradd --system --uid 1001 --gid ouyaml --home-dir /app ouyaml
 COPY --from=build --chown=ouyaml:ouyaml /app/dist ./dist
 COPY --from=build --chown=ouyaml:ouyaml /app/dist-server ./dist-server

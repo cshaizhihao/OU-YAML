@@ -153,6 +153,20 @@ install_ip_mode() {
   say "访问地址：${c_green}http://服务器IP:${port}${c_reset}"
 }
 
+install_web_update_agent() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    warn "当前系统没有 systemd，网页一键更新代理未启用。"
+    return 0
+  fi
+  step "正在启用网页端一键更新代理..."
+  sed "s&@INSTALL_DIR@&${INSTALL_DIR}&g" "${INSTALL_DIR}/deploy/ou-yaml-web-update-agent.service" > /etc/systemd/system/ou-yaml-web-update-agent.service
+  install -m 0644 "${INSTALL_DIR}/deploy/ou-yaml-web-update-agent.timer" /etc/systemd/system/ou-yaml-web-update-agent.timer
+  touch "${INSTALL_DIR}/data/web-update-agent.enabled"
+  chown 1001:1001 "${INSTALL_DIR}/data/web-update-agent.enabled" 2>/dev/null || true
+  systemctl daemon-reload
+  systemctl enable --now ou-yaml-web-update-agent.timer
+}
+
 install_domain_mode() {
   local domain cf_mode
   domain="$(ask '请输入已完成 DNS 解析的域名')"
@@ -198,6 +212,7 @@ run_install() {
     2) install_domain_mode;;
     *) fail "安装方式选择无效。";;
   esac
+  install_web_update_agent
   if command -v systemctl >/dev/null 2>&1; then
     local auto_update
     auto_update="$(ask '是否启用每日自动更新？输入 y 启用，其他跳过' 'n')"

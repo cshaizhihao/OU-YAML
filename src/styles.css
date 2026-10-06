@@ -572,3 +572,24 @@ input:disabled { background: #eef1ef; color: var(--ink-faint); }
 .template-card p { margin: 0 0 18px; color: var(--ink-faint); }
 .template-card-meta { color: var(--ink-faint); font-size: 13px; }
 .template-card-meta span { display: inline-flex; align-items: center; gap: 6px; }
+
+.update-section { align-items: start; }
+.update-section > header p { margin: 7px 0 0; color: var(--ink-faint); font-size: 13px; line-height: 1.6; }
+.update-card { display: grid; gap: 16px; padding: 18px; border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line)); border-radius: var(--radius-lg); background: linear-gradient(135deg, color-mix(in srgb, var(--accent-soft) 65%, var(--surface)), var(--surface)); box-shadow: 0 12px 30px rgba(49, 75, 67, .07); animation: update-card-in .45s var(--ease) both; }
+.update-card-top, .update-release, .update-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.update-card-top strong { display: block; margin-top: 6px; font-size: 16px; }
+.update-release { padding: 13px 14px; border-radius: var(--radius); background: rgba(255, 255, 255, .72); }
+.update-release strong, .update-release small { display: block; }
+.update-release small { margin-top: 4px; color: var(--ink-faint); }
+.update-notes, .update-log { max-height: 180px; overflow: auto; margin: 0; padding: 13px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(35, 47, 43, .06); color: var(--ink-soft); font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.update-ready { display: flex; align-items: center; gap: 8px; color: var(--accent); font-weight: 650; }
+.update-hint { display: flex; align-items: center; gap: 6px; margin: -5px 0 0; color: var(--warning); font-size: 13px; }
+.update-progress { display: grid; gap: 8px; padding-top: 4px; }
+.update-progress-label { color: var(--ink-soft); font-size: 13px; }
+.update-progress-label b { color: var(--accent); }
+.update-progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.update-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #8fbd9a); transition: width .5s var(--ease); }
+.update-progress.failed .update-progress-track i { background: var(--danger); }
+.update-progress small { color: var(--ink-faint); }
+@keyframes update-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .update-card, .update-progress-track i { animation: none; transition: none; } }

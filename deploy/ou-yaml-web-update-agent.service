@@ -1,0 +1,9 @@
+[Unit]
+Description=OU-YAML web update agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/bin/bash @INSTALL_DIR@/deploy/ou-yaml-web-update-agent.sh

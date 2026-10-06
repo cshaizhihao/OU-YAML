@@ -15,6 +15,7 @@ import { safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
 import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, recordAudit, recordJob, updateJob } from "./domainService";
+import { checkForUpdate, readUpdateLog, readUpdateStatus, requestWebUpdate } from "./update";
 
 declare global {
   namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
@@ -213,6 +214,30 @@ app.delete("/api/admin/users/:id", requireAuth, requireAdmin, (req, res) => {
   }
   db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
   res.status(204).end();
+});
+
+app.get("/api/admin/update/check", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    res.json(await checkForUpdate());
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? `检查更新失败：${error.message}` : "检查更新失败" });
+  }
+});
+
+app.get("/api/admin/update/status", requireAuth, requireAdmin, async (_req, res) => {
+  res.json(await readUpdateStatus());
+});
+
+app.get("/api/admin/update/log", requireAuth, requireAdmin, async (_req, res) => {
+  res.json({ log: await readUpdateLog() });
+});
+
+app.post("/api/admin/update/start", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    res.status(202).json(await requestWebUpdate(req.user!.username));
+  } catch (error) {
+    res.status(409).json({ error: error instanceof Error ? error.message : "更新启动失败" });
+  }
 });
 
 app.get("/api/projects", requireAuth, (req, res) => {

@@ -8,7 +8,7 @@
     作者：<code>nodeseek@cshaizhihao</code>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.0.2-2E4E3F?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/version-1.1.0-2E4E3F?style=flat-square" alt="version" />
     <img src="https://img.shields.io/badge/Mihomo-Clash%20Meta-C85A3E?style=flat-square" alt="Mihomo" />
     <img src="https://img.shields.io/badge/sing--box-supported-73629B?style=flat-square" alt="sing-box" />
   </p>
@@ -65,6 +65,10 @@ http://服务器IP:8787
 - 没有其他反向代理占用 80、443。
 
 ### 更新与备份
+
+管理员登录后，可以在「基础设置 → 网页更新」中检查 GitHub 最新版本，并一键完成备份、拉取、重建和重启。安装脚本会自动注册轻量级 systemd 更新代理；网页容器本身不接触 Docker Socket，更新任务由主机代理执行。
+
+如果需要手动更新，也可以运行：
 
 ```bash
 sudo /opt/ou-yaml/update.sh

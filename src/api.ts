@@ -1,6 +1,10 @@
 import type { NodeSource, ManagedNode, GenerationProfile, GeneratedSubscription } from "./shared/domain";
 import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
 
+
+export type UpdateInfo = { currentVersion: string; latestVersion: string | null; hasUpdate: boolean; releaseUrl: string | null; releaseNotes: string; publishedAt: string | null; agentAvailable: boolean };
+export type UpdateStatus = { status: "idle" | "requested" | "running" | "completed" | "failed"; message: string; progress: number; updatedAt: string | null };
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...options,
@@ -26,6 +30,10 @@ export const api = {
   createUser: (username: string, password: string, isAdmin: boolean) => request<UserAccount>("/api/admin/users", { method: "POST", body: JSON.stringify({ username, password, isAdmin }) }),
   updateUser: (id: string, data: { isAdmin: boolean; disabled: boolean; password?: string }) => request<UserAccount>(`/api/admin/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteUser: (id: string) => request<void>(`/api/admin/users/${id}`, { method: "DELETE" }),
+  checkUpdate: () => request<UpdateInfo>("/api/admin/update/check"),
+  getUpdateStatus: () => request<UpdateStatus>("/api/admin/update/status"),
+  getUpdateLog: () => request<{ log: string }>("/api/admin/update/log"),
+  startUpdate: () => request<{ accepted: boolean }>("/api/admin/update/start", { method: "POST" }),
   listProjects: () => request<ProjectSummary[]>("/api/projects"),
   listNodeSources: () => request<NodeSource[]>("/api/node-sources"),
   createNodeSource: (data: Pick<NodeSource, "name" | "kind" | "format"> & { url?: string }) => request<NodeSource>("/api/node-sources", { method: "POST", body: JSON.stringify(data) }),

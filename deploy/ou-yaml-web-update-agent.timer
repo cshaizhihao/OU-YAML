@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll OU-YAML web update requests
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=15s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

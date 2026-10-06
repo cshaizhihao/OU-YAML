@@ -1,7 +1,10 @@
 services:
   ou-yaml:
-    build: .
     image: ou-yaml:local
+    build:
+      context: .
+      args:
+        BUILD_COMMIT: "${OU_YAML_BUILD_COMMIT:-unknown}"
     container_name: ou-yaml
     restart: unless-stopped
     ports:
