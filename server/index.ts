@@ -14,6 +14,7 @@ import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from 
 import { safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
+import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription } from "./domainService";
 
 declare global {
   namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
@@ -325,6 +326,38 @@ app.post("/api/projects/:projectId/versions/:id/restore", requireAuth, (req, res
   db.prepare("UPDATE projects SET config_json = ?, target_format = ?, updated_at = ? WHERE id = ?")
     .run(version.config_json, version.target_format, now, req.params.projectId);
   res.json(readProject(db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.projectId) as Record<string, unknown>));
+});
+
+app.get("/api/node-sources", requireAuth, (req, res) => res.json(listNodeSources(req.user!.id)));
+app.post("/api/node-sources", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120), kind: z.enum(["manual", "file", "remote-url", "share-links"]), url: z.string().url().max(2048).optional(), format: z.enum(["auto", "links", "mihomo", "sing-box"]).optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "节点来源参数无效" });
+  res.status(201).json(createNodeSource(req.user!.id, parsed.data));
+});
+app.get("/api/managed-nodes", requireAuth, (req, res) => res.json(listManagedNodes(req.user!.id, typeof req.query.sourceId === "string" ? req.query.sourceId : undefined)));
+app.post("/api/managed-nodes", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(160), type: z.string().min(1).max(40), server: z.string().min(1).max(255), port: z.number().int().min(1).max(65535), sourceId: z.string().optional(), tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(), note: z.string().max(500).optional(), extra: z.record(z.unknown()).default({}) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "节点参数无效" });
+  res.status(201).json(createManagedNode(req.user!.id, { ...parsed.data, id: randomUUID() }));
+});
+app.delete("/api/managed-nodes/:id", requireAuth, (req, res) => res.json({ deleted: deleteManagedNode(req.user!.id, String(req.params.id)) }));
+app.get("/api/generation-profiles", requireAuth, (req, res) => res.json(listProfiles(req.user!.id)));
+app.post("/api/generation-profiles", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120), targetFormat: z.enum(["mihomo", "sing-box"]), config: z.any().default({}), nodeIds: z.array(z.string()).default([]), sourceIds: z.array(z.string()).default([]), templateId: z.string().optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "生成配置参数无效" });
+  res.status(201).json(createProfile(req.user!.id, { ...parsed.data, config: parsed.data.config as MihomoConfig }));
+});
+app.get("/api/generated-subscriptions", requireAuth, (req, res) => res.json(listPublishedSubscriptions(req.user!.id)));
+app.post("/api/generated-subscriptions", requireAuth, (req, res) => {
+  const parsed = z.object({ profileId: z.string(), name: z.string().trim().min(1).max(120), targetFormat: z.enum(["mihomo", "sing-box"]), content: z.string().min(1).max(10_000_000), nodeCount: z.number().int().min(0), expiresAt: z.string().datetime().optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "生成订阅参数无效" });
+  res.status(201).json(publishSubscription(req.user!.id, parsed.data.profileId, parsed.data.name, parsed.data.targetFormat, parsed.data.content, parsed.data.nodeCount, parsed.data.expiresAt));
+});
+app.get("/sub/:token", (req, res) => {
+  const item = readPublicSubscription(req.params.token);
+  if (!item) return res.status(404).type("text/plain").send("订阅不存在、已撤销或已过期");
+  res.setHeader("Cache-Control", "private, max-age=60");
+  res.type(item.targetFormat === "sing-box" ? "application/json" : "application/yaml").send(item.content);
 });
 
 app.post("/api/tools/parse", requireAuth, (req, res) => {

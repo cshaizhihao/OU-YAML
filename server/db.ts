@@ -61,6 +61,73 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_subscriptions_project ON subscriptions(project_id);
   CREATE INDEX IF NOT EXISTS idx_versions_project ON project_versions(project_id, created_at DESC);
+  CREATE TABLE IF NOT EXISTS node_sources (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    url TEXT,
+    format TEXT NOT NULL DEFAULT 'auto',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    node_count INTEGER NOT NULL DEFAULT 0,
+    last_updated_at TEXT,
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS managed_nodes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_id TEXT REFERENCES node_sources(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    server TEXT NOT NULL,
+    port INTEGER NOT NULL,
+    config_json TEXT NOT NULL,
+    raw_config_json TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_managed_nodes_user ON managed_nodes(user_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_managed_nodes_source ON managed_nodes(source_id);
+  CREATE TABLE IF NOT EXISTS node_tags (
+    node_id TEXT NOT NULL REFERENCES managed_nodes(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL,
+    PRIMARY KEY(node_id, tag)
+  );
+  CREATE TABLE IF NOT EXISTS generation_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    target_format TEXT NOT NULL DEFAULT 'mihomo',
+    config_json TEXT NOT NULL,
+    node_ids_json TEXT NOT NULL DEFAULT '[]',
+    source_ids_json TEXT NOT NULL DEFAULT '[]',
+    template_id TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS generated_subscriptions (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES generation_profiles(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    target_format TEXT NOT NULL,
+    token_hash TEXT UNIQUE NOT NULL,
+    content TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    node_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_generated_subscriptions_user ON generated_subscriptions(user_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_generated_subscriptions_token ON generated_subscriptions(token_hash);
 `);
 
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
