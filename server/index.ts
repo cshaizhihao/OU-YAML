@@ -14,7 +14,7 @@ import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from 
 import { safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
-import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs } from "./domainService";
+import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs, deleteNodeSource, recordAudit, recordJob, updateJob } from "./domainService";
 
 declare global {
   namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
@@ -35,6 +35,7 @@ app.use(helmet({
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 
+const publicSubscriptionLimiter = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
 const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(256) });
 const userSchema = z.object({
@@ -340,7 +341,8 @@ app.post("/api/managed-nodes", requireAuth, (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "节点参数无效" });
   res.status(201).json(createManagedNode(req.user!.id, { ...parsed.data, id: randomUUID() }));
 });
-app.delete("/api/managed-nodes/:id", requireAuth, (req, res) => res.json({ deleted: deleteManagedNode(req.user!.id, String(req.params.id)) }));
+app.delete("/api/managed-nodes/:id", requireAuth, (req, res) => { const deleted = deleteManagedNode(req.user!.id, String(req.params.id)); recordAudit(req.user!.id, "delete", "managed-node", String(req.params.id)); res.json({ deleted }); });
+app.delete("/api/node-sources/:id", requireAuth, (req, res) => { const deleted = deleteNodeSource(req.user!.id, String(req.params.id)); recordAudit(req.user!.id, "delete", "node-source", String(req.params.id)); res.json({ deleted }); });
 app.get("/api/generation-profiles", requireAuth, (req, res) => res.json(listProfiles(req.user!.id)));
 app.post("/api/generation-profiles", requireAuth, (req, res) => {
   const parsed = z.object({ name: z.string().trim().min(1).max(120), targetFormat: z.enum(["mihomo", "sing-box"]), config: z.any().default({}), nodeIds: z.array(z.string()).default([]), sourceIds: z.array(z.string()).default([]), templateId: z.string().optional() }).safeParse(req.body);
@@ -359,10 +361,11 @@ app.post("/api/generated-subscriptions/:id/revoke", requireAuth, (req, res) => r
 app.post("/api/generated-subscriptions", requireAuth, (req, res) => {
   const parsed = z.object({ profileId: z.string(), name: z.string().trim().min(1).max(120), targetFormat: z.enum(["mihomo", "sing-box"]), content: z.string().min(1).max(10_000_000), nodeCount: z.number().int().min(0), expiresAt: z.string().datetime().optional() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "生成订阅参数无效" });
-  res.status(201).json(publishSubscription(req.user!.id, parsed.data.profileId, parsed.data.name, parsed.data.targetFormat, parsed.data.content, parsed.data.nodeCount, parsed.data.expiresAt));
+  const jobId = recordJob(req.user!.id, "generate-subscription", { profileId: parsed.data.profileId });
+  try { const result = publishSubscription(req.user!.id, parsed.data.profileId, parsed.data.name, parsed.data.targetFormat, parsed.data.content, parsed.data.nodeCount, parsed.data.expiresAt); updateJob(jobId, "completed"); recordAudit(req.user!.id, "publish", "generated-subscription", result.id, { targetFormat: result.targetFormat }); res.status(201).json(result); } catch (error) { updateJob(jobId, "failed", error instanceof Error ? error.message : "生成失败"); throw error; }
 });
-app.get("/sub/:token", (req, res) => {
-  const item = readPublicSubscription(req.params.token);
+app.get("/sub/:token", publicSubscriptionLimiter, (req, res) => {
+  const item = readPublicSubscription(String(req.params.token));
   if (!item) return res.status(404).type("text/plain").send("订阅不存在、已撤销或已过期");
   res.setHeader("Cache-Control", "private, max-age=60");
   res.type(item.targetFormat === "sing-box" ? "application/json" : "application/yaml").send(item.content);

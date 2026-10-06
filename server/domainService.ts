@@ -111,3 +111,15 @@ export function createRuleTemplate(userId: string, input: { name: string; descri
 export function listJobs(userId: string) {
   return (db.prepare('SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').all(userId) as Record<string, unknown>[]).map(row => ({ id: String(row.id), kind: String(row.kind), status: String(row.status), error: row.error ? String(row.error) : undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at) }));
 }
+
+export function deleteNodeSource(userId: string, id: string) { return db.prepare("DELETE FROM node_sources WHERE id = ? AND user_id = ?").run(id, userId).changes > 0; }
+
+export function recordJob(userId: string | undefined, kind: string, payload: unknown = {}) {
+  const id = randomUUID(); const stamp = now();
+  db.prepare("INSERT INTO jobs (id,user_id,kind,status,payload_json,created_at,updated_at) VALUES (?,?,?,'queued',?,?,?)").run(id, userId || null, kind, JSON.stringify(payload), stamp, stamp);
+  return id;
+}
+
+export function updateJob(id: string, status: string, error?: string) { db.prepare("UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?").run(status, error || null, now(), id); }
+
+export function recordAudit(userId: string | undefined, action: string, resourceType: string, resourceId?: string, metadata: unknown = {}) { db.prepare("INSERT INTO audit_logs (id,user_id,action,resource_type,resource_id,metadata_json,created_at) VALUES (?,?,?,?,?,?,?)").run(randomUUID(), userId || null, action, resourceType, resourceId || null, JSON.stringify(metadata), now()); }

@@ -31,6 +31,7 @@ export const api = {
   createNodeSource: (data: Pick<NodeSource, "name" | "kind" | "format"> & { url?: string }) => request<NodeSource>("/api/node-sources", { method: "POST", body: JSON.stringify(data) }),
   listManagedNodes: (sourceId?: string) => request<ManagedNode[]>(`/api/managed-nodes${sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ""}`),
   createManagedNode: (data: Partial<ManagedNode> & Pick<ManagedNode, "name" | "type" | "server" | "port">) => request<ManagedNode>("/api/managed-nodes", { method: "POST", body: JSON.stringify(data) }),
+  deleteNodeSource: (id: string) => request<{ deleted: boolean }>(`/api/node-sources/${id}`, { method: "DELETE" }),
   deleteManagedNode: (id: string) => request<{ deleted: boolean }>(`/api/managed-nodes/${id}`, { method: "DELETE" }),
   listRuleTemplates: () => request<any[]>("/api/rule-templates"),
   createRuleTemplate: (data: { name: string; description?: string; targetFormat: TargetFormat; content: unknown[] }) => request<any>("/api/rule-templates", { method: "POST", body: JSON.stringify(data) }),
