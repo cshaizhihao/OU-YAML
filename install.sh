@@ -11,8 +11,11 @@ if [ "${EUID}" -ne 0 ]; then
   exit 1
 fi
 
-if ! [ -t 0 ] && [ -r /dev/tty ]; then
-  exec </dev/tty
+if ! [ -t 0 ]; then
+  tty_path="$(tty 2>/dev/null || true)"
+  if [ -n "${tty_path}" ] && [ "${tty_path}" != "not a tty" ]; then
+    exec 0<"${tty_path}"
+  fi
 fi
 
 c_green='\033[1;32m'; c_cyan='\033[1;36m'; c_yellow='\033[1;33m'; c_red='\033[1;31m'; c_dim='\033[2m'; c_reset='\033[0m'
