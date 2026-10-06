@@ -593,3 +593,31 @@ input:disabled { background: #eef1ef; color: var(--ink-faint); }
 .update-progress small { color: var(--ink-faint); }
 @keyframes update-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .update-card, .update-progress-track i { animation: none; transition: none; } }
+
+.nav-section-label { margin: 14px 8px 4px; color: #70817b; font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-item { min-height: 48px; }
+.nav-item > span { display: grid; gap: 2px; }
+.nav-item > span strong { font-size: 13px; font-weight: 650; }
+.nav-item > span small { color: #82928c; font-size: 10px; }
+.nav-item.active > span small, .nav-item:hover > span small { color: #b3c5bf; }
+@media (max-width: 900px) { .nav-section-label { margin-top: 9px; } }
+
+.settings-advanced { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-soft); overflow: hidden; }
+.settings-advanced > summary { cursor: pointer; list-style: none; padding: 16px 18px; color: var(--ink); font-weight: 700; }
+.settings-advanced > summary::-webkit-details-marker { display: none; }
+.settings-advanced > summary::after { content: "＋"; float: right; color: var(--accent); font-size: 18px; }
+.settings-advanced[open] > summary::after { content: "－"; }
+.settings-advanced > summary span { margin-left: 8px; color: var(--ink-faint); font-size: 12px; font-weight: 500; }
+.settings-advanced .settings-section { margin: 0 18px; }
+.group-drag-handle { margin-left: -5px; color: var(--ink-faint); }
+.group-column.dragging { opacity: .55; }
+@media (max-width: 620px) { .settings-advanced > summary span { display: block; margin: 5px 0 0; } }
+@media (max-width: 900px) and (min-width: 621px) {
+  .nav-item > span { display: none; }
+  .nav-item { justify-content: center; padding: 0; }
+  .nav-section-label { display: none; }
+}
+@media (max-width: 620px) {
+  .nav-item > span { display: grid; }
+  .nav-section-label { display: block; }
+}

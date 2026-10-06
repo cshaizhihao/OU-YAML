@@ -21,20 +21,20 @@ import { TemplatesView } from "./views/TemplatesView";
 import { QuickStartView, type GuideTarget } from "./views/QuickStartView";
 
 type View = "start" | "links" | "sources" | "pool" | "generator" | "templates" | "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
-const baseNav: { id: View; label: string; icon: typeof Network }[] = [
-  { id: "links", label: "订阅链接", icon: Rss },
-  { id: "sources", label: "订阅来源", icon: FolderPlus },
-  { id: "pool", label: "节点池", icon: Database },
-  { id: "generator", label: "生成订阅", icon: Rocket },
-  { id: "templates", label: "模板中心", icon: FileCode2 },
-  { id: "start", label: "开始", icon: ListChecks },
-  { id: "nodes", label: "节点", icon: Network },
-  { id: "groups", label: "分组编排", icon: Group },
-  { id: "rules", label: "规则", icon: ScrollText },
-  { id: "subscriptions", label: "订阅", icon: Rss },
-  { id: "history", label: "历史", icon: History },
-  { id: "settings", label: "基础设置", icon: Settings },
-  { id: "source", label: "源码", icon: FileCode2 },
+const baseNav: { id: View; label: string; hint: string; section: string; icon: typeof Network }[] = [
+  { id: "start", label: "开始使用", hint: "新手引导", section: "工作流", icon: ListChecks },
+  { id: "sources", label: "导入来源", hint: "订阅 URL / 文件", section: "工作流", icon: FolderPlus },
+  { id: "pool", label: "节点池", hint: "管理全部节点", section: "工作流", icon: Database },
+  { id: "groups", label: "代理分组", hint: "拖拽编排策略", section: "工作流", icon: Group },
+  { id: "rules", label: "规则编辑", hint: "匹配与分流", section: "工作流", icon: ScrollText },
+  { id: "generator", label: "生成订阅", hint: "生成配置", section: "发布", icon: Rocket },
+  { id: "links", label: "订阅链接", hint: "查看已发布", section: "发布", icon: Rss },
+  { id: "templates", label: "规则模板", hint: "复用模板", section: "资源", icon: FileCode2 },
+  { id: "nodes", label: "当前配置节点", hint: "仅当前项目", section: "资源", icon: Network },
+  { id: "subscriptions", label: "项目订阅", hint: "自动刷新", section: "资源", icon: Rss },
+  { id: "history", label: "历史版本", hint: "回滚快照", section: "管理", icon: History },
+  { id: "settings", label: "设置", hint: "账号与系统", section: "管理", icon: Settings },
+  { id: "source", label: "查看源码", hint: "原始配置", section: "管理", icon: FileCode2 },
 ];
 
 export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
@@ -63,7 +63,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
 
   const issues = useMemo(() => project ? validateConfig(project.config) : [], [project]);
   const errors = issues.filter((issue) => issue.level === "error").length;
-  const nav = useMemo(() => user.isAdmin ? [...baseNav, { id: "admin" as View, label: "系统", icon: ShieldCheck }] : baseNav, [user.isAdmin]);
+  const nav = useMemo(() => user.isAdmin ? [...baseNav, { id: "admin" as View, label: "系统管理", hint: "用户与权限", section: "管理", icon: ShieldCheck }] : baseNav, [user.isAdmin]);
 
   const updateProject = useCallback((updater: (current: Project) => Project) => {
     setProject((current) => current ? updater(current) : current);
@@ -135,7 +135,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   return <div className="workspace">
     <aside className={mobileNav ? "sidebar mobile-open" : "sidebar"}>
       <div className="sidebar-brand"><div className="brand-mark"><img src="/brand/ou-yaml-logo.png" alt="OU-YAML" /></div><strong>OU-YAML</strong><button className="icon-button mobile-only" onClick={() => setMobileNav(false)} aria-label="关闭导航"><XCircle size={20} /></button></div>
-      <nav aria-label="主要导航">{nav.map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "nav-item active" : "nav-item"} onClick={() => { setView(id); setMobileNav(false); }}><Icon size={19} /><span>{label}</span>{id === "nodes" && <b>{project.config.proxies.length}</b>}{id === "groups" && <b>{project.config.proxyGroups.length}</b>}{id === "rules" && <b>{project.config.rules.length}</b>}</button>)}</nav>
+      <nav aria-label="主要导航">{nav.map(({ id, label, hint, section, icon: Icon }, index) => <div key={id}>{(index === 0 || nav[index - 1].section !== section) && <div className="nav-section-label">{section}</div>}<button className={view === id ? "nav-item active" : "nav-item"} onClick={() => { setView(id); setMobileNav(false); }}><Icon size={18} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}{id === "groups" && <b>{project.config.proxyGroups.length}</b>}{id === "rules" && <b>{project.config.rules.length}</b>}</button></div>)}</nav>
       <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={async () => { await api.logout(); onLogout(); }}><LogOut size={18} /></button></div>
     </aside>
 

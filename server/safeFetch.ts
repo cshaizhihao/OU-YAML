@@ -19,7 +19,7 @@ async function resolvePublic(hostname: string) {
   return records[0];
 }
 
-async function requestOnce(url: URL, maxBytes: number): Promise<{ body?: string; redirect?: URL }> {
+async function requestOnce(url: URL, maxBytes: number, userAgent = "clash.meta/1.19.0 (OU-YAML; subscription-import)"): Promise<{ body?: string; redirect?: URL }> {
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("订阅地址只支持 HTTP 或 HTTPS");
   if (url.username || url.password) throw new Error("订阅地址不能包含 URL 账号密码");
   const resolved = await resolvePublic(url.hostname);
@@ -33,7 +33,7 @@ async function requestOnce(url: URL, maxBytes: number): Promise<{ body?: string;
       path: `${url.pathname}${url.search}`,
       method: "GET",
       servername: net.isIP(url.hostname) ? undefined : url.hostname,
-      headers: { Host: url.host, "User-Agent": "OU-YAML/0.2", Accept: "text/plain, application/yaml, application/json", "Accept-Encoding": "identity" },
+      headers: { Host: url.host, "User-Agent": userAgent, Accept: "*/*", "Accept-Encoding": "identity", Connection: "close", "Cache-Control": "no-cache" },
       timeout: 15_000,
     }, (response) => {
       if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
@@ -42,7 +42,11 @@ async function requestOnce(url: URL, maxBytes: number): Promise<{ body?: string;
         return;
       }
       if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
-        response.resume(); reject(new Error(`订阅服务器返回 HTTP ${response.statusCode || 0}`)); return;
+        const statusCode = response.statusCode || 0;
+        response.resume();
+        const error = new Error(`订阅服务器返回 HTTP ${statusCode}`) as Error & { statusCode?: number };
+        error.statusCode = statusCode;
+        reject(error); return;
       }
       const chunks: Buffer[] = [];
       let size = 0;
@@ -63,10 +67,19 @@ export async function safeFetchText(input: string, maxBytes = 2_000_000) {
   let url: URL;
   try { url = new URL(input); } catch { throw new Error("订阅地址格式无效"); }
   for (let redirects = 0; redirects <= 3; redirects += 1) {
-    const result = await requestOnce(url, maxBytes);
-    if (result.body !== undefined) return result.body;
-    if (!result.redirect) break;
-    url = result.redirect;
+    try {
+      const result = await requestOnce(url, maxBytes);
+      if (result.body !== undefined) return result.body;
+      if (!result.redirect) break;
+      url = result.redirect;
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode !== 403 && statusCode !== 404) throw error;
+      const retry = await requestOnce(url, maxBytes, "Mozilla/5.0 (compatible; OU-YAML subscription importer)");
+      if (retry.body !== undefined) return retry.body;
+      if (!retry.redirect) throw error;
+      url = retry.redirect;
+    }
   }
   throw new Error("订阅重定向次数过多");
 }

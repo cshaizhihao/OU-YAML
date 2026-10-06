@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addGroupMembers, moveGroupMember, reorderGroupMember } from "../src/shared/grouping";
+import { addGroupMembers, moveGroupMember, reorderGroupMember, reorderGroups } from "../src/shared/grouping";
 import type { ProxyGroup } from "../src/shared/types";
 
 const groups = (): ProxyGroup[] => [
@@ -22,4 +22,13 @@ test("成员跨组移动时从原组移除并加入目标组", () => {
   const output = moveGroupMember(groups(), "a", "b", "日本 01", "美国 01");
   assert.deepEqual(output[0].proxies, ["香港 01", "DIRECT"]);
   assert.deepEqual(output[1].proxies, ["日本 01", "美国 01"]);
+});
+
+test("策略组可以整体重新排序", () => {
+  const groups = [
+    { id: "a", name: "A", type: "select", proxies: [], extra: {} },
+    { id: "b", name: "B", type: "select", proxies: [], extra: {} },
+    { id: "c", name: "C", type: "select", proxies: [], extra: {} },
+  ] as any;
+  assert.deepEqual(reorderGroups(groups, "c", "a").map((group: any) => group.id), ["c", "a", "b"]);
 });

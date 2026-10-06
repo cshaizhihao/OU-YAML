@@ -29,3 +29,14 @@ export function moveGroupMember(groups: ProxyGroup[], sourceGroupId: string, tar
   const removed = removeGroupMember(groups, sourceGroupId, name);
   return addGroupMembers(removed, targetGroupId, [name], before);
 }
+
+export function reorderGroups(groups: ProxyGroup[], groupId: string, beforeGroupId: string) {
+  if (groupId === beforeGroupId) return groups;
+  const from = groups.findIndex((group) => group.id === groupId);
+  const to = groups.findIndex((group) => group.id === beforeGroupId);
+  if (from < 0 || to < 0) return groups;
+  const next = [...groups];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
