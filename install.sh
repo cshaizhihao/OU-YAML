@@ -11,10 +11,9 @@ if [ "${EUID}" -ne 0 ]; then
   exit 1
 fi
 
-if ! [ -t 0 ]; then
-  tty_path="$(tty 2>/dev/null || true)"
-  if [ -n "${tty_path}" ] && [ "${tty_path}" != "not a tty" ]; then
-    exec 0<"${tty_path}"
+if ! [ -t 0 ] && [ -e /dev/tty ]; then
+  if ( : </dev/tty ) 2>/dev/null; then
+    exec </dev/tty
   fi
 fi
 
@@ -30,12 +29,11 @@ art() {
   clear 2>/dev/null || true
   say "${c_green}"
   cat <<'ART'
-   ____  _   _       __   ____  __  __ _        _
-  / __ \| | | |      \ \ / /  \/  |/ _| |      | |
- | |  | | | | |______ \ V /| |\/| | |_| |      | |
- | |  | | | | |______  > < | |  | |  _| |      | |
- | |__| | |_| |      / . \| |  | | | | |____  | |____
-  \____/ \___/      /_/ \_\_|  |_|_| |______| |______|
+   OOO   U   U        -   Y   Y   AAAAA  M   M  L
+  O   O  U   U       ---   Y Y    A   A  MM MM  L
+  O   O  U   U        -     Y     AAAAA  M M M  L
+  O   O  U   U              Y     A   A  M   M  L
+   OOO    UUU               Y     A   A  M   M  LLLLL
 
                  YAML · Nodes · Subscriptions
 ART
