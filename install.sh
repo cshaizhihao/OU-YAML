@@ -11,9 +11,14 @@ if [ "${EUID}" -ne 0 ]; then
   exit 1
 fi
 
-if ! [ -t 0 ] && [ -e /dev/tty ]; then
-  if ( : </dev/tty ) 2>/dev/null; then
-    exec </dev/tty
+INPUT_FD=0
+if ! [ -t 0 ]; then
+  if [ -e /dev/tty ] && ( : </dev/tty ) 2>/dev/null; then
+    exec 3</dev/tty
+    INPUT_FD=3
+  else
+    echo "安装程序需要交互式终端，请使用 SSH 终端运行，或先下载脚本再执行。" >&2
+    exit 1
   fi
 fi
 
@@ -23,7 +28,15 @@ say() { printf '%b\n' "$*"; }
 step() { say "${c_cyan}▶${c_reset} $*"; }
 warn() { say "${c_yellow}⚠${c_reset} $*"; }
 fail() { say "${c_red}✕${c_reset} $*" >&2; exit 1; }
-ask() { local prompt="$1" default="${2:-}" value; if [ -n "$default" ]; then read -r -p "$prompt [$default]: " value; printf '%s' "${value:-$default}"; else read -r -p "$prompt: " value; printf '%s' "$value"; fi; }
+read_input() {
+  if [ "$INPUT_FD" -eq 3 ]; then
+    read -r "$@" <&3
+  else
+    read -r "$@"
+  fi
+}
+
+ask() { local prompt="$1" default="${2:-}" value; if [ -n "$default" ]; then read_input -p "$prompt [$default]: " value; printf '%s' "${value:-$default}"; else read_input -p "$prompt: " value; printf '%s' "$value"; fi; }
 
 art() {
   clear 2>/dev/null || true
@@ -60,7 +73,7 @@ show_agreement() {
 NOTICE
   say "请输入 ${c_green}YES${c_reset} 表示同意协议，输入其他内容退出。"
   local agreement
-  read -r -p "确认: " agreement
+  read_input -p "确认: " agreement
   [ "${agreement}" = "YES" ] || fail "未同意使用协议，安装已退出。"
 }
 
@@ -120,7 +133,7 @@ write_env() {
   fi
   admin_user="$(ask '管理员账号' 'admin')"
   while :; do
-    read -r -s -p "管理员密码（至少 10 位）: " password; echo
+    read_input -s -p "管理员密码（至少 10 位）: " password; echo
     [ "${#password}" -ge 10 ] && break
     warn "密码至少需要 10 位。"
   done
