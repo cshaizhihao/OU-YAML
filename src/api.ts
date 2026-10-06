@@ -32,6 +32,8 @@ export const api = {
   listManagedNodes: (sourceId?: string) => request<ManagedNode[]>(`/api/managed-nodes${sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ""}`),
   createManagedNode: (data: Partial<ManagedNode> & Pick<ManagedNode, "name" | "type" | "server" | "port">) => request<ManagedNode>("/api/managed-nodes", { method: "POST", body: JSON.stringify(data) }),
   deleteManagedNode: (id: string) => request<{ deleted: boolean }>(`/api/managed-nodes/${id}`, { method: "DELETE" }),
+  listRuleTemplates: () => request<any[]>("/api/rule-templates"),
+  createRuleTemplate: (data: { name: string; description?: string; targetFormat: TargetFormat; content: unknown[] }) => request<any>("/api/rule-templates", { method: "POST", body: JSON.stringify(data) }),
   listGenerationProfiles: () => request<GenerationProfile[]>("/api/generation-profiles"),
   createGenerationProfile: (data: Pick<GenerationProfile, "name" | "targetFormat" | "config"> & { nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) => request<GenerationProfile>("/api/generation-profiles", { method: "POST", body: JSON.stringify(data) }),
   listGeneratedSubscriptions: () => request<GeneratedSubscription[]>("/api/generated-subscriptions"),

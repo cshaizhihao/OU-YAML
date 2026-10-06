@@ -96,3 +96,18 @@ export function readPublicSubscription(token: string) {
 }
 
 export function revokePublishedSubscription(userId: string, id: string) { return db.prepare("UPDATE generated_subscriptions SET revoked = 1, updated_at = ? WHERE id = ? AND user_id = ?").run(now(), id, userId).changes > 0; }
+
+export function listRuleTemplates(userId: string) {
+  const rows = db.prepare('SELECT * FROM rule_templates WHERE is_builtin = 1 OR user_id = ? ORDER BY is_builtin DESC, updated_at DESC').all(userId) as Record<string, unknown>[];
+  return rows.map(row => ({ id: String(row.id), userId: row.user_id ? String(row.user_id) : undefined, name: String(row.name), description: String(row.description), targetFormat: String(row.target_format), content: readJson<unknown[]>(row.content_json, []), builtin: Boolean(row.is_builtin), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }));
+}
+
+export function createRuleTemplate(userId: string, input: { name: string; description?: string; targetFormat: TargetFormat; content: unknown[] }) {
+  const id = randomUUID(); const stamp = now();
+  db.prepare('INSERT INTO rule_templates (id,user_id,name,description,target_format,content_json,is_builtin,created_at,updated_at) VALUES (?,?,?,?,?,?,0,?,?)').run(id, userId, input.name, input.description || '', input.targetFormat, JSON.stringify(input.content), stamp, stamp);
+  return listRuleTemplates(userId).find(item => item.id === id)!;
+}
+
+export function listJobs(userId: string) {
+  return (db.prepare('SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').all(userId) as Record<string, unknown>[]).map(row => ({ id: String(row.id), kind: String(row.kind), status: String(row.status), error: row.error ? String(row.error) : undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at) }));
+}

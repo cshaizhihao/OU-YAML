@@ -562,3 +562,13 @@ input:disabled { background: #eef1ef; color: var(--ink-faint); }
 .summary-list strong { color: var(--ink); }
 .form-hint { display: flex; align-items: center; gap: 8px; color: var(--ink-faint); font-size: 13px; }
 @media (max-width: 900px) { .generator-layout { grid-template-columns: 1fr; } .generator-choice { grid-template-columns: 1fr; } }
+
+.template-card { display: flex; gap: 16px; transition: transform var(--ease), box-shadow var(--ease); }
+.template-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+.template-card-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; color: var(--accent); background: var(--accent-soft); flex: 0 0 auto; }
+.template-card-body { flex: 1; min-width: 0; }
+.template-card-top, .template-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.template-card h2 { margin: 8px 0 4px; font-size: 18px; }
+.template-card p { margin: 0 0 18px; color: var(--ink-faint); }
+.template-card-meta { color: var(--ink-faint); font-size: 13px; }
+.template-card-meta span { display: inline-flex; align-items: center; gap: 6px; }

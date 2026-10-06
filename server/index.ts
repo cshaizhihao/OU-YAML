@@ -14,7 +14,7 @@ import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from 
 import { safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
-import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription } from "./domainService";
+import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs } from "./domainService";
 
 declare global {
   namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
@@ -347,6 +347,13 @@ app.post("/api/generation-profiles", requireAuth, (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "生成配置参数无效" });
   res.status(201).json(createProfile(req.user!.id, { ...parsed.data, config: parsed.data.config as MihomoConfig }));
 });
+app.get("/api/rule-templates", requireAuth, (req, res) => res.json(listRuleTemplates(req.user!.id)));
+app.post("/api/rule-templates", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120), description: z.string().max(500).optional(), targetFormat: z.enum(["mihomo", "sing-box"]), content: z.array(z.unknown()).max(5000) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "规则模板参数无效" });
+  res.status(201).json(createRuleTemplate(req.user!.id, parsed.data));
+});
+app.get("/api/jobs", requireAuth, (req, res) => res.json(listJobs(req.user!.id)));
 app.get("/api/generated-subscriptions", requireAuth, (req, res) => res.json(listPublishedSubscriptions(req.user!.id)));
 app.post("/api/generated-subscriptions/:id/revoke", requireAuth, (req, res) => res.json({ revoked: revokePublishedSubscription(req.user!.id, String(req.params.id)) }));
 app.post("/api/generated-subscriptions", requireAuth, (req, res) => {

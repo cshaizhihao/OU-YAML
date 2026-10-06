@@ -128,6 +128,66 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_generated_subscriptions_user ON generated_subscriptions(user_id, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_generated_subscriptions_token ON generated_subscriptions(token_hash);
+  CREATE TABLE IF NOT EXISTS proxy_groups (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS proxy_group_members (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL REFERENCES proxy_groups(id) ON DELETE CASCADE,
+    member_type TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(group_id, member_type, member_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_proxy_groups_user ON proxy_groups(user_id, updated_at DESC);
+  CREATE TABLE IF NOT EXISTS rule_sets (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'custom',
+    content_json TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS rule_templates (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    target_format TEXT NOT NULL DEFAULT 'mihomo',
+    content_json TEXT NOT NULL DEFAULT '[]',
+    is_builtin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_rule_templates_user ON rule_templates(user_id, updated_at DESC);
+  CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, created_at DESC);
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    resource_id TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+  );
 `);
 
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];

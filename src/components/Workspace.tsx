@@ -17,14 +17,16 @@ import { NodePoolView } from "./views/NodePoolView";
 import { SourceManagerView } from "./views/SourceManagerView";
 import { GeneratedSubscriptionsView } from "./views/GeneratedSubscriptionsView";
 import { GeneratorView } from "./views/GeneratorView";
+import { TemplatesView } from "./views/TemplatesView";
 import { QuickStartView, type GuideTarget } from "./views/QuickStartView";
 
-type View = "start" | "links" | "sources" | "pool" | "generator" | "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
+type View = "start" | "links" | "sources" | "pool" | "generator" | "templates" | "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
 const baseNav: { id: View; label: string; icon: typeof Network }[] = [
   { id: "links", label: "订阅链接", icon: Rss },
   { id: "sources", label: "订阅来源", icon: FolderPlus },
   { id: "pool", label: "节点池", icon: Database },
   { id: "generator", label: "生成订阅", icon: Rocket },
+  { id: "templates", label: "模板中心", icon: FileCode2 },
   { id: "start", label: "开始", icon: ListChecks },
   { id: "nodes", label: "节点", icon: Network },
   { id: "groups", label: "分组编排", icon: Group },
@@ -161,6 +163,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
         {view === "sources" && <SourceManagerView onMessage={setMessage} />}
         {view === "pool" && <NodePoolView onMessage={setMessage} />}
         {view === "generator" && <GeneratorView project={project} onMessage={setMessage} />}
+        {view === "templates" && <TemplatesView onMessage={setMessage} />}
         {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
