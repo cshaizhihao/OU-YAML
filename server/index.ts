@@ -14,7 +14,7 @@ import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from 
 import { safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
-import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs, deleteNodeSource, recordAudit, recordJob, updateJob } from "./domainService";
+import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, recordAudit, recordJob, updateJob } from "./domainService";
 
 declare global {
   namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
@@ -348,6 +348,18 @@ app.post("/api/generation-profiles", requireAuth, (req, res) => {
   const parsed = z.object({ name: z.string().trim().min(1).max(120), targetFormat: z.enum(["mihomo", "sing-box"]), config: z.any().default({}), nodeIds: z.array(z.string()).default([]), sourceIds: z.array(z.string()).default([]), templateId: z.string().optional() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "生成配置参数无效" });
   res.status(201).json(createProfile(req.user!.id, { ...parsed.data, config: parsed.data.config as MihomoConfig }));
+});
+app.get("/api/proxy-groups", requireAuth, (req, res) => res.json(listProxyGroups(req.user!.id)));
+app.post("/api/proxy-groups", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120), type: z.string().min(1).max(40), config: z.record(z.unknown()).optional(), members: z.array(z.object({ memberType: z.string(), memberId: z.string() })).max(1000).optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "代理组参数无效" });
+  res.status(201).json(createProxyGroup(req.user!.id, parsed.data));
+});
+app.get("/api/rule-sets", requireAuth, (req, res) => res.json(listRuleSets(req.user!.id)));
+app.post("/api/rule-sets", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120), kind: z.string().max(40).optional(), content: z.array(z.unknown()).max(10000) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "规则集参数无效" });
+  res.status(201).json(createRuleSet(req.user!.id, parsed.data));
 });
 app.get("/api/rule-templates", requireAuth, (req, res) => res.json(listRuleTemplates(req.user!.id)));
 app.post("/api/rule-templates", requireAuth, (req, res) => {

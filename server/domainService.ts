@@ -123,3 +123,28 @@ export function recordJob(userId: string | undefined, kind: string, payload: unk
 export function updateJob(id: string, status: string, error?: string) { db.prepare("UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?").run(status, error || null, now(), id); }
 
 export function recordAudit(userId: string | undefined, action: string, resourceType: string, resourceId?: string, metadata: unknown = {}) { db.prepare("INSERT INTO audit_logs (id,user_id,action,resource_type,resource_id,metadata_json,created_at) VALUES (?,?,?,?,?,?,?)").run(randomUUID(), userId || null, action, resourceType, resourceId || null, JSON.stringify(metadata), now()); }
+
+export function listProxyGroups(userId: string) {
+  const rows = db.prepare('SELECT * FROM proxy_groups WHERE user_id = ? ORDER BY updated_at DESC').all(userId) as Record<string, unknown>[];
+  return rows.map(row => ({ id: String(row.id), userId: String(row.user_id), name: String(row.name), type: String(row.type), config: readJson<Record<string, unknown>>(row.config_json, {}), createdAt: String(row.created_at), updatedAt: String(row.updated_at), members: (db.prepare('SELECT * FROM proxy_group_members WHERE group_id = ? ORDER BY position ASC').all(String(row.id)) as Record<string, unknown>[]).map(member => ({ id: String(member.id), memberType: String(member.member_type), memberId: String(member.member_id), position: Number(member.position) })) }));
+}
+
+export function createProxyGroup(userId: string, input: { name: string; type: string; config?: Record<string, unknown>; members?: { memberType: string; memberId: string }[] }) {
+  const id = randomUUID(); const stamp = now();
+  db.transaction(() => {
+    db.prepare('INSERT INTO proxy_groups (id,user_id,name,type,config_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(id, userId, input.name, input.type, JSON.stringify(input.config || {}), stamp, stamp);
+    for (const [position, member] of (input.members || []).entries()) db.prepare('INSERT INTO proxy_group_members (id,group_id,member_type,member_id,position) VALUES (?,?,?,?,?)').run(randomUUID(), id, member.memberType, member.memberId, position);
+  })();
+  return listProxyGroups(userId).find(item => item.id === id)!;
+}
+
+export function listRuleSets(userId: string) {
+  const rows = db.prepare('SELECT * FROM rule_sets WHERE user_id = ? ORDER BY updated_at DESC').all(userId) as Record<string, unknown>[];
+  return rows.map(row => ({ id: String(row.id), userId: String(row.user_id), name: String(row.name), kind: String(row.kind), content: readJson<unknown[]>(row.content_json, []), enabled: Boolean(row.enabled), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }));
+}
+
+export function createRuleSet(userId: string, input: { name: string; kind?: string; content: unknown[] }) {
+  const id = randomUUID(); const stamp = now();
+  db.prepare('INSERT INTO rule_sets (id,user_id,name,kind,content_json,enabled,created_at,updated_at) VALUES (?,?,?,?,?,1,?,?)').run(id, userId, input.name, input.kind || 'custom', JSON.stringify(input.content), stamp, stamp);
+  return listRuleSets(userId).find(item => item.id === id)!;
+}
