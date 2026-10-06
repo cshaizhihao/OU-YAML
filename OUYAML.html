@@ -1,0 +1,1892 @@
+  --border-subtle: rgba(28, 25, 23, 0.06);
+  --border-base: rgba(28, 25, 23, 0.10);
+  --border-strong: rgba(28, 25, 23, 0.18);
+  --border-focus: #2E4E3F;
+
+  --text-title: #181715;
+  --text-body: #3D3A35;
+  --text-muted: #79756E;
+  --text-light: #A39E96;
+
+  /* Signature Brand Tones */
+  --sage-main: #2E4E3F;
+  --sage-hover: #233C30;
+  --sage-soft: #EBF2ED;
+  --sage-text: #244134;
+
+  --terracotta-main: #C85A3E;
+  --terracotta-soft: #FAF0EC;
+  --terracotta-text: #963A23;
+
+  --amber-main: #C4841D;
+  --amber-soft: #FAF4E8;
+  --amber-text: #8E5B09;
+
+  --lavender-main: #73629B;
+  --lavender-soft: #F3EFF9;
+  --lavender-text: #534475;
+
+  --code-bg: #1A1A18;
+  --code-text: #E5E3DE;
+  --code-muted: #807E78;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --radius-pill: 9999px;
+
+  --shadow-ambient: 0 1px 2px rgba(28, 25, 23, 0.03), 0 4px 12px -2px rgba(28, 25, 23, 0.04);
+  --shadow-hover: 0 4px 6px -1px rgba(28, 25, 23, 0.04), 0 14px 28px -4px rgba(28, 25, 23, 0.08);
+  --shadow-modal: 0 20px 48px -8px rgba(28, 25, 23, 0.18);
+
+  --ease-silk: cubic-bezier(0.16, 1, 0.3, 1);
+  --sidebar-w: 254px;
+  --sidebar-collapsed-w: 78px;
+  --header-h: 68px;
+}
+
+[data-theme="dark"] {
+  --bg-app: #121211;
+  --bg-sidebar: #171716;
+  --bg-surface: #1E1E1C;
+  --bg-subtle: #252523;
+  --bg-card-muted: #222220;
+  --bg-hover: #2C2C29;
+
+  --border-subtle: rgba(245, 243, 238, 0.07);
+  --border-base: rgba(245, 243, 238, 0.12);
+  --border-strong: rgba(245, 243, 238, 0.22);
+  --border-focus: #52866D;
+
+  --text-title: #F5F4F0;
+  --text-body: #D6D3CB;
+  --text-muted: #949086;
+  --text-light: #6E6A62;
+
+  --sage-main: #4F836A;
+  --sage-hover: #3E6A55;
+  --sage-soft: #1B2922;
+  --sage-text: #96C5AD;
+
+  --terracotta-main: #DE6D50;
+  --terracotta-soft: #2E1D19;
+  --terracotta-text: #EFA693;
+
+  --amber-main: #D99B36;
+  --amber-soft: #2E2514;
+  --amber-text: #ECC381;
+
+  --lavender-main: #9683C4;
+  --lavender-soft: #272133;
+  --lavender-text: #C4B6E5;
+
+  --code-bg: #10100F;
+  --code-text: #DCD9D2;
+  --shadow-ambient: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+
+/* Reset & Typography */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-body);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  overflow-x: hidden;
+  letter-spacing: -0.01em;
+}
+
+input, button, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: all 0.22s var(--ease-silk);
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+svg {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ==========================================================================
+   Sidebar Architecture
+   ========================================================================== */
+.app-sidebar {
+  width: var(--sidebar-w);
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  transition: width 0.32s var(--ease-silk), transform 0.32s var(--ease-silk);
+}
+
+.app-sidebar.collapsed {
+  width: var(--sidebar-collapsed-w);
+}
+
+.app-sidebar.collapsed .sidebar-hide {
+  display: none !important;
+}
+
+.app-sidebar.collapsed .brand-container {
+  justify-content: center;
+  padding: 22px 10px;
+}
+
+.app-sidebar.collapsed .nav-link {
+  justify-content: center;
+  padding: 11px 0;
+}
+
+.brand-container {
+  padding: 24px 22px 20px 22px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.brand-logo-frame {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  position: relative;
+}
+
+.brand-logo-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brand-logo-fallback {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sage-main);
+  display: none;
+  letter-spacing: -0.5px;
+}
+
+.brand-meta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-title);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.brand-tagline {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.nav-list {
+  flex: 1;
+  padding: 12px 14px;
+  list-style: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nav-category-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 14px 12px 6px 12px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9.5px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.18s var(--ease-silk);
+  position: relative;
+}
+
+.nav-link:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-title);
+}
+
+.nav-link.active {
+  background-color: var(--bg-surface);
+  color: var(--sage-main);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-subtle);
+}
+
+[data-theme="dark"] .nav-link.active {
+  color: var(--sage-text);
+  background-color: var(--bg-surface);
+}
+
+.nav-badge-pill {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7.5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.nav-link.active .nav-badge-pill {
+  background: var(--sage-soft);
+  color: var(--sage-text);
+}
+
+.sidebar-bottom {
+  padding: 16px 14px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-collapse {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.btn-collapse:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-title);
+}
+
+/* ==========================================================================
+   Main Header & App Container
+   ========================================================================== */
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  height: var(--header-h);
+  background-color: var(--bg-app);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 36px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.btn-mobile-nav {
+  display: none;
+  padding: 7px;
+  border-radius: var(--radius-md);
+  color: var(--text-title);
+}
+
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  width: 270px;
+  transition: all 0.22s var(--ease-silk);
+}
+.header-search:focus-within {
+  width: 330px;
+  background: var(--bg-surface);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(46, 78, 63, 0.12);
+}
+.header-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-size: 13px;
+  color: var(--text-title);
+}
+.kbd-shortcut {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1.5px 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  position: relative;
+}
+.btn-header-icon:hover {
+  background-color: var(--bg-subtle);
+  color: var(--text-title);
+}
+.indicator-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: var(--terracotta-main);
+}
+
+.user-capsule {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 12px 4px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  margin-left: 6px;
+  transition: all 0.2s;
+}
+.user-capsule:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-base);
+}
+.user-avatar-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--sage-main);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+.user-profile-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.app-workspace {
+  flex: 1;
+  padding: 34px 40px;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Page View Transitions */
+.view-container {
+  display: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.26s var(--ease-silk), transform 0.26s var(--ease-silk);
+}
+
+.view-container.active-view {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ==========================================================================
+   Card Systems & Component Stylings
+   ========================================================================== */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-ambient);
+  transition: transform 0.22s var(--ease-silk), box-shadow 0.22s var(--ease-silk), border-color 0.22s var(--ease-silk);
+}
+
+.card.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--border-base);
+}
+
+.card-heading {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-title);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  letter-spacing: -0.015em;
+}
+
+/* Tactile Buttons */
+.btn {
+  padding: 8.5px 18px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn-primary {
+  background-color: var(--sage-main);
+  color: #FFFFFF;
+}
+.btn-primary:hover {
+  background-color: var(--sage-hover);
+  box-shadow: 0 3px 8px rgba(46, 78, 63, 0.25);
+}
+.btn-secondary {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  color: var(--text-title);
+}
+.btn-secondary:hover {
+  background-color: var(--bg-subtle);
+  border-color: var(--border-strong);
+}
+.btn-subtle {
+  background-color: var(--bg-subtle);
+  color: var(--text-title);
+  box-shadow: none;
+}
+.btn-subtle:hover {
+  background-color: var(--bg-hover);
+}
+.btn-ghost {
+  box-shadow: none;
+  color: var(--text-muted);
+}
+.btn-ghost:hover {
+  background-color: var(--bg-subtle);
+  color: var(--text-title);
+}
+.btn-danger-ghost {
+  color: var(--terracotta-main);
+  box-shadow: none;
+}
+.btn-danger-ghost:hover {
+  background-color: var(--terracotta-soft);
+}
+.btn-sm {
+  padding: 5.5px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* Badges & Status Indicators */
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pill-sage {
+  background: var(--sage-soft);
+  color: var(--sage-text);
+}
+.pill-terracotta {
+  background: var(--terracotta-soft);
+  color: var(--terracotta-text);
+}
+.pill-amber {
+  background: var(--amber-soft);
+  color: var(--amber-text);
+}
+.pill-lavender {
+  background: var(--lavender-soft);
+  color: var(--lavender-text);
+}
+.pill-neutral {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.beacon-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  position: relative;
+}
+.beacon-dot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: beaconBreath 2.6s infinite ease-out;
+}
+@keyframes beaconBreath {
+  0% { transform: scale(0.9); opacity: 0.4; }
+  50% { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(0.9); opacity: 0; }
+}
+
+/* Grid Layout Framework */
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
+
+/* ==========================================================================
+   VIEW 1: Dashboard Refined
+   ========================================================================== */
+.editorial-hero {
+  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-card-muted) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 32px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 26px;
+  position: relative;
+  box-shadow: var(--shadow-ambient);
+}
+
+.hero-greeting h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-title);
+  letter-spacing: -0.025em;
+  margin-bottom: 6px;
+}
+
+.hero-greeting p {
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.hero-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stat-metric-card {
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.metric-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metric-numeric {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-title);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.metric-caption {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.dashboard-dual-column {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 22px;
+  margin-top: 24px;
+}
+
+/* Minimalist Bars & Timeline */
+.chart-distribution-row {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+.dist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dist-label {
+  width: 76px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-body);
+}
+.dist-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.dist-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+.dist-val {
+  width: 44px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.feed-timeline {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.feed-item {
+  display: flex;
+  gap: 14px;
+  position: relative;
+}
+.feed-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+.feed-body {
+  flex: 1;
+}
+.feed-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+.feed-time {
+  font-size: 11.5px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   VIEW 2: Subscriptions
+   ========================================================================== */
+.sub-card-box {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sub-url-strip {
+  background: var(--bg-card-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sub-url-strip code {
+  font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--text-title);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+/* ==========================================================================
+   VIEW 4: Nodes Management
+   ========================================================================== */
+.nodes-stat-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+
+.node-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+}
+.node-tile:hover {
+  border-color: var(--border-strong);
+}
+
+.node-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+.node-data-table th, .node-data-table td {
+  padding: 13px 18px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.node-data-table th {
+  background: var(--bg-card-muted);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.node-data-table tr:last-child td {
+  border-bottom: none;
+}
+.node-data-table tr:hover td {
+  background: var(--bg-card-muted);
+}
+
+/* ==========================================================================
+   VIEW 5: Generator Wizard
+   ========================================================================== */
+.wizard-progress-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin-bottom: 26px;
+}
+.wizard-progress-bar::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  background: var(--border-subtle);
+  z-index: 1;
+}
+.wiz-step-pill {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-app);
+  padding: 0 12px;
+  cursor: pointer;
+}
+.wiz-step-indicator {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+.wiz-step-pill.active .wiz-step-indicator {
+  background: var(--sage-main);
+  border-color: var(--sage-main);
+  color: #fff;
+}
+.wiz-step-pill.completed .wiz-step-indicator {
+  background: var(--sage-soft);
+  border-color: var(--sage-main);
+  color: var(--sage-text);
+}
+.wiz-step-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.wiz-step-pill.active .wiz-step-label {
+  color: var(--text-title);
+}
+
+.code-dark-canvas {
+  background: var(--code-bg);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  color: var(--code-text);
+  font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: pre;
+}
+
+/* ==========================================================================
+   VIEW 6: Proxy Groups Visual Canvas
+   ========================================================================== */
+.group-canvas-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  gap: 20px;
+  align-items: start;
+}
+
+.drag-node-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: grab;
+  user-select: none;
+  margin-bottom: 8px;
+  font-size: 13px;
+  transition: all 0.18s;
+}
+.drag-node-item:hover {
+  border-color: var(--sage-main);
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-ambient);
+}
+.drag-node-item:active {
+  cursor: grabbing;
+}
+
+.canvas-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.drop-bucket {
+  min-height: 76px;
+  border: 2px dashed var(--border-base);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+  margin-top: 12px;
+  background: var(--bg-card-muted);
+  transition: all 0.2s;
+}
+.drop-bucket.drag-hover {
+  border-color: var(--sage-main);
+  background: var(--sage-soft);
+}
+
+.group-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* Switch Component */
+.switch-wrap {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
+}
+.switch-wrap input { opacity: 0; width: 0; height: 0; }
+.switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: var(--border-base);
+  transition: .24s var(--ease-silk);
+  border-radius: 34px;
+}
+.switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .24s var(--ease-silk);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+input:checked + .switch-slider {
+  background-color: var(--sage-main);
+}
+input:checked + .switch-slider:before {
+  transform: translateX(16px);
+}
+
+/* Form Fields */
+.form-item {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-item label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+.form-field {
+  background: var(--bg-card-muted);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  padding: 9.5px 13px;
+  font-size: 13.5px;
+  color: var(--text-title);
+  outline: none;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.form-field:focus {
+  border-color: var(--border-focus);
+  background: var(--bg-surface);
+}
+
+/* Drawer & Modal Overlays */
+.overlay-veil {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 23, 21, 0.45);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.26s var(--ease-silk);
+}
+.overlay-veil.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 460px;
+  max-width: 92vw;
+  background: var(--bg-surface);
+  z-index: 101;
+  transform: translateX(100%);
+  transition: transform 0.32s var(--ease-silk);
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+}
+.drawer-panel.show {
+  transform: translateX(0);
+}
+.drawer-head {
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.drawer-body {
+  padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+.drawer-foot {
+  padding: 18px 24px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-box {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -46%) scale(0.97);
+  width: 500px;
+  max-width: 92vw;
+  background: var(--bg-surface);
+  border-radius: var(--radius-xl);
+  z-index: 102;
+  box-shadow: var(--shadow-modal);
+  border: 1px solid var(--border-subtle);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.28s var(--ease-silk);
+  display: flex;
+  flex-direction: column;
+}
+.modal-box.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+.modal-head {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-body {
+  padding: 24px;
+}
+.modal-foot {
+  padding: 18px 24px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Toast System */
+.toast-rack {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.toast-pill {
+  pointer-events: auto;
+  padding: 11px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-title);
+  transform: translateY(16px);
+  opacity: 0;
+  transition: all 0.26s var(--ease-silk);
+}
+.toast-pill.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Responsive Adaptation */
+@media (max-width: 1080px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: 1fr; }
+  .dashboard-dual-column { grid-template-columns: 1fr; }
+  .group-canvas-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .app-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+  }
+  .app-sidebar.mobile-active {
+    transform: translateX(0);
+  }
+  .btn-mobile-nav {
+    display: inline-flex;
+  }
+  .header-search {
+    display: none;
+  }
+  .app-workspace {
+    padding: 20px 16px;
+  }
+  .grid-2 { grid-template-columns: 1fr; }
+  .editorial-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 24px;
+  }
+}
+
+```
+
+```
+<ul class="nav-list" role="navigation">
+  <li class="nav-category-label sidebar-hide">核心面板</li>
+  <li>
+    <a href="#dashboard" class="nav-link active" onclick="switchRoute('dashboard', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span class="sidebar-hide">工作台</span>
+    </a>
+  </li>
+  <li>
+    <a href="#sub-links" class="nav-link" onclick="switchRoute('sub-links', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <span class="sidebar-hide">订阅链接</span>
+      <span class="nav-badge-pill sidebar-hide">3</span>
+    </a>
+  </li>
+  <li>
+    <a href="#sub-manage" class="nav-link" onclick="switchRoute('sub-manage', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span class="sidebar-hide">订阅管理</span>
+    </a>
+  </li>
+  <li>
+    <a href="#nodes" class="nav-link" onclick="switchRoute('nodes', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span class="sidebar-hide">节点管理</span>
+      <span class="nav-badge-pill sidebar-hide" id="sidebarNodeBadge">8</span>
+    </a>
+  </li>
+
+  <li class="nav-category-label sidebar-hide" style="margin-top: 10px;">编排与发布</li>
+  <li>
+    <a href="#generator" class="nav-link" onclick="switchRoute('generator', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      <span class="sidebar-hide">生成订阅</span>
+    </a>
+  </li>
+  <li>
+    <a href="#groups" class="nav-link" onclick="switchRoute('groups', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span class="sidebar-hide">代理分组</span>
+    </a>
+  </li>
+  <li>
+    <a href="#rules" class="nav-link" onclick="switchRoute('rules', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span class="sidebar-hide">规则中心</span>
+    </a>
+  </li>
+  <li>
+    <a href="#templates" class="nav-link" onclick="switchRoute('templates', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span class="sidebar-hide">模板中心</span>
+    </a>
+  </li>
+  <li>
+    <a href="#history" class="nav-link" onclick="switchRoute('history', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+      <span class="sidebar-hide">历史版本</span>
+    </a>
+  </li>
+  <li>
+    <a href="#settings" class="nav-link" onclick="switchRoute('settings', event)">
+      <svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="sidebar-hide">系统设置</span>
+    </a>
+  </li>
+</ul>
+
+<div class="sidebar-bottom">
+  <button class="btn-collapse" onclick="toggleSidebarCollapse()" title="收起导航">
+    <svg width="18" height="18" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    <span class="sidebar-hide">收起侧边栏</span>
+  </button>
+</div>
+
+```
+
+```
+    <div class="header-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" style="color: var(--text-light);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="globalSearchInput" placeholder="全局搜索节点、分组或规则..." onkeydown="handleSearchEnter(event)">
+      <span class="kbd-shortcut">⌘K</span>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <button class="btn-header-icon" onclick="toggleThemePalette()" title="色彩模式切换">
+      <svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+
+    <button class="btn-header-icon" onclick="openModal('helpGuideModal')" title="入门指南">
+      <svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </button>
+
+    <button class="btn-header-icon" onclick="sendToast('所有节点订阅来源状态均处于最新同步点', 'info')" title="消息中心">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="indicator-dot"></span>
+    </button>
+
+    <div class="user-capsule" onclick="openDrawer('userProfileDrawer')">
+      <div class="user-avatar-circle">O</div>
+      <span class="user-profile-name">Olivia</span>
+    </div>
+  </div>
+</header>
+
+<div class="app-workspace">
+
+  <!-- VIEW 1: Dashboard -->
+  <section id="view-dashboard" class="view-container active-view">
+    <div class="editorial-hero">
+      <div class="hero-greeting">
+        <h1>晚上好，欢迎回到 OU-YAML</h1>
+        <p>2026年10月6日 星期二 · 节点编排已就绪，所有出站策略运行平稳</p>
+      </div>
+      <div class="hero-controls">
+        <button class="btn btn-secondary" onclick="openDrawer('addSourceDrawer')">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          导入订阅源
+        </button>
+        <button class="btn btn-primary" onclick="switchRoute('generator')">
+          <svg width="15" height="15" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          一键生成订阅
+        </button>
+      </div>
+    </div>
+
+    <div class="grid-4" style="margin-bottom: 24px;">
+      <div class="card stat-metric-card hover-lift">
+        <div class="metric-icon-box" style="background: var(--sage-soft); color: var(--sage-main);">
+          <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div>
+          <div class="metric-numeric" id="dashNodeCount">8</div>
+          <div class="metric-caption">健康活跃节点</div>
+        </div>
+      </div>
+
+      <div class="card stat-metric-card hover-lift">
+        <div class="metric-icon-box" style="background: var(--amber-soft); color: var(--amber-main);">
+          <svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
+        <div>
+          <div class="metric-numeric">3</div>
+          <div class="metric-caption">上游来源服务</div>
+        </div>
+      </div>
+
+      <div class="card stat-metric-card hover-lift">
+        <div class="metric-icon-box" style="background: var(--terracotta-soft); color: var(--terracotta-main);">
+          <svg width="22" height="22" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        </div>
+        <div>
+          <div class="metric-numeric">3</div>
+          <div class="metric-caption">对外分发配置</div>
+        </div>
+      </div>
+
+      <div class="card stat-metric-card hover-lift">
+        <div class="metric-icon-box" style="background: var(--lavender-soft); color: var(--lavender-main);">
+          <svg width="22" height="22" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </div>
+        <div>
+          <div class="metric-numeric">5</div>
+          <div class="metric-caption">出站策略分组</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-dual-column">
+      <div style="display: flex; flex-direction: column; gap: 22px;">
+        <div class="card">
+          <div class="card-heading">
+            <span>最近流转流水</span>
+            <span class="pill-badge pill-neutral">实时记录</span>
+          </div>
+          <ul class="feed-timeline" id="dashFeedList"></ul>
+        </div>
+
+        <div class="card">
+          <div class="card-heading">
+            <span>节点协议分布比例</span>
+            <span class="pill-badge pill-sage">已洗净</span>
+          </div>
+          <div class="chart-distribution-row">
+            <div class="dist-row">
+              <span class="dist-label">VLESS</span>
+              <div class="dist-track"><div class="dist-bar-fill" style="width: 50%; background: var(--sage-main);"></div></div>
+              <span class="dist-val">4 节点</span>
+            </div>
+            <div class="dist-row">
+              <span class="dist-label">Hysteria2</span>
+              <div class="dist-track"><div class="dist-bar-fill" style="width: 25%; background: var(--terracotta-main);"></div></div>
+              <span class="dist-val">2 节点</span>
+            </div>
+            <div class="dist-row">
+              <span class="dist-label">Trojan</span>
+              <div class="dist-track"><div class="dist-bar-fill" style="width: 15%; background: var(--amber-main);"></div></div>
+              <span class="dist-val">1 节点</span>
+            </div>
+            <div class="dist-row">
+              <span class="dist-label">VMess</span>
+              <div class="dist-track"><div class="dist-bar-fill" style="width: 10%; background: var(--lavender-main);"></div></div>
+              <span class="dist-val">1 节点</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-heading">
+          <span>订阅分发健康状态</span>
+          <button class="btn btn-ghost btn-sm" onclick="sendToast('开始健康自检...', 'info')">自检</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-card-muted); border-radius: var(--radius-md);">
+            <div>
+              <div style="font-weight: 600; color: var(--text-title);">主力日常配置 (Meta)</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">clash.profile.v2 · 7 节点</div>
+            </div>
+            <span class="pill-badge pill-sage"><span class="beacon-dot"></span> 正常</span>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-card-muted); border-radius: var(--radius-md);">
+            <div>
+              <div style="font-weight: 600; color: var(--text-title);">极速游戏线路 (SingBox)</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">gaming.json · 4 节点</div>
+            </div>
+            <span class="pill-badge pill-sage"><span class="beacon-dot"></span> 正常</span>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-card-muted); border-radius: var(--radius-md);">
+            <div>
+              <div style="font-weight: 600; color: var(--text-title);">媒体解锁分发 (Surge)</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">streaming.conf · 3 节点</div>
+            </div>
+            <span class="pill-badge pill-amber">待同步</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--border-subtle);">
+          <div style="font-size: 13px; font-weight: 600; color: var(--text-title); margin-bottom: 10px;">国家与地区覆盖</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <span class="pill-badge pill-neutral">🇭🇰 香港 (2)</span>
+            <span class="pill-badge pill-neutral">🇯🇵 日本 (2)</span>
+            <span class="pill-badge pill-neutral">🇸🇬 新加坡 (1)</span>
+            <span class="pill-badge pill-neutral">🇺🇸 美国 (1)</span>
+            <span class="pill-badge pill-neutral">🇹🇼 台湾 (1)</span>
+            <span class="pill-badge pill-neutral">🇩🇪 德国 (1)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW 2: Subscriptions -->
+  <section id="view-sub-links" class="view-container">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+      <div>
+        <h2 style="font-size: 20px; font-weight: 700; color: var(--text-title); letter-spacing: -0.02em;">已发布订阅链接</h2>
+        <p style="color: var(--text-muted); font-size: 13px;">对外分发的专属客户端配置，支持一键复制导入或扫码添加。</p>
+      </div>
+      <button class="btn btn-primary" onclick="switchRoute('generator')">
+        <svg width="15" height="15" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建订阅
+      </button>
+    </div>
+
+    <div class="grid-3" id="subLinksContainer"></div>
+  </section>
+
+  <!-- VIEW 3: Sources Management -->
+  <section id="view-sub-manage" class="view-container">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; flex-wrap: wrap; gap: 12px;">
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <div class="header-search" style="width: 250px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" style="color: var(--text-light);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="搜索订阅源..." oninput="filterSources(this.value)">
+        </div>
+        <select class="form-field" style="padding: 7px 12px; font-size: 12.5px;" onchange="filterSourceByStatus(this.value)">
+          <option value="all">所有状态</option>
+          <option value="success">同步正常</option>
+          <option value="refreshing">同步中</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="openModal('uploadModal')">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          上传配置
+        </button>
+        <button class="btn btn-primary" onclick="openDrawer('addSourceDrawer')">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          添加订阅源
+        </button>
+      </div>
+    </div>
+
+    <div class="grid-3" id="sourcesGrid"></div>
+  </section>
+
+  <!-- VIEW 4: Nodes Management -->
+  <section id="view-nodes" class="view-container">
+    <div class="nodes-stat-bar">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <span>全部节点池: <strong id="nodesCountBar">8</strong></span>
+        <span style="color: var(--border-strong);">|</span>
+        <span>正常响应: <strong style="color: var(--sage-main);">7</strong></span>
+        <span style="color: var(--border-strong);">|</span>
+        <span>备用离线: <strong style="color: var(--terracotta-main);">1</strong></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button class="btn btn-secondary btn-sm" onclick="runPingProbeAll()">
+          <svg width="13" height="13" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          批量测速
+        </button>
+        <div style="display: flex; background: var(--bg-card-muted); padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <button class="btn btn-ghost btn-sm" id="btnToggleGrid" style="padding: 4px 8px; background: var(--bg-surface);" onclick="toggleNodeView('grid')">网格</button>
+          <button class="btn btn-ghost btn-sm" id="btnToggleTable" style="padding: 4px 8px;" onclick="toggleNodeView('table')">表格</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <div class="header-search" style="width: 250px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" style="color: var(--text-light);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="搜索节点名称、IP..." oninput="filterNodesByName(this.value)">
+        </div>
+        <select class="form-field" style="padding: 7px 12px; font-size: 12.5px;" onchange="filterNodeByProtocol(this.value)">
+          <option value="all">所有协议</option>
+          <option value="VLESS">VLESS</option>
+          <option value="Hysteria2">Hysteria2</option>
+          <option value="Trojan">Trojan</option>
+          <option value="VMess">VMess</option>
+          <option value="Shadowsocks">Shadowsocks</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="openDrawer('nodeEditDrawer')">
+        <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        新建节点
+      </button>
+    </div>
+
+    <div id="nodesGridWrap" class="grid-4"></div>
+    <div id="nodesTableWrap" style="display: none;">
+      <table class="node-data-table">
+        <thead>
+          <tr>
+            <th>节点名称</th>
+            <th>协议</th>
+            <th>端点地址</th>
+            <th>延迟</th>
+            <th>来源</th>
+            <th>状态</th>
+            <th style="text-align: right;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="nodesTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- VIEW 5: Generator Wizard -->
+  <section id="view-generator" class="view-container">
+    <div class="wizard-progress-bar">
+      <div class="wiz-step-pill active" id="wizStep1" onclick="jumpToWizardStep(1)">
+        <div class="wiz-step-indicator">1</div>
+        <span class="wiz-step-label">选择来源</span>
+      </div>
+      <div class="wiz-step-pill" id="wizStep2" onclick="jumpToWizardStep(2)">
+        <div class="wiz-step-indicator">2</div>
+        <span class="wiz-step-label">挑选节点</span>
+      </div>
+      <div class="wiz-step-pill" id="wizStep3" onclick="jumpToWizardStep(3)">
+        <div class="wiz-step-indicator">3</div>
+        <span class="wiz-step-label">策略绑定</span>
+      </div>
+      <div class="wiz-step-pill" id="wizStep4" onclick="jumpToWizardStep(4)">
+        <div class="wiz-step-indicator">4</div>
+        <span class="wiz-step-label">分流规则</span>
+      </div>
+      <div class="wiz-step-pill" id="wizStep5" onclick="jumpToWizardStep(5)">
+        <div class="wiz-step-indicator">5</div>
+        <span class="wiz-step-label">目标客户端</span>
+      </div>
+      <div class="wiz-step-pill" id="wizStep6" onclick="jumpToWizardStep(6)">
+        <div class="wiz-step-indicator">6</div>
+        <span class="wiz-step-label">预览校验</span>
+      </div>
+      <div class="wiz-step-pill" id="wizStep7" onclick="jumpToWizardStep(7)">
+        <div class="wiz-step-indicator">7</div>
+        <span class="wiz-step-label">发布成功</span>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start;">
+      <div class="card" style="min-height: 480px; display: flex; flex-direction: column; justify-content: space-between;">
+        <!-- Step Content Panes -->
+        <div id="wizPaneContainer">
+          <!-- Rendered via JS -->
+        </div>
+
+        <!-- Wizard Bottom Actions -->
+        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 18px; margin-top: 24px;">
+          <button class="btn btn-secondary" id="btnWizPrev" onclick="navigateWizardStep(-1)" style="visibility: hidden;">上一步</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-ghost" onclick="sendToast('草稿已存入本地持久区', 'info')">存为草稿</button>
+            <button class="btn btn-primary" id="btnWizNext" onclick="navigateWizardStep(1)">下一步</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wizard Live Summary Strip -->
+      <div class="card">
+        <div class="card-heading" style="margin-bottom: 12px;">实时编排摘要</div>
+        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px dashed var(--border-subtle);">
+            <span style="color: var(--text-muted);">订阅源选择</span>
+            <strong id="wizSumSources">2 个来源</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px dashed var(--border-subtle);">
+            <span style="color: var(--text-muted);">已选择节点</span>
+            <strong id="wizSumNodes">7 个节点</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px dashed var(--border-subtle);">
+            <span style="color: var(--text-muted);">策略分组</span>
+            <strong>3 个 Group</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px dashed var(--border-subtle);">
+            <span style="color: var(--text-muted);">匹配规则条数</span>
+            <strong>142 条</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px dashed var(--border-subtle);">
+            <span style="color: var(--text-muted);">输出格式</span>
+            <strong>Clash Meta (YAML)</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
+            <span style="color: var(--text-muted);">语法状态</span>
+            <span class="pill-badge pill-sage">校验通过</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW 6: Proxy Groups Visual Canvas -->
+  <section id="view-groups" class="view-container">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;">
+      <div>
+        <h2 style="font-size: 20px; font-weight: 700; color: var(--text-title); letter-spacing: -0.02em;">代理分组可视化编排</h2>
+        <p style="color: var(--text-muted); font-size: 13px;">从左侧待选节点池拖放至策略组画布，右侧实时调整延迟测试与降级参数。</p>
+      </div>
+      <button class="btn btn-primary" onclick="sendToast('分组拓扑已持久化保存', 'success')">保存当前分组拓扑</button>
+    </div>
+
+    <div class="group-canvas-grid">
+      <!-- Left: Node Pool -->
+      <div class="card" style="padding: 18px;">
+        <div style="font-weight: 700; color: var(--text-title); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+          <span>待编排节点池</span>
+          <span class="pill-badge pill-neutral" id="poolBadgeCount">8</span>
+        </div>
+        <input type="text" placeholder="过滤池中节点..." class="form-field" style="width: 100%; margin-bottom: 12px; font-size: 12px; padding: 7px 10px;" oninput="filterDraggablePool(this.value)">
+        <div id="dragNodesPool" style="max-height: 500px; overflow-y: auto;"></div>
+      </div>
+
+      <!-- Middle: Group Canvas -->
+      <div>
+        <div class="canvas-card">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <strong style="color: var(--text-title); font-size: 14.5px;">🚀 PROXY (手动选择)</strong>
+              <div style="font-size: 12px; color: var(--text-muted);">select · 核心通用出站出口</div>
+            </div>
+            <span class="pill-badge pill-sage">主策略</span>
+          </div>
+          <div class="drop-bucket" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDropNode(event, 'PROXY')">
+            <span class="group-tag-pill">🇭🇰 香港｜稳定线路 01 <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+            <span class="group-tag-pill">🇯🇵 日本｜东京高速 02 <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+            <span class="group-tag-pill">🇸🇬 新加坡｜低延迟 01 <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+          </div>
+        </div>
+
+        <div class="canvas-card">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <strong style="color: var(--text-title); font-size: 14.5px;">⚡ AUTO (延迟最低优选)</strong>
+              <div style="font-size: 12px; color: var(--text-muted);">url-test · 容错差值 50ms</div>
+            </div>
+            <span class="pill-badge pill-amber">自动测速</span>
+          </div>
+          <div class="drop-bucket" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDropNode(event, 'AUTO')">
+            <span class="group-tag-pill">🇯🇵 日本｜东京高速 02 <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+            <span class="group-tag-pill">🇸🇬 新加坡｜低延迟 01 <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+            <span class="group-tag-pill">🇰🇷 韩国｜首尔低延迟 <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+          </div>
+        </div>
+
+        <div class="canvas-card">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <strong style="color: var(--text-title); font-size: 14.5px;">🎬 STREAMING (流媒体专用)</strong>
+              <div style="font-size: 12px; color: var(--text-muted);">fallback · 原生家庭宽带优先</div>
+            </div>
+            <span class="pill-badge pill-lavender">媒体解锁</span>
+          </div>
+          <div class="drop-bucket" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDropNode(event, 'STREAMING')">
+            <span class="group-tag-pill">🇹🇼 台湾｜家庭宽带 <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+            <span class="group-tag-pill">🇺🇸 美国｜洛杉矶 IEPL <span onclick="removeNodeTag(this)" style="cursor:pointer;">&times;</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Inspector -->
+      <div class="card" style="padding: 20px;">
+        <div class="card-heading" style="margin-bottom: 14px;">策略组属性参数</div>
+        <div class="form-item">
+          <label>目标配置策略</label>
+          <select class="form-field">
+            <option>⚡ AUTO (自动优选)</option>
+            <option>🚀 PROXY (手动选择)</option>
+            <option>🎬 STREAMING (流媒体专用)</option>
+          </select>
+        </div>
+        <div class="form-item">
+          <label>测速链接 (Health URL)</label>
+          <input type="text" class="form-field" value="[http://www.gstatic.com/generate_204](http://www.gstatic.com/generate_204)">
+        </div>
+        <div class="form-item">
+          <label>测速轮询间隔 (秒)</label>
+          <input type="number" class="form-field" value="300">
+        </div>
+        <div class="form-item">
+          <label>延迟容错差值 (ms)</label>
+          <input type="number" class="form-field" value="50">
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px;">
+          <span style="font-size: 13px; font-weight: 500;">延迟加载 (Lazy)</span>
+          <label class="switch-wrap">
+            <input type="checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW 7: Rules -->
+  <section id="view-rules" class="view-container">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;">
+      <div>
+        <h2 style="font-size: 20px; font-weight: 700; color: var(--text-title); letter-spacing: -0.02em;">分流规则集编排</h2>
+        <p style="color: var(--text-muted); font-size: 13px;">按照自上而下的绝对优先级执行路由匹配。</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="openDrawer('rulePreviewDrawer')">规则源内容</button>
+        <button class="btn btn-primary" onclick="sendToast('新增自定义规则功能已唤起', 'info')">添加规则</button>
+      </div>
+    </div>
+    <div id="rulesListContainer"></div>
+  </section>
+
+  <!-- VIEW 8: Templates -->
+  <section id="view-templates" class="view-container">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;">
+      <div>
+        <h2 style="font-size: 20px; font-weight: 700; color: var(--text-title); letter-spacing: -0.02em;">核心与客户端模板</h2>
+        <p style="color: var(--text-muted); font-size: 13px;">基于专业预设构建高兼容性的客户端配置文件。</p>
+      </div>
+      <button class="btn btn-secondary" onclick="sendToast('已导入官方精选模板至本地', 'success')">从预设库同步</button>
+    </div>
+    <div class="grid-2" id="templatesContainer"></div>
+  </section>
+
+  <!-- VIEW 9: History -->
+  <section id="view-history" class="view-container">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;">
+      <div>
+        <h2 style="font-size: 20px; font-weight: 700; color: var(--text-title); letter-spacing: -0.02em;">快照与历史版本</h2>
+        <p style="color: var(--text-muted); font-size: 13px;">随时记录、对比并安全回滚任意一次生成或拉取版本。</p>
+      </div>
+      <button class="btn btn-secondary" onclick="captureManualSnapshot()">拍摄手动快照</button>
+    </div>
+    <div class="card" style="padding: 0; overflow: hidden;">
+      <table class="node-data-table">
+        <thead>
+          <tr>
+            <th>版本标号</th>
+            <th>创建时间</th>
+            <th>来源动作</th>
+            <th>节点数量</th>
+            <th>策略组</th>
+            <th>规则条数</th>
+            <th style="text-align: right;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="historyTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- VIEW 10: Settings -->
+  <section id="view-settings" class="view-container">
+    <div style="max-width: 740px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+      <div class="card">
+        <div class="card-heading">个人偏好与客户端目标</div>
+        <div class="form-item">
+          <label>账户显示名称</label>
+          <input type="text" class="form-field" value="Olivia Parker">
+        </div>
+        <div class="form-item">
+          <label>默认目标客户端核心</label>
+          <select class="form-field">
+            <option>Clash Meta (Mihomo 1.18+)</option>
+            <option>Sing-Box (JSON 1.9+)</option>
+            <option>Shadowrocket (Rocket iOS)</option>
+            <option>Surge 5</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-heading">视觉与交互体验</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--border-subtle);">
+          <div>
+            <div style="font-weight: 600; color: var(--text-title);">细腻平滑动画微动效</div>
+            <div style="font-size: 12px; color: var(--text-muted);">保持抽屉、弹窗与卡片悬停的丝滑缓动</div>
+          </div>
+          <label class="switch-wrap">
+            <input type="checkbox" checked onchange="toggleAnimStyle(this.checked)">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 0 0 0;">
+          <div>
+            <div style="font-weight: 600; color: var(--text-title);">自动清洗离线失效节点</div>
+            <div style="font-size: 12px; color: var(--text-muted);">订阅生成时自动剔除连续 3 次探测超时的节点</div>
+          </div>
+          <label class="switch-wrap">
+            <input type="checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-heading">数据本地备份与迁移</div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">所有节点和编排配置持久化在本地，支持一键导出单文件备份。</p>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary" onclick="exportBackupJson()">导出全量配置 JSON</button>
+          <button class="btn btn-secondary" onclick="sendToast('已成功从本地备份载入', 'success')">从备份恢复</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+```

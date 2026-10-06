@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Braces, Eye, EyeOff, LoaderCircle, LockKeyhole } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, LockKeyhole } from "lucide-react";
 import { api } from "../api";
 import type { SessionUser } from "../shared/types";
 
@@ -19,7 +19,7 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
 
   return <main className="login-page">
     <section className="login-brand" aria-label="OU-YAML">
-      <div className="brand-mark large"><Braces size={28} strokeWidth={2.2} /></div>
+      <div className="brand-mark large"><img src="/brand/ou-yaml-logo.png" alt="OU-YAML" /></div>
       <div><h1>OU-YAML</h1><p>Mihomo 配置工作台</p></div>
       <div className="config-lines" aria-hidden="true">
         <span><i />mixed-port: 7890</span>
