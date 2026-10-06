@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Database, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, History, ListChecks, LoaderCircle, LogOut, Menu, Network, Rss, Save, ScrollText, Settings, ShieldCheck, TerminalSquare, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, Rocket, ChevronDown, CircleHelp, Download, FileCode2, FolderPlus, Gauge, Group, History, ListChecks, LoaderCircle, LogOut, Menu, Network, Rss, Save, ScrollText, Settings, ShieldCheck, TerminalSquare, Upload, XCircle } from "lucide-react";
 import { api } from "../api";
 import { exportMihomoYaml, validateConfig } from "../shared/mihomo";
 import { exportSingBoxJson } from "../shared/singbox";
@@ -14,14 +14,17 @@ import { SubscriptionsView } from "./views/SubscriptionsView";
 import { HistoryView } from "./views/HistoryView";
 import { AdminView } from "./views/AdminView";
 import { NodePoolView } from "./views/NodePoolView";
+import { SourceManagerView } from "./views/SourceManagerView";
 import { GeneratedSubscriptionsView } from "./views/GeneratedSubscriptionsView";
+import { GeneratorView } from "./views/GeneratorView";
 import { QuickStartView, type GuideTarget } from "./views/QuickStartView";
 
-type View = "start" | "links" | "sources" | "pool" | "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
+type View = "start" | "links" | "sources" | "pool" | "generator" | "nodes" | "groups" | "rules" | "subscriptions" | "history" | "settings" | "source" | "admin";
 const baseNav: { id: View; label: string; icon: typeof Network }[] = [
   { id: "links", label: "订阅链接", icon: Rss },
   { id: "sources", label: "订阅来源", icon: FolderPlus },
   { id: "pool", label: "节点池", icon: Database },
+  { id: "generator", label: "生成订阅", icon: Rocket },
   { id: "start", label: "开始", icon: ListChecks },
   { id: "nodes", label: "节点", icon: Network },
   { id: "groups", label: "分组编排", icon: Group },
@@ -155,8 +158,9 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       <section className="content-area">
         {view === "start" && <QuickStartView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onNavigate={(target: GuideTarget) => setView(target)} onOpenImport={() => setShowImport(true)} onDownload={download} />}
         {view === "links" && <GeneratedSubscriptionsView onMessage={setMessage} />}
-        {view === "sources" && <SubscriptionsView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onMessage={setMessage} />}
+        {view === "sources" && <SourceManagerView onMessage={setMessage} />}
         {view === "pool" && <NodePoolView onMessage={setMessage} />}
+        {view === "generator" && <GeneratorView project={project} onMessage={setMessage} />}
         {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}

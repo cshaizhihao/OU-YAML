@@ -90,7 +90,9 @@ export function listPublishedSubscriptions(userId: string) {
 }
 
 export function readPublicSubscription(token: string) {
-  const row = db.prepare('SELECT * FROM generated_subscriptions WHERE token_hash = ? AND revoked = 0').get(hashToken(token)) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM generated_subscriptions WHERE (token_hash = ? OR id = ?) AND revoked = 0').get(hashToken(token), token) as Record<string, unknown> | undefined;
   if (!row || (row.expires_at && new Date(String(row.expires_at)).getTime() <= Date.now())) return undefined;
   return { content: String(row.content), targetFormat: String(row.target_format) as TargetFormat, name: String(row.name), version: Number(row.version) };
 }
+
+export function revokePublishedSubscription(userId: string, id: string) { return db.prepare("UPDATE generated_subscriptions SET revoked = 1, updated_at = ? WHERE id = ? AND user_id = ?").run(now(), id, userId).changes > 0; }

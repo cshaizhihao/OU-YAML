@@ -35,6 +35,7 @@ export const api = {
   listGenerationProfiles: () => request<GenerationProfile[]>("/api/generation-profiles"),
   createGenerationProfile: (data: Pick<GenerationProfile, "name" | "targetFormat" | "config"> & { nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) => request<GenerationProfile>("/api/generation-profiles", { method: "POST", body: JSON.stringify(data) }),
   listGeneratedSubscriptions: () => request<GeneratedSubscription[]>("/api/generated-subscriptions"),
+  revokeGeneratedSubscription: (id: string) => request<{ revoked: boolean }>(`/api/generated-subscriptions/${id}/revoke`, { method: "POST" }),
   publishGeneratedSubscription: (data: { profileId: string; name: string; targetFormat: TargetFormat; content: string; nodeCount: number; expiresAt?: string }) => request<GeneratedSubscription & { token: string }>("/api/generated-subscriptions", { method: "POST", body: JSON.stringify(data) }),
 
   createProject: (name = "我的配置") => request<Project>("/api/projects", { method: "POST", body: JSON.stringify({ name }) }),
