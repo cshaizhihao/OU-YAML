@@ -1,3 +1,4 @@
+import type { NodeSource, ManagedNode, GenerationProfile, GeneratedSubscription } from "./shared/domain";
 import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -26,6 +27,16 @@ export const api = {
   updateUser: (id: string, data: { isAdmin: boolean; disabled: boolean; password?: string }) => request<UserAccount>(`/api/admin/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteUser: (id: string) => request<void>(`/api/admin/users/${id}`, { method: "DELETE" }),
   listProjects: () => request<ProjectSummary[]>("/api/projects"),
+  listNodeSources: () => request<NodeSource[]>("/api/node-sources"),
+  createNodeSource: (data: Pick<NodeSource, "name" | "kind" | "format"> & { url?: string }) => request<NodeSource>("/api/node-sources", { method: "POST", body: JSON.stringify(data) }),
+  listManagedNodes: (sourceId?: string) => request<ManagedNode[]>(`/api/managed-nodes${sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ""}`),
+  createManagedNode: (data: Partial<ManagedNode> & Pick<ManagedNode, "name" | "type" | "server" | "port">) => request<ManagedNode>("/api/managed-nodes", { method: "POST", body: JSON.stringify(data) }),
+  deleteManagedNode: (id: string) => request<{ deleted: boolean }>(`/api/managed-nodes/${id}`, { method: "DELETE" }),
+  listGenerationProfiles: () => request<GenerationProfile[]>("/api/generation-profiles"),
+  createGenerationProfile: (data: Pick<GenerationProfile, "name" | "targetFormat" | "config"> & { nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) => request<GenerationProfile>("/api/generation-profiles", { method: "POST", body: JSON.stringify(data) }),
+  listGeneratedSubscriptions: () => request<GeneratedSubscription[]>("/api/generated-subscriptions"),
+  publishGeneratedSubscription: (data: { profileId: string; name: string; targetFormat: TargetFormat; content: string; nodeCount: number; expiresAt?: string }) => request<GeneratedSubscription & { token: string }>("/api/generated-subscriptions", { method: "POST", body: JSON.stringify(data) }),
+
   createProject: (name = "我的配置") => request<Project>("/api/projects", { method: "POST", body: JSON.stringify({ name }) }),
   getProject: (id: string) => request<Project>(`/api/projects/${id}`),
   saveProject: (project: Project) => request<ProjectSummary>(`/api/projects/${project.id}`, { method: "PUT", body: JSON.stringify({ name: project.name, config: project.config, targetFormat: project.targetFormat }) }),
