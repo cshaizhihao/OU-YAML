@@ -4,11 +4,27 @@ import type { MihomoConfig, ProxyNode, TargetFormat } from '../src/shared/types'
 
 function now() { return new Date().toISOString(); }
 function readJson<T>(value: unknown, fallback: T): T { try { return JSON.parse(String(value)) as T; } catch { return fallback; } }
+function readFlag(value: unknown) { return Number(value) === 1 || value === true; }
+type ManagedNodeInput = Omit<ProxyNode, "id"> & { id?: string; sourceId?: string; tags?: string[]; note?: string };
+
+function managedNodeIdentity(node: Pick<ProxyNode, "type" | "server" | "port" | "uuid" | "password" | "cipher" | "sni" | "network" | "wsPath" | "wsHost" | "grpcServiceName">) {
+  return [node.type, node.server, node.port, node.uuid || "", node.password || "", node.cipher || "", node.sni || "", node.network || "", node.wsPath || "", node.wsHost || "", node.grpcServiceName || ""].join("\u001f").toLowerCase();
+}
+
+function readManagedNode(row: Record<string, unknown>) {
+  return {
+    ...readJson<ProxyNode>(row.config_json, { id: String(row.id), name: String(row.name), type: String(row.type), server: String(row.server), port: Number(row.port), extra: {} }),
+    id: String(row.id), userId: String(row.user_id), sourceId: row.source_id ? String(row.source_id) : undefined,
+    enabled: readFlag(row.enabled), sortOrder: Number(row.sort_order || 0), tags: readJson<string[]>(row.tags_json, []),
+    note: row.note ? String(row.note) : undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at),
+  };
+}
 
 export function migrateLegacyProjects(userId: string) {
   const projects = db.prepare('SELECT id, name, config_json, created_at, updated_at FROM projects WHERE user_id = ?').all(userId) as Record<string, unknown>[];
   const created = db.transaction(() => {
     let count = 0;
+    let nextOrder = Number((db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS value FROM managed_nodes WHERE user_id = ?").get(userId) as { value: number }).value) + 1;
     for (const project of projects) {
       const sourceId = `legacy-${String(project.id)}`;
       const exists = db.prepare('SELECT id FROM node_sources WHERE id = ?').get(sourceId);
@@ -23,8 +39,8 @@ export function migrateLegacyProjects(userId: string) {
         if (db.prepare('SELECT id FROM managed_nodes WHERE id = ?').get(managedId)) continue;
         const stamp = String(project.updated_at || project.created_at || now());
         db.prepare(`INSERT INTO managed_nodes
-          (id,user_id,source_id,name,type,server,port,config_json,raw_config_json,enabled,tags_json,created_at,updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(managedId, userId, sourceId, node.name, node.type, node.server, node.port, JSON.stringify(node), JSON.stringify(node.extra || {}), 1, '[]', stamp, stamp);
+          (id,user_id,source_id,name,type,server,port,config_json,raw_config_json,enabled,sort_order,tags_json,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(managedId, userId, sourceId, node.name, node.type, node.server, node.port, JSON.stringify(node), JSON.stringify(node.extra || {}), 1, nextOrder++, '[]', stamp, stamp);
         count += 1;
       }
       db.prepare('UPDATE node_sources SET node_count = (SELECT COUNT(*) FROM managed_nodes WHERE source_id = ?) WHERE id = ?').run(sourceId, sourceId);
@@ -38,15 +54,15 @@ export function listNodeSources(userId: string) {
   migrateLegacyProjects(userId);
   return (db.prepare('SELECT * FROM node_sources WHERE user_id = ? ORDER BY updated_at DESC').all(userId) as Record<string, unknown>[]).map(row => ({
     id: String(row.id), userId: String(row.user_id), name: String(row.name), kind: String(row.kind), url: row.url ? String(row.url) : undefined,
-    format: String(row.format), enabled: Boolean(row.enabled), nodeCount: Number(row.node_count), lastUpdatedAt: row.last_updated_at ? String(row.last_updated_at) : undefined,
+    format: String(row.format), enabled: readFlag(row.enabled), nodeCount: Number(row.node_count), lastUpdatedAt: row.last_updated_at ? String(row.last_updated_at) : undefined,
     lastError: row.last_error ? String(row.last_error) : undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at),
   }));
 }
 
 export function listManagedNodes(userId: string, sourceId?: string) {
   migrateLegacyProjects(userId);
-  const rows = (sourceId ? db.prepare('SELECT * FROM managed_nodes WHERE user_id = ? AND source_id = ? ORDER BY updated_at DESC').all(userId, sourceId) : db.prepare('SELECT * FROM managed_nodes WHERE user_id = ? ORDER BY updated_at DESC').all(userId)) as Record<string, unknown>[];
-  return rows.map(row => ({ ...readJson<ProxyNode>(row.config_json, { id: String(row.id), name: String(row.name), type: String(row.type), server: String(row.server), port: Number(row.port), extra: {} }), id: String(row.id), userId: String(row.user_id), sourceId: row.source_id ? String(row.source_id) : undefined, enabled: Boolean(row.enabled), tags: readJson<string[]>(row.tags_json, []), note: row.note ? String(row.note) : undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at) }));
+  const rows = (sourceId ? db.prepare('SELECT * FROM managed_nodes WHERE user_id = ? AND source_id = ? ORDER BY sort_order ASC, created_at ASC, id ASC').all(userId, sourceId) : db.prepare('SELECT * FROM managed_nodes WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC, id ASC').all(userId)) as Record<string, unknown>[];
+  return rows.map(readManagedNode);
 }
 
 export function createNodeSource(userId: string, input: { name: string; kind: string; url?: string; format?: string }) {
@@ -55,13 +71,134 @@ export function createNodeSource(userId: string, input: { name: string; kind: st
   return listNodeSources(userId).find(item => item.id === id)!;
 }
 
-export function createManagedNode(userId: string, input: ProxyNode & { sourceId?: string; tags?: string[]; note?: string }) {
+export function updateNodeSource(userId: string, id: string, input: { name: string; kind: string; url?: string; format?: string }) {
+  const result = db.prepare("UPDATE node_sources SET name = ?, kind = ?, url = ?, format = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+    .run(input.name, input.kind, input.url || null, input.format || "auto", now(), id, userId);
+  if (!result.changes) return undefined;
+  return listNodeSources(userId).find(item => item.id === id);
+}
+
+export function markNodeSourceError(userId: string, id: string, message: string) {
+  const stamp = now();
+  const result = db.prepare("UPDATE node_sources SET last_error = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(message.slice(0, 500), stamp, id, userId);
+  return result.changes > 0;
+}
+
+export function replaceManagedNodesForSource(userId: string, sourceId: string, incoming: ProxyNode[]) {
+  const source = db.prepare("SELECT * FROM node_sources WHERE id = ? AND user_id = ?").get(sourceId, userId) as Record<string, unknown> | undefined;
+  if (!source) throw new Error("节点来源不存在");
+  const rows = db.prepare("SELECT * FROM managed_nodes WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC, id ASC").all(userId) as Record<string, unknown>[];
+  const existing = rows.filter((row) => String(row.source_id || "") === sourceId).map((row) => ({ row, node: readManagedNode(row) }));
+  const otherNames = new Set(rows.filter((row) => String(row.source_id || "") !== sourceId).map((row) => String(row.name)));
+  const usedNames = new Set(otherNames);
+  const nodes = incoming.map((node) => {
+    const base = node.name.trim() || `${node.type.toUpperCase()} 节点`;
+    let name = base;
+    let suffix = 2;
+    while (usedNames.has(name)) name = `${base} ${suffix++}`;
+    usedNames.add(name);
+    return { ...node, name };
+  });
+  const byIdentity = new Map<string, number[]>();
+  const byName = new Map<string, number[]>();
+  nodes.forEach((node, index) => {
+    const identity = managedNodeIdentity(node);
+    byIdentity.set(identity, [...(byIdentity.get(identity) || []), index]);
+    byName.set(node.name, [...(byName.get(node.name) || []), index]);
+  });
+  const consumed = new Set<number>();
+  const matched = new Map<string, number>();
+  const take = (candidates: number[] | undefined) => {
+    const index = candidates?.find((candidate) => !consumed.has(candidate));
+    if (index === undefined) return undefined;
+    consumed.add(index);
+    return index;
+  };
+  for (const item of existing) {
+    const index = take(byIdentity.get(managedNodeIdentity(item.node))) ?? take(byName.get(item.node.name));
+    if (index !== undefined) matched.set(String(item.row.id), index);
+  }
+
+  const desired: { node: ProxyNode; id: string; existing?: Record<string, unknown> }[] = [];
+  for (const row of rows) {
+    if (String(row.source_id || "") !== sourceId) {
+      desired.push({ node: readManagedNode(row), id: String(row.id), existing: row });
+      continue;
+    }
+    const index = matched.get(String(row.id));
+    if (index !== undefined) desired.push({ node: nodes[index], id: String(row.id), existing: row });
+  }
+  nodes.forEach((node, index) => {
+    if (!consumed.has(index)) desired.push({ node, id: randomUUID() });
+  });
+
+  const stamp = now();
+  db.transaction(() => {
+    db.prepare("DELETE FROM managed_nodes WHERE user_id = ? AND source_id = ?").run(userId, sourceId);
+    const updateOrder = db.prepare("UPDATE managed_nodes SET sort_order = ? WHERE id = ? AND user_id = ?");
+    const insert = db.prepare(`INSERT INTO managed_nodes
+      (id,user_id,source_id,name,type,server,port,config_json,raw_config_json,enabled,sort_order,tags_json,note,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    desired.forEach((item, position) => {
+      if (item.existing && String(item.existing.source_id || "") !== sourceId) {
+        updateOrder.run(position, item.id, userId);
+        return;
+      }
+      const previous = item.existing;
+      insert.run(item.id, userId, sourceId, item.node.name, item.node.type, item.node.server, item.node.port, JSON.stringify({ ...item.node, id: item.id }), JSON.stringify(item.node.extra || {}), previous ? Number(previous.enabled) : 1, position, JSON.stringify(previous ? readJson<string[]>(previous.tags_json, []) : []), previous?.note || null, previous?.created_at || stamp, stamp);
+    });
+    db.prepare("UPDATE node_sources SET last_updated_at = ?, last_error = NULL, node_count = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+      .run(stamp, nodes.length, stamp, sourceId, userId);
+  })();
+  return { source: listNodeSources(userId).find((item) => item.id === sourceId)!, nodes: listManagedNodes(userId, sourceId) };
+}
+
+export function createManagedNode(userId: string, input: ManagedNodeInput) {
   const id = input.id || randomUUID(); const stamp = now();
-  db.prepare(`INSERT INTO managed_nodes (id,user_id,source_id,name,type,server,port,config_json,raw_config_json,enabled,tags_json,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id, userId, input.sourceId || null, input.name, input.type, input.server, input.port, JSON.stringify({ ...input, id }), JSON.stringify(input.extra || {}), 1, JSON.stringify(input.tags || []), input.note || null, stamp, stamp);
+  if (input.sourceId && !db.prepare("SELECT id FROM node_sources WHERE id = ? AND user_id = ?").get(input.sourceId, userId)) throw new Error("节点来源不存在");
+  const max = db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS value FROM managed_nodes WHERE user_id = ?").get(userId) as { value: number };
+  db.prepare(`INSERT INTO managed_nodes (id,user_id,source_id,name,type,server,port,config_json,raw_config_json,enabled,sort_order,tags_json,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id, userId, input.sourceId || null, input.name, input.type, input.server, input.port, JSON.stringify({ ...input, id }), JSON.stringify(input.extra || {}), 1, Number(max.value) + 1, JSON.stringify(input.tags || []), input.note || null, stamp, stamp);
+  if (input.sourceId) db.prepare("UPDATE node_sources SET node_count = (SELECT COUNT(*) FROM managed_nodes WHERE source_id = ?), updated_at = ? WHERE id = ? AND user_id = ?").run(input.sourceId, stamp, input.sourceId, userId);
   return listManagedNodes(userId).find(item => item.id === id)!;
 }
 
-export function deleteManagedNode(userId: string, id: string) { return db.prepare('DELETE FROM managed_nodes WHERE id = ? AND user_id = ?').run(id, userId).changes > 0; }
+export function updateManagedNode(userId: string, id: string, input: ManagedNodeInput) {
+  const existing = db.prepare("SELECT * FROM managed_nodes WHERE id = ? AND user_id = ?").get(id, userId) as Record<string, unknown> | undefined;
+  if (!existing) return undefined;
+  const stamp = now();
+  db.prepare(`UPDATE managed_nodes SET name = ?, type = ?, server = ?, port = ?, config_json = ?, raw_config_json = ?, tags_json = ?, note = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
+    .run(input.name, input.type, input.server, input.port, JSON.stringify({ ...input, id }), JSON.stringify(input.extra || {}), JSON.stringify(input.tags || []), input.note || null, stamp, id, userId);
+  return listManagedNodes(userId).find(item => item.id === id);
+}
+
+export function reorderManagedNodes(userId: string, orderedIds: string[]) {
+  const uniqueIds = [...new Set(orderedIds)];
+  const rows = db.prepare("SELECT id, sort_order FROM managed_nodes WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC, id ASC").all(userId) as { id: string; sort_order: number }[];
+  const known = new Set(rows.map(row => row.id));
+  if (uniqueIds.some(id => !known.has(id))) throw new Error("节点排序列表包含无权操作的节点");
+  const selected = new Set(uniqueIds);
+  const slots = rows.map((row, index) => selected.has(row.id) ? index : -1).filter(index => index >= 0);
+  if (slots.length !== uniqueIds.length) throw new Error("节点排序列表不完整");
+  db.transaction(() => {
+    const update = db.prepare("UPDATE managed_nodes SET sort_order = ?, updated_at = ? WHERE id = ? AND user_id = ?");
+    const stamp = now();
+    uniqueIds.forEach((id, index) => update.run(slots[index], stamp, id, userId));
+  })();
+  return listManagedNodes(userId);
+}
+
+export function deleteManagedNode(userId: string, id: string) {
+  const existing = db.prepare("SELECT source_id FROM managed_nodes WHERE id = ? AND user_id = ?").get(id, userId) as { source_id?: string } | undefined;
+  const deleted = db.prepare('DELETE FROM managed_nodes WHERE id = ? AND user_id = ?').run(id, userId).changes > 0;
+  if (!deleted) return false;
+  db.transaction(() => {
+    const rows = db.prepare("SELECT id FROM managed_nodes WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC, id ASC").all(userId) as { id: string }[];
+    const update = db.prepare("UPDATE managed_nodes SET sort_order = ? WHERE id = ? AND user_id = ?");
+    rows.forEach((row, index) => update.run(index, row.id, userId));
+  })();
+  if (existing?.source_id) db.prepare("UPDATE node_sources SET node_count = (SELECT COUNT(*) FROM managed_nodes WHERE source_id = ?), updated_at = ? WHERE id = ? AND user_id = ?").run(existing.source_id, now(), existing.source_id, userId);
+  return true;
+}
 
 export function createProfile(userId: string, input: { name: string; targetFormat: TargetFormat; config: MihomoConfig; nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) {
   const id = randomUUID(); const stamp = now();

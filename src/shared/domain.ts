@@ -22,6 +22,7 @@ export interface ManagedNode extends ProxyNode {
   userId: string;
   sourceId?: string;
   enabled: boolean;
+  sortOrder: number;
   tags: string[];
   rawConfig?: Record<string, unknown>;
   note?: string;

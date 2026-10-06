@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -18,7 +18,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from "@dnd-kit/utilities";
 import { Check, ChevronDown, Gauge, GripVertical, Group, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { createId } from "../../shared/id";
-import { addGroupMembers, moveGroupMember, removeGroupMember, reorderGroupMember, reorderGroups } from "../../shared/grouping";
+import { addGroupMembers, canAddGroupMember, hasGroupCycle, moveGroupMember, removeGroupMember, reorderGroupMember, reorderGroups } from "../../shared/grouping";
 import type { GroupType, MihomoConfig, ProxyGroup, ProxyNode } from "../../shared/types";
 import { ConfirmDialog, Drawer } from "../Dialog";
 
@@ -40,7 +40,7 @@ const boardCollisionDetection: CollisionDetection = (args) => {
   return member ? [member] : collisions;
 };
 
-export function GroupsView({ config, onChange }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void }) {
+export function GroupsView({ config, onChange, onMessage }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void; onMessage?: (message: string) => void }) {
   const [editing, setEditing] = useState<ProxyGroup | null>(null);
   const [deleting, setDeleting] = useState<ProxyGroup | null>(null);
   const [query, setQuery] = useState("");
@@ -54,15 +54,31 @@ export function GroupsView({ config, onChange }: { config: MihomoConfig; onChang
   const nodes = useMemo(() => config.proxies.filter((node) => `${node.name} ${node.server} ${node.type}`.toLowerCase().includes(query.toLowerCase())), [config.proxies, query]);
   const selectedGroup = config.proxyGroups.find((group) => group.id === selectedGroupId) || config.proxyGroups[0];
 
+  useEffect(() => {
+    if (selectedGroupId && config.proxyGroups.some((group) => group.id === selectedGroupId)) return;
+    setSelectedGroupId(config.proxyGroups[0]?.id || "");
+  }, [config.proxyGroups, selectedGroupId]);
+
   function updateGroups(proxyGroups: ProxyGroup[]) { onChange({ ...config, proxyGroups }); }
   function save(group: ProxyGroup) {
-    const exists = config.proxyGroups.some((item) => item.id === group.id);
-    updateGroups(exists ? config.proxyGroups.map((item) => item.id === group.id ? group : item) : [...config.proxyGroups, group]);
+    const normalized = { ...group, name: group.name.trim(), proxies: [...new Set(group.proxies)] };
+    if (!normalized.name) { onMessage?.("策略组名称不能为空"); return; }
+    if (config.proxyGroups.some((item) => item.id !== normalized.id && item.name === normalized.name)) { onMessage?.("策略组名称不能重复"); return; }
+    const previous = config.proxyGroups.find((item) => item.id === normalized.id);
+    const exists = !!previous;
+    let nextGroups = exists ? config.proxyGroups.map((item) => item.id === normalized.id ? normalized : item) : [...config.proxyGroups, normalized];
+    if (previous && previous.name !== normalized.name) {
+      nextGroups = nextGroups.map((item) => item.id === normalized.id ? item : { ...item, proxies: item.proxies.map((member) => member === previous.name ? normalized.name : member) });
+    }
+    if (hasGroupCycle(nextGroups)) { onMessage?.("不能保存：策略组会形成循环引用"); return; }
+    onChange({ ...config, proxyGroups: nextGroups, rules: previous && previous.name !== normalized.name ? config.rules.map((rule) => rule.target === previous.name ? { ...rule, target: normalized.name } : rule) : config.rules });
     if (!exists) setSelectedGroupId(group.id);
     setEditing(null);
   }
   function addMembers(targetGroupId: string, names: string[], before?: string) {
-    updateGroups(addGroupMembers(config.proxyGroups, targetGroupId, names, before));
+    const allowed = names.filter((name) => canAddGroupMember(config.proxyGroups, targetGroupId, name));
+    if (allowed.length !== names.length) onMessage?.("已跳过会造成循环引用的策略组");
+    if (allowed.length) updateGroups(addGroupMembers(config.proxyGroups, targetGroupId, allowed, before));
   }
   function removeMember(targetGroupId: string, name: string) {
     updateGroups(removeGroupMember(config.proxyGroups, targetGroupId, name));
@@ -94,6 +110,8 @@ export function GroupsView({ config, onChange }: { config: MihomoConfig; onChang
       updateGroups(reorderGroupMember(config.proxyGroups, targetGroupId, active.name, before));
       return;
     }
+    const withoutSource = removeGroupMember(config.proxyGroups, active.groupId, active.name);
+    if (!canAddGroupMember(withoutSource, targetGroupId, active.name)) { onMessage?.("不能移动：策略组会形成循环引用"); return; }
     updateGroups(moveGroupMember(config.proxyGroups, active.groupId, targetGroupId, active.name, before));
     setSelectedGroupId(targetGroupId);
   }
@@ -102,8 +120,8 @@ export function GroupsView({ config, onChange }: { config: MihomoConfig; onChang
     <div className="view-toolbar group-board-toolbar"><div className="summary-inline"><span><strong>{config.proxies.length}</strong> 个节点</span><i /><span><strong>{config.proxyGroups.length}</strong> 个策略组</span><i /><span><strong>{config.proxyGroups.reduce((sum, item) => sum + item.proxies.length, 0)}</strong> 个引用</span></div><button className="primary-button" onClick={() => setEditing(blankGroup())}><Plus size={17} />添加策略组</button></div>
     <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveName("")}>
       <div className="group-board">
-        <aside className="node-pool" aria-label="节点池">
-          <header><div><Network size={18} /><strong>节点池</strong></div><span>{nodes.length}</span></header>
+        <aside className="node-pool" aria-label="当前配置节点">
+          <header><div><Network size={18} /><strong>可编排节点</strong></div><span>{nodes.length}</span></header>
           <label className="board-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索节点" aria-label="搜索节点池" /></label>
           {!!config.proxyGroups.length && <div className="pool-target"><label>加入到<div><select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select><ChevronDown size={14} /></div></label><button className="secondary-button compact-button" disabled={!selectedNodes.size || !selectedGroup} onClick={() => { if (!selectedGroup) return; addMembers(selectedGroup.id, [...selectedNodes]); setSelectedNodes(new Set()); }}><Plus size={15} />加入所选 {selectedNodes.size || ""}</button></div>}
           <div className="node-pool-list">{nodes.map((node) => <PoolNode key={node.id} node={node} selected={selectedNodes.has(node.name)} targetName={selectedGroup?.name} onToggle={() => toggleNode(node.name)} onAdd={() => selectedGroup && addMembers(selectedGroup.id, [node.name])} />)}{!nodes.length && <div className="pool-empty">{config.proxies.length ? "没有匹配节点" : "先从订阅或节点页导入节点"}</div>}</div>
@@ -119,7 +137,16 @@ export function GroupsView({ config, onChange }: { config: MihomoConfig; onChang
       <DragOverlay dropAnimation={{ duration: 160, easing: "ease-out" }}>{activeName ? <div className="drag-overlay"><GripVertical size={16} /><strong>{activeName}</strong></div> : null}</DragOverlay>
     </DndContext>
     <GroupEditor key={editing?.id || "closed"} config={config} group={editing} onClose={() => setEditing(null)} onSave={save} />
-    <ConfirmDialog open={!!deleting} title="删除策略组" message={`确定删除“${deleting?.name}”吗？引用该组的规则会变为无效。`} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) updateGroups(config.proxyGroups.filter((item) => item.id !== deleting.id)); setDeleting(null); }} />
+    <ConfirmDialog open={!!deleting} title="删除策略组" message={`确定删除“${deleting?.name}”吗？其他策略组和规则中的相关引用会自动清理。`} onClose={() => setDeleting(null)} onConfirm={() => {
+      if (deleting) {
+        onChange({
+          ...config,
+          proxyGroups: config.proxyGroups.filter((item) => item.id !== deleting.id).map((item) => ({ ...item, proxies: item.proxies.filter((member) => member !== deleting.name) })),
+          rules: config.rules.map((rule) => rule.target === deleting.name ? { ...rule, target: "DIRECT" } : rule),
+        });
+      }
+      setDeleting(null);
+    }} />
   </>;
 }
 
@@ -146,9 +173,13 @@ function GroupEditor({ config, group, onClose, onSave }: { config: MihomoConfig;
   const [draft, setDraft] = useState<ProxyGroup | null>(group);
   if (!group || !draft) return null;
   const memberOptions = ["DIRECT", "REJECT", ...config.proxies.map((item) => item.name), ...config.proxyGroups.filter((item) => item.id !== draft.id).map((item) => item.name)];
-  const toggleMember = (member: string) => setDraft({ ...draft, proxies: draft.proxies.includes(member) ? draft.proxies.filter((item) => item !== member) : [...draft.proxies, member] });
+  const draftGroups = config.proxyGroups.map((item) => item.id === draft.id ? draft : item);
+  const toggleMember = (member: string) => {
+    if (draft.proxies.includes(member)) setDraft({ ...draft, proxies: draft.proxies.filter((item) => item !== member) });
+    else if (canAddGroupMember(draftGroups, draft.id, member)) setDraft({ ...draft, proxies: [...draft.proxies, member] });
+  };
   return <Drawer title={group.name === "新策略组" ? "添加策略组" : `编辑 ${group.name}`} open onClose={onClose} footer={<><button className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" disabled={!draft.name.trim()} onClick={() => onSave(draft)}>保存策略组</button></>}>
     <div className="form-grid"><label className="span-2">策略组名称<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label><label className="span-2">类型<select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as GroupType })}>{groupTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>{draft.type !== "select" && draft.type !== "relay" && <><label className="span-2">测速 URL<input value={draft.url || "https://www.gstatic.com/generate_204"} onChange={(event) => setDraft({ ...draft, url: event.target.value })} /></label><label>间隔（秒）<input type="number" min={10} value={draft.interval || 300} onChange={(event) => setDraft({ ...draft, interval: Number(event.target.value) })} /></label><label>容差（毫秒）<input type="number" min={0} value={draft.tolerance || 50} onChange={(event) => setDraft({ ...draft, tolerance: Number(event.target.value) })} /></label></>}</div>
-    <fieldset className="member-selector"><legend>成员</legend><div className="member-options">{memberOptions.map((member) => <label key={member}><input type="checkbox" checked={draft.proxies.includes(member)} onChange={() => toggleMember(member)} /><span>{member}</span></label>)}</div></fieldset>
+    <fieldset className="member-selector"><legend>成员</legend><div className="member-options">{memberOptions.map((member) => { const checked = draft.proxies.includes(member); const allowed = checked || canAddGroupMember(draftGroups, draft.id, member); return <label key={member} className={!allowed ? "disabled" : ""}><input type="checkbox" checked={checked} disabled={!allowed} onChange={() => toggleMember(member)} /><span>{member}</span></label>; })}</div></fieldset>
   </Drawer>;
 }

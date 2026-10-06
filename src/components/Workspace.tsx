@@ -24,11 +24,11 @@ type View = "start" | "links" | "sources" | "pool" | "generator" | "templates" |
 const baseNav: { id: View; label: string; hint: string; section: string; icon: typeof Network }[] = [
   { id: "start", label: "开始使用", hint: "新手引导", section: "工作流", icon: ListChecks },
   { id: "sources", label: "导入来源", hint: "订阅 URL / 文件", section: "工作流", icon: FolderPlus },
-  { id: "pool", label: "节点池", hint: "管理全部节点", section: "工作流", icon: Database },
+  { id: "pool", label: "节点池", hint: "管理全部资源节点", section: "工作流", icon: Database },
   { id: "groups", label: "代理分组", hint: "拖拽编排策略", section: "工作流", icon: Group },
   { id: "rules", label: "规则编辑", hint: "匹配与分流", section: "工作流", icon: ScrollText },
   { id: "generator", label: "生成订阅", hint: "生成配置", section: "发布", icon: Rocket },
-  { id: "links", label: "订阅链接", hint: "查看已发布", section: "发布", icon: Rss },
+  { id: "links", label: "发布链接", hint: "查看已发布订阅", section: "发布", icon: Rss },
   { id: "templates", label: "规则模板", hint: "复用模板", section: "资源", icon: FileCode2 },
   { id: "nodes", label: "当前配置节点", hint: "仅当前项目", section: "资源", icon: Network },
   { id: "subscriptions", label: "项目订阅", hint: "自动刷新", section: "资源", icon: Rss },
@@ -161,11 +161,11 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
         {view === "start" && <QuickStartView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onNavigate={(target: GuideTarget) => setView(target)} onOpenImport={() => setShowImport(true)} onDownload={download} />}
         {view === "links" && <GeneratedSubscriptionsView onMessage={setMessage} />}
         {view === "sources" && <SourceManagerView onMessage={setMessage} />}
-        {view === "pool" && <NodePoolView onMessage={setMessage} />}
+        {view === "pool" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
         {view === "generator" && <GeneratorView project={project} onMessage={setMessage} />}
         {view === "templates" && <TemplatesView onMessage={setMessage} />}
-        {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
-        {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
+        {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
+        {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "subscriptions" && <SubscriptionsView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onMessage={setMessage} />}
         {view === "history" && <HistoryView project={project} onRestore={(restored) => { setProject(restored); setStatus("saved"); }} onMessage={setMessage} />}

@@ -78,22 +78,69 @@ NOTICE
 }
 
 detect_reverse_proxy_conflict() {
-  local found=() service
+  local mode="${1:-domain}" app_port="${2:-}" found=() conflicts=() listeners=() service binary port_filter
+  local has_port_conflict=0
   for service in nginx nginx.service apache2 httpd caddy traefik haproxy; do
-    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$service" 2>/dev/null; then found+=("$service"); fi
+    if [[ "$service" == *.service ]]; then continue; fi
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$service" 2>/dev/null; then
+      found+=("运行中的 ${service}")
+      conflicts+=("运行中的 ${service}")
+    fi
   done
-  if command -v ss >/dev/null 2>&1; then
-    if ss -ltnH '( sport = :80 or sport = :443 )' 2>/dev/null | grep -q .; then found+=("80/443 端口已有监听"); fi
+  for binary in nginx apache2 httpd caddy traefik haproxy; do
+    if command -v "$binary" >/dev/null 2>&1 && [[ ! " ${found[*]} " == *" ${binary}"* ]]; then found+=("已安装 ${binary}"); fi
+  done
+  if [ "$mode" = "domain" ]; then
+    port_filter='( sport = :80 or sport = :443 )'
+  elif [[ "$app_port" =~ ^[0-9]+$ ]]; then
+    port_filter="( sport = :${app_port} )"
+  else
+    port_filter=''
+  fi
+  if [ -n "$port_filter" ] && command -v ss >/dev/null 2>&1; then
+    while IFS= read -r listener; do
+      [ -n "$listener" ] && listeners+=("$listener")
+    done < <(ss -ltnH "$port_filter" 2>/dev/null || true)
+  elif [ -n "$port_filter" ] && command -v lsof >/dev/null 2>&1; then
+    local listen_port
+    if [ "$mode" = "domain" ]; then
+      for listen_port in 80 443; do
+        while IFS= read -r listener; do
+          [ -n "$listener" ] && listeners+=("$listener")
+        done < <(lsof -nP -iTCP:"$listen_port" -sTCP:LISTEN 2>/dev/null || true)
+      done
+    else
+      while IFS= read -r listener; do
+        [ -n "$listener" ] && listeners+=("$listener")
+      done < <(lsof -nP -iTCP:"$app_port" -sTCP:LISTEN 2>/dev/null || true)
+    fi
+  fi
+  if [ "${#listeners[@]}" -gt 0 ]; then
+    has_port_conflict=1
+    if [ "$mode" = "domain" ]; then
+      found+=("80/443 端口已有监听")
+      conflicts+=("80/443 端口已有监听")
+    else
+      found+=("${app_port} 端口已有监听")
+      conflicts+=("${app_port} 端口已有监听")
+    fi
   fi
   if [ "${#found[@]}" -gt 0 ]; then
     warn "检测到可能与 OU-YAML 冲突的反向代理或端口占用：${found[*]}"
-    warn "域名模式需要 Docker Caddy 使用 80/443 端口。"
-    if [ "${OU_YAML_ALLOW_REVERSE_PROXY_CONFLICT:-0}" != "1" ]; then
-      say "请先停止已有反代，或确认它们不占用 80/443 后重新运行。"
-      say "如已确认风险，可设置 OU_YAML_ALLOW_REVERSE_PROXY_CONFLICT=1 强制继续。"
+    if [ "$mode" = "domain" ]; then
+      warn "域名模式需要 Docker Caddy 使用 80/443 端口。"
+      if [ "${#conflicts[@]}" -gt 0 ] && [ "${OU_YAML_ALLOW_REVERSE_PROXY_CONFLICT:-0}" != "1" ]; then
+        say "请先停止已有反代，或确认它们不占用 80/443 后重新运行。"
+        say "如已确认风险，可设置 OU_YAML_ALLOW_REVERSE_PROXY_CONFLICT=1 强制继续。"
+        return 1
+      fi
+      if [ "${#conflicts[@]}" -gt 0 ]; then warn "已设置强制继续，将由用户自行处理反代冲突。"; else warn "检测到相关程序但当前未发现活动冲突，继续安装。"; fi
+    elif [ "$has_port_conflict" -eq 1 ]; then
+      say "IP + 端口模式需要使用未被占用的 ${app_port} 端口。"
       return 1
+    else
+      warn "当前为 IP + 端口模式，已有反代只要不占用 ${app_port} 通常可以共存。"
     fi
-    warn "已设置强制继续，将由用户自行处理反代冲突。"
   fi
 }
 
@@ -159,6 +206,7 @@ install_ip_mode() {
   if command -v ss >/dev/null 2>&1 && ss -ltnH "sport = :${port}" 2>/dev/null | grep -q .; then
     fail "端口 ${port} 已被其他程序占用，请更换端口后重试。"
   fi
+  detect_reverse_proxy_conflict ip "$port" || fail "检测到端口冲突，已停止安装。"
   write_env ip "$port"
   cd "${INSTALL_DIR}"
   step "正在构建并启动 OU-YAML..."

@@ -1,5 +1,29 @@
 import type { ProxyGroup } from "./types";
 
+function groupByName(groups: ProxyGroup[], name: string) {
+  return groups.find((group) => group.name === name);
+}
+
+function reachesGroup(groups: ProxyGroup[], startName: string, targetName: string, visited = new Set<string>()): boolean {
+  if (startName === targetName) return true;
+  if (visited.has(startName)) return false;
+  visited.add(startName);
+  const group = groupByName(groups, startName);
+  return !!group?.proxies.some((member) => groupByName(groups, member) && reachesGroup(groups, member, targetName, visited));
+}
+
+export function canAddGroupMember(groups: ProxyGroup[], targetGroupId: string, memberName: string) {
+  const target = groups.find((group) => group.id === targetGroupId);
+  const memberGroup = groupByName(groups, memberName);
+  if (!target || !memberGroup) return true;
+  if (target.id === memberGroup.id) return false;
+  return !reachesGroup(groups, memberGroup.name, target.name);
+}
+
+export function hasGroupCycle(groups: ProxyGroup[]) {
+  return groups.some((group) => group.proxies.some((member) => groupByName(groups, member) && reachesGroup(groups, member, group.name)));
+}
+
 export function addGroupMembers(groups: ProxyGroup[], targetGroupId: string, names: string[], before?: string) {
   return groups.map((group) => {
     if (group.id !== targetGroupId) return group;

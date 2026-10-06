@@ -86,6 +86,7 @@ db.exec(`
     config_json TEXT NOT NULL,
     raw_config_json TEXT,
     enabled INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
     tags_json TEXT NOT NULL DEFAULT '[]',
     note TEXT,
     created_at TEXT NOT NULL,
@@ -189,6 +190,22 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `);
+
+const managedNodeColumns = db.prepare("PRAGMA table_info(managed_nodes)").all() as { name: string }[];
+if (!managedNodeColumns.some((column) => column.name === "sort_order")) db.exec("ALTER TABLE managed_nodes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+db.exec("CREATE INDEX IF NOT EXISTS idx_managed_nodes_sort ON managed_nodes(user_id, sort_order, created_at, id)");
+db.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+if (!db.prepare("SELECT 1 FROM schema_meta WHERE key = 'managed-node-sort-v1'").get()) {
+  db.transaction(() => {
+    const users = db.prepare("SELECT DISTINCT user_id FROM managed_nodes").all() as { user_id: string }[];
+    const update = db.prepare("UPDATE managed_nodes SET sort_order = ? WHERE id = ? AND user_id = ?");
+    for (const user of users) {
+      const nodes = db.prepare("SELECT id FROM managed_nodes WHERE user_id = ? ORDER BY created_at ASC, id ASC").all(user.user_id) as { id: string }[];
+      nodes.forEach((node, index) => update.run(index, node.id, user.user_id));
+    }
+    db.prepare("INSERT INTO schema_meta (key, value) VALUES ('managed-node-sort-v1', ?)").run(new Date().toISOString());
+  })();
+}
 
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
 if (!userColumns.some((column) => column.name === "is_admin")) db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");

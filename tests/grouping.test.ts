@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addGroupMembers, moveGroupMember, reorderGroupMember, reorderGroups } from "../src/shared/grouping";
+import { addGroupMembers, canAddGroupMember, hasGroupCycle, moveGroupMember, reorderGroupMember, reorderGroups } from "../src/shared/grouping";
 import type { ProxyGroup } from "../src/shared/types";
 
 const groups = (): ProxyGroup[] => [
@@ -31,4 +31,16 @@ test("策略组可以整体重新排序", () => {
     { id: "c", name: "C", type: "select", proxies: [], extra: {} },
   ] as any;
   assert.deepEqual(reorderGroups(groups, "c", "a").map((group: any) => group.id), ["c", "a", "b"]);
+});
+
+test("策略组拖放会阻止自引用和循环引用", () => {
+  const nested: ProxyGroup[] = [
+    { id: "a", name: "A", type: "select", proxies: ["B"], extra: {} },
+    { id: "b", name: "B", type: "select", proxies: [], extra: {} },
+  ];
+  assert.equal(canAddGroupMember(nested, "b", "A"), false);
+  assert.equal(canAddGroupMember(nested, "a", "A"), false);
+  assert.equal(canAddGroupMember(nested, "a", "B"), true);
+  assert.equal(hasGroupCycle(nested), false);
+  assert.equal(hasGroupCycle([{ ...nested[1], proxies: ["A"] }, nested[0]]), true);
 });

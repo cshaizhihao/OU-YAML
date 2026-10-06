@@ -20,10 +20,15 @@ function decodeName(value: string | undefined, fallback: string) {
 function hostPort(value: string): { server: string; port: number } {
   if (value.startsWith("[")) {
     const end = value.indexOf("]");
-    return { server: value.slice(1, end), port: Number(value.slice(end + 2)) };
+    if (end < 0 || value[end + 1] !== ":") throw new Error("链接缺少有效端口");
+    const port = Number(value.slice(end + 2));
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("链接端口无效");
+    return { server: value.slice(1, end), port };
   }
   const index = value.lastIndexOf(":");
-  return { server: value.slice(0, index), port: Number(value.slice(index + 1)) };
+  const port = Number(value.slice(index + 1));
+  if (index < 1 || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error("链接缺少有效服务器或端口");
+  return { server: value.slice(0, index), port };
 }
 
 function common(name: string, type: string, server: string, port: number): ProxyNode {
@@ -93,9 +98,10 @@ function parseSsr(input: string): ProxyNode {
 
 function parseUrlNode(input: string): ProxyNode {
   const url = new URL(input);
-  const typeMap: Record<string, string> = { "socks": "socks5", "socks5": "socks5", "hy2": "hysteria2" };
-  const type = typeMap[url.protocol.slice(0, -1)] || url.protocol.slice(0, -1);
-  const node = common(decodeName(url.hash.slice(1), url.hostname), type, url.hostname, Number(url.port || (url.searchParams.get("tls") ? 443 : 80)));
+  const typeMap: Record<string, string> = { "socks": "socks5", "socks5": "socks5", "hy2": "hysteria2", "hysteria": "hysteria2" };
+  const type = typeMap[url.protocol.slice(0, -1).toLowerCase()] || url.protocol.slice(0, -1).toLowerCase();
+  const server = url.hostname.replace(/^\[|\]$/g, "");
+  const node = common(decodeName(url.hash.slice(1), server), type, server, Number(url.port || (url.searchParams.get("tls") ? 443 : 80)));
   const username = decodeURIComponent(url.username);
   const password = decodeURIComponent(url.password);
   if (type === "vless" || type === "vmess") node.uuid = username;
@@ -117,10 +123,11 @@ function parseUrlNode(input: string): ProxyNode {
 
 export function parseShareLink(input: string): ProxyNode {
   const value = input.trim();
-  if (value.startsWith("ss://")) return parseSs(value);
-  if (value.startsWith("ssr://")) return parseSsr(value);
-  if (value.startsWith("vmess://")) return parseVmess(value);
-  if (/^(vless|trojan|hysteria2|hy2|tuic|snell|socks5?|http):\/\//i.test(value)) return parseUrlNode(value);
+  const scheme = value.slice(0, value.indexOf("://") + 3).toLowerCase();
+  if (scheme === "ss://") return parseSs(value);
+  if (scheme === "ssr://") return parseSsr(value);
+  if (scheme === "vmess://") return parseVmess(value);
+  if (/^(vless|trojan|hysteria|hysteria2|hy2|tuic|snell|socks5?|http):\/\//i.test(value)) return parseUrlNode(value);
   throw new Error("不支持的分享链接协议");
 }
 

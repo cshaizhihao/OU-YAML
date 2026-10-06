@@ -14,7 +14,7 @@ import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from 
 import { safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
-import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, recordAudit, recordJob, updateJob } from "./domainService";
+import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, listRuleTemplates, createRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, markNodeSourceError, recordAudit, recordJob, updateJob, updateManagedNode, updateNodeSource, replaceManagedNodesForSource, reorderManagedNodes } from "./domainService";
 import { checkForUpdate, readUpdateLog, readUpdateStatus, requestWebUpdate } from "./update";
 
 declare global {
@@ -52,6 +52,22 @@ const subscriptionSchema = z.object({
   }),
   format: z.enum(["auto", "links", "mihomo", "sing-box"]).default("auto"),
   intervalMinutes: z.number().int().min(0).max(10080).default(0),
+});
+const managedNodeSchema = z.object({
+  name: z.string().trim().min(1).max(160), type: z.string().trim().min(1).max(40), server: z.string().trim().min(1).max(255), port: z.number().int().min(1).max(65535),
+  udp: z.boolean().optional(), tls: z.boolean().optional(), skipCertVerify: z.boolean().optional(), sni: z.string().max(512).optional(), uuid: z.string().max(512).optional(), password: z.string().max(2048).optional(), cipher: z.string().max(256).optional(), network: z.string().max(64).optional(), wsPath: z.string().max(2048).optional(), wsHost: z.string().max(512).optional(), grpcServiceName: z.string().max(512).optional(),
+  sourceId: z.string().optional(), tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(), note: z.string().max(500).optional(), extra: z.record(z.unknown()).default({}), formatExtra: z.record(z.unknown()).optional(),
+});
+const nodeSourceSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  kind: z.enum(["manual", "file", "remote-url", "share-links"]),
+  url: z.string().trim().max(2048).refine((value) => {
+    if (!value) return true;
+    try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+  }, "来源地址必须是 HTTP 或 HTTPS").optional(),
+  format: z.enum(["auto", "links", "mihomo", "sing-box"]).optional(),
+}).superRefine((value, context) => {
+  if (value.kind === "remote-url" && !value.url) context.addIssue({ code: z.ZodIssueCode.custom, path: ["url"], message: "远程来源需要订阅地址" });
 });
 
 function readSubscription(row: Record<string, unknown>): Subscription {
@@ -356,15 +372,51 @@ app.post("/api/projects/:projectId/versions/:id/restore", requireAuth, (req, res
 
 app.get("/api/node-sources", requireAuth, (req, res) => res.json(listNodeSources(req.user!.id)));
 app.post("/api/node-sources", requireAuth, (req, res) => {
-  const parsed = z.object({ name: z.string().trim().min(1).max(120), kind: z.enum(["manual", "file", "remote-url", "share-links"]), url: z.string().url().max(2048).optional(), format: z.enum(["auto", "links", "mihomo", "sing-box"]).optional() }).safeParse(req.body);
+  const parsed = nodeSourceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "节点来源参数无效" });
   res.status(201).json(createNodeSource(req.user!.id, parsed.data));
 });
+app.put("/api/node-sources/:id", requireAuth, (req, res) => {
+  const parsed = nodeSourceSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "节点来源参数无效" });
+  const updated = updateNodeSource(req.user!.id, String(req.params.id), parsed.data);
+  if (!updated) return res.status(404).json({ error: "节点来源不存在" });
+  res.json(updated);
+});
+app.post("/api/node-sources/:id/refresh", requireAuth, async (req, res) => {
+  const source = listNodeSources(req.user!.id).find((item) => item.id === String(req.params.id));
+  if (!source) return res.status(404).json({ error: "节点来源不存在" });
+  if (!source.url) return res.status(400).json({ error: "该来源没有可抓取的远程地址" });
+  try {
+    const content = await safeFetchText(source.url);
+    const imported = parseImportedContent(content, source.format as ImportFormat);
+    const result = replaceManagedNodesForSource(req.user!.id, source.id, imported.nodes);
+    res.json({ ...result, warnings: imported.warnings });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "来源刷新失败";
+    markNodeSourceError(req.user!.id, source.id, message);
+    res.status(422).json({ error: message });
+  }
+});
 app.get("/api/managed-nodes", requireAuth, (req, res) => res.json(listManagedNodes(req.user!.id, typeof req.query.sourceId === "string" ? req.query.sourceId : undefined)));
 app.post("/api/managed-nodes", requireAuth, (req, res) => {
-  const parsed = z.object({ name: z.string().trim().min(1).max(160), type: z.string().min(1).max(40), server: z.string().min(1).max(255), port: z.number().int().min(1).max(65535), sourceId: z.string().optional(), tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(), note: z.string().max(500).optional(), extra: z.record(z.unknown()).default({}) }).safeParse(req.body);
+  const parsed = managedNodeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "节点参数无效" });
-  res.status(201).json(createManagedNode(req.user!.id, { ...parsed.data, id: randomUUID() }));
+  try { res.status(201).json(createManagedNode(req.user!.id, { ...parsed.data, id: randomUUID() })); }
+  catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "节点保存失败" }); }
+});
+app.put("/api/managed-nodes/order", requireAuth, (req, res) => {
+  const parsed = z.object({ ids: z.array(z.string()).min(1).max(5000) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "节点排序参数无效" });
+  try { res.json(reorderManagedNodes(req.user!.id, parsed.data.ids)); }
+  catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "节点排序失败" }); }
+});
+app.put("/api/managed-nodes/:id", requireAuth, (req, res) => {
+  const parsed = managedNodeSchema.omit({ sourceId: true }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "节点参数无效" });
+  const updated = updateManagedNode(req.user!.id, String(req.params.id), { ...parsed.data, id: String(req.params.id) });
+  if (!updated) return res.status(404).json({ error: "节点不存在" });
+  res.json(updated);
 });
 app.delete("/api/managed-nodes/:id", requireAuth, (req, res) => { const deleted = deleteManagedNode(req.user!.id, String(req.params.id)); recordAudit(req.user!.id, "delete", "managed-node", String(req.params.id)); res.json({ deleted }); });
 app.delete("/api/node-sources/:id", requireAuth, (req, res) => { const deleted = deleteNodeSource(req.user!.id, String(req.params.id)); recordAudit(req.user!.id, "delete", "node-source", String(req.params.id)); res.json({ deleted }); });

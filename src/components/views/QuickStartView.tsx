@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Check, CheckCircle2, Circle, Download, FileUp, Group, Link2, LoaderCircle, Network, ScrollText, ShieldCheck } from "lucide-react";
+import { Check, CheckCircle2, Circle, Database, Download, FileUp, Group, Link2, LoaderCircle, ScrollText, ShieldCheck } from "lucide-react";
 import { api } from "../../api";
 import { validateConfig } from "../../shared/mihomo";
 import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, Subscription } from "../../shared/types";
 
-export type GuideTarget = "nodes" | "groups" | "rules" | "subscriptions";
+export type GuideTarget = "pool" | "nodes" | "groups" | "rules" | "subscriptions";
 
 export function QuickStartView({ project, onConfig, onNavigate, onOpenImport, onDownload }: {
   project: Project;
@@ -63,7 +63,7 @@ export function QuickStartView({ project, onConfig, onNavigate, onOpenImport, on
       </div>
     </section>
 
-    <GuideStep number={2} title="拖动节点完成分组" detail={groupsReady ? `${project.config.proxyGroups.length} 个策略组已引用节点` : "从节点池拖入策略组，也可多选批量加入"} complete={groupsReady} actions={<><button className="secondary-button" onClick={() => onNavigate("nodes")}><Network size={16} />查看节点</button><button className="secondary-button" onClick={() => onNavigate("groups")}><Group size={16} />打开分组编排</button></>} />
+    <GuideStep number={2} title="把节点放入策略组" detail={groupsReady ? `${project.config.proxyGroups.length} 个策略组已引用节点` : "先从节点池加入当前配置，再拖入策略组"} complete={groupsReady} actions={<><button className="secondary-button" onClick={() => onNavigate("pool")}><Database size={16} />打开节点池</button><button className="secondary-button" onClick={() => onNavigate("groups")}><Group size={16} />打开分组编排</button></>} />
     <GuideStep number={3} title="选择分流规则" detail={rulesReady ? `${project.config.rules.length} 条规则，已包含兜底规则` : "选择规则模板并指定目标策略组"} complete={rulesReady} actions={<button className="secondary-button" onClick={() => onNavigate("rules")}><ScrollText size={16} />打开规则</button>} />
     <GuideStep number={4} title="内核检查与导出" detail={kernel?.available ? kernel.version : `${project.targetFormat} 内核未安装`} complete={!errors && !!kernel?.available} actions={<><button className="secondary-button" disabled={kernelBusy || !kernel?.available} onClick={checkKernel}>{kernelBusy ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />}内核检查</button><button className="primary-button" disabled={errors > 0} onClick={onDownload}><Download size={16} />导出配置</button></>} result={kernelResult} />
   </div>;

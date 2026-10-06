@@ -7,7 +7,7 @@ import { ConfirmDialog, Drawer } from "../Dialog";
 const types: ProxyType[] = ["ss", "ssr", "vmess", "vless", "trojan", "snell", "socks5", "http", "hysteria2", "tuic", "wireguard"];
 const blankNode = (): ProxyNode => ({ id: createId(), name: "新节点", type: "ss", server: "", port: 443, udp: true, cipher: "aes-128-gcm", extra: {} });
 
-export function NodesView({ config, onChange }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void }) {
+export function NodesView({ config, onChange, onMessage }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void; onMessage?: (message: string) => void }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("all");
   const [editing, setEditing] = useState<ProxyNode | null>(null);
@@ -15,8 +15,11 @@ export function NodesView({ config, onChange }: { config: MihomoConfig; onChange
   const filtered = useMemo(() => config.proxies.filter((node) => (type === "all" || node.type === type) && `${node.name} ${node.server}`.toLowerCase().includes(query.toLowerCase())), [config.proxies, query, type]);
 
   function save(node: ProxyNode) {
-    const exists = config.proxies.some((item) => item.id === node.id);
-    onChange({ ...config, proxies: exists ? config.proxies.map((item) => item.id === node.id ? node : item) : [...config.proxies, node] });
+    const normalized = { ...node, name: node.name.trim() };
+    if (!normalized.name) { onMessage?.("节点名称不能为空"); return; }
+    if (config.proxies.some((item) => item.id !== normalized.id && item.name === normalized.name)) { onMessage?.("节点名称不能重复"); return; }
+    const exists = config.proxies.some((item) => item.id === normalized.id);
+    onChange({ ...config, proxies: exists ? config.proxies.map((item) => item.id === normalized.id ? normalized : item) : [...config.proxies, normalized] });
     setEditing(null);
   }
   function duplicate(node: ProxyNode) {
@@ -37,7 +40,7 @@ export function NodesView({ config, onChange }: { config: MihomoConfig; onChange
     </div>
     {filtered.length ? <div className="data-table-wrap"><table className="data-table"><thead><tr><th>名称</th><th>协议</th><th>服务器</th><th>端口</th><th>传输</th><th><span className="sr-only">操作</span></th></tr></thead><tbody>{filtered.map((node) => <tr key={node.id}><td><button className="entity-name" onClick={() => setEditing({ ...node })}><span className="entity-icon"><Server size={17} /></span><strong>{node.name}</strong></button></td><td><span className="type-badge">{node.type.toUpperCase()}</span></td><td className="mono truncate-cell" title={node.server}>{node.server || "-"}</td><td className="mono">{node.port}</td><td>{node.network ? node.network.toUpperCase() : "TCP"}{node.tls && <span className="secure-dot" title="TLS"><KeyRound size={13} /></span>}</td><td><div className="row-actions"><button onClick={() => move(node, -1)} className="icon-button compact" aria-label={`上移 ${node.name}`}><ArrowUp size={16} /></button><button onClick={() => move(node, 1)} className="icon-button compact" aria-label={`下移 ${node.name}`}><ArrowDown size={16} /></button><button onClick={() => duplicate(node)} className="icon-button compact" aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button onClick={() => setEditing({ ...node })} className="icon-button compact" aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button onClick={() => setDeleting(node)} className="icon-button compact danger" aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div> : <div className="empty-state"><div><Network size={24} /></div><h2>{config.proxies.length ? "没有匹配的节点" : "还没有节点"}</h2><button className="primary-button" onClick={() => setEditing(blankNode())}><Plus size={17} />添加节点</button></div>}
     <NodeEditor key={editing?.id || "closed"} node={editing} onClose={() => setEditing(null)} onSave={save} />
-    <ConfirmDialog open={!!deleting} title="删除节点" message={`确定删除“${deleting?.name}”吗？策略组中的同名引用不会自动删除。`} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) onChange({ ...config, proxies: config.proxies.filter((item) => item.id !== deleting.id) }); setDeleting(null); }} />
+    <ConfirmDialog open={!!deleting} title="删除节点" message={`确定删除“${deleting?.name}”吗？它在策略组中的引用会自动清理。`} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) onChange({ ...config, proxies: config.proxies.filter((item) => item.id !== deleting.id), proxyGroups: config.proxyGroups.map((group) => ({ ...group, proxies: group.proxies.filter((member) => member !== deleting.name) })) }); setDeleting(null); }} />
   </>;
 }
 

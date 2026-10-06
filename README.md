@@ -8,7 +8,7 @@
     作者：<code>nodeseek@cshaizhihao</code>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.2.0-2E4E3F?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/version-1.3.0-2E4E3F?style=flat-square" alt="version" />
     <img src="https://img.shields.io/badge/Mihomo-Clash%20Meta-C85A3E?style=flat-square" alt="Mihomo" />
     <img src="https://img.shields.io/badge/sing--box-supported-73629B?style=flat-square" alt="sing-box" />
   </p>
@@ -100,6 +100,8 @@ sudo /opt/ou-yaml/backup.sh
 - 自动识别订阅格式。
 - 支持手动刷新和定时刷新。
 - 记录导入警告和失败状态。
+- 远程来源刷新会保留已有节点的 ID、手动排序、标签和备注，新节点自动追加。
+- 针对常见的 `403`、`404`、压缩响应和订阅网页返回提供兼容处理与可读诊断。
 
 ### 🧩 节点管理
 
@@ -110,6 +112,14 @@ sudo /opt/ou-yaml/backup.sh
 - 批量删除和启用状态管理。
 - 保留规范化配置和原始配置。
 
+### 🧺 节点池工作流
+
+- 粘贴 `VLESS`、`VMess`、`Trojan`、`SS`、`SSR`、`Hysteria2`、`TUIC`、`SOCKS5` 和 `HTTP` 分享链接。
+- 支持一行一个、多行链接、Base64 订阅、IPv6、TLS、Reality、SNI、WebSocket 和 gRPC 参数。
+- 导入前预览节点，逐行显示无法识别的内容，并自动跳过重复节点。
+- 拖拽节点自由排序，顺序持久化到数据库；筛选、刷新、重启和重新登录后仍保持一致。
+- 支持批量选择节点，一键加入当前配置或删除节点；桌面、平板和手机端均采用自适应卡片布局。
+
 ### 🎯 生成订阅
 
 - 分步生成向导。
@@ -119,6 +129,7 @@ sudo /opt/ou-yaml/backup.sh
 - 调用 Mihomo 或 sing-box 内核进行校验。
 - 保存 Generation Profile。
 - 发布公开订阅链接。
+- 支持 Mihomo YAML / Clash Meta 与 sing-box JSON 两种目标格式。
 
 ### 🧱 代理分组
 
@@ -171,6 +182,12 @@ Logo 资源位于：
 ```text
 public/brand/ou-yaml-logo.png
 ```
+
+## 🔄 网页端更新
+
+管理员可以在「设置 → 网页更新」中检查 GitHub 最新版本。部署了网页更新代理后，点击更新会自动完成数据备份、拉取代码、重建容器、重启服务和健康检查，整个过程无需登录服务器执行命令。
+
+如果部署环境没有 systemd，仍可使用项目目录中的 `update.sh` 手动更新；更新前建议先执行 `backup.sh`。
 
 ## 🛠️ 本地开发
 

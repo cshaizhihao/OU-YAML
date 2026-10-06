@@ -56,3 +56,36 @@ test("过期订阅不可访问", () => {
   const published = domain.publishSubscription(userId, profile.id, "过期订阅", "mihomo", "rules: []\n", 0, new Date(Date.now() - 1000).toISOString());
   assert.equal(domain.readPublicSubscription(published.id), undefined);
 });
+
+test("节点池排序会持久化并保持用户隔离", () => {
+  const first = domain.createManagedNode(userId, { name: "排序一", type: "vless", server: "one.example.com", port: 443, uuid: "uuid-one", extra: {} });
+  const second = domain.createManagedNode(userId, { name: "排序二", type: "vless", server: "two.example.com", port: 443, uuid: "uuid-two", extra: {} });
+  const reordered = domain.reorderManagedNodes(userId, [second.id, first.id]);
+  assert.deepEqual(reordered.filter(node => [first.id, second.id].includes(node.id)).map(node => node.id), [second.id, first.id]);
+  assert.equal(reordered.find(node => node.id === first.id)?.uuid, "uuid-one");
+  assert.throws(() => domain.reorderManagedNodes(randomUUID(), [first.id]), /无权操作/);
+});
+
+test("节点编辑不会丢失协议字段", () => {
+  const node = domain.createManagedNode(userId, { name: "待编辑", type: "vless", server: "edit.example.com", port: 443, uuid: "keep-me", tls: true, sni: "sni.example.com", extra: {} });
+  const updated = domain.updateManagedNode(userId, node.id, { ...node, name: "已编辑" });
+  assert.equal(updated?.name, "已编辑");
+  assert.equal(updated?.uuid, "keep-me");
+  assert.equal(updated?.tls, true);
+  assert.equal(updated?.sni, "sni.example.com");
+});
+
+test("远程来源替换节点时保留已匹配节点的顺序和元数据", () => {
+  const source = domain.createNodeSource(userId, { name: "远程来源", kind: "remote-url", url: "https://nodes.example.com/sub", format: "links" });
+  const first = domain.createManagedNode(userId, { name: "来源一", type: "vless", server: "one.example.com", port: 443, uuid: "one", sourceId: source.id, tags: ["保留"], note: "手动备注", extra: {} });
+  const second = domain.createManagedNode(userId, { name: "来源二", type: "vless", server: "two.example.com", port: 443, uuid: "two", sourceId: source.id, extra: {} });
+  domain.reorderManagedNodes(userId, [second.id, first.id]);
+  const result = domain.replaceManagedNodesForSource(userId, source.id, [
+    { id: randomUUID(), name: "更新二", type: "vless", server: "two.example.com", port: 443, uuid: "two", extra: {} },
+    { id: randomUUID(), name: "新节点", type: "vless", server: "three.example.com", port: 443, uuid: "three", extra: {} },
+  ]);
+  assert.deepEqual(result.nodes.map((node) => node.name), ["更新二", "新节点"]);
+  assert.equal(result.nodes[0].id, second.id);
+  assert.equal(result.nodes[0].tags.length, 0);
+  assert.equal(result.source.nodeCount, 2);
+});

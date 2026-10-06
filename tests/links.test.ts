@@ -39,3 +39,9 @@ test("解析整段 Base64 订阅并报告坏行", () => {
   assert.equal(result.errors.length, 1);
   assert.equal(result.errors[0].line, 2);
 });
+
+test("链接协议大小写和 Hysteria 别名可以识别", () => {
+  assert.equal(parseShareLink("VLESS://uuid@edge.example.com:443#Edge").type, "vless");
+  assert.equal(parseShareLink("hysteria://pass@edge.example.com:443#Hysteria").type, "hysteria2");
+  assert.equal(parseShareLink("hy2://pass@[2001:db8::1]:443#IPv6").server, "2001:db8::1");
+});
