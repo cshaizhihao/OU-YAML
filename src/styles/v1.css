@@ -1804,6 +1804,18 @@ textarea::placeholder {
   color: #f0e9fb;
 }
 
+.node-row.is-disabled {
+  opacity: .84;
+  background: rgba(21, 15, 35, .2);
+}
+
+.node-row.is-disabled .node-row-name strong,
+.node-row.is-disabled .node-row-server,
+.node-row.is-disabled .node-row-source,
+.node-row.is-disabled .node-row-tags {
+  color: var(--ink-soft);
+}
+
 @media (max-width: 840px) {
   .section-tabs button {
     min-width: max-content;
