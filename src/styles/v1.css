@@ -1926,6 +1926,18 @@ textarea::placeholder {
   .template-card-meta .compact-button {
     padding-inline: 8px;
   }
+
+  .source-card > footer:has(> button:nth-child(4)) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .source-card > footer:has(> button:nth-child(4)) > button {
+    width: 100%;
+    min-width: 0;
+    flex: none;
+  }
 }
 
 @media (min-width: 521px) and (max-width: 840px) {
