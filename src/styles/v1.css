@@ -1238,6 +1238,104 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.guide-state {
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .055);
+}
+
+.guide-state.current {
+  color: var(--warning);
+  border-color: rgba(245, 199, 107, .3);
+  background: var(--warning-soft);
+}
+
+.guide-state.done {
+  color: var(--success);
+  border-color: rgba(115, 224, 173, .28);
+  background: var(--success-soft);
+}
+
+.guide-check-result.success {
+  color: var(--success);
+  border-color: rgba(115, 224, 173, .32);
+  background: var(--success-soft);
+}
+
+.guide-check-result.error {
+  color: var(--danger);
+  border-color: rgba(255, 143, 157, .32);
+  background: var(--danger-soft);
+}
+
+.template-option {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(36, 26, 55, .78);
+}
+
+.template-option:hover {
+  color: var(--ink);
+  border-color: rgba(207, 177, 255, .42);
+  background: rgba(164, 125, 232, .14);
+}
+
+.template-option.active {
+  color: var(--ink);
+  border-color: rgba(218, 186, 255, .68);
+  background: linear-gradient(100deg, rgba(165, 118, 241, .3), rgba(215, 142, 224, .18));
+  box-shadow: 0 0 0 2px rgba(194, 146, 255, .1);
+}
+
+.template-option strong {
+  color: var(--ink);
+}
+
+.user-row {
+  color: var(--ink);
+  background: rgba(30, 22, 49, .62);
+}
+
+.user-row:hover {
+  background: rgba(164, 125, 232, .14);
+}
+
+.user-list-icon.disabled {
+  color: var(--ink-faint);
+  background: rgba(255, 255, 255, .08);
+}
+
+.member-kind.group {
+  color: var(--plum);
+  background: var(--plum-soft);
+}
+
+.member-kind.builtin {
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .1);
+}
+
+.empty-state {
+  min-height: 260px;
+}
+
+.subscription-empty {
+  min-height: 260px;
+}
+
+.update-safety {
+  border-color: rgba(117, 222, 208, .25);
+  background: var(--teal-soft);
+}
+
+.update-safety > span {
+  color: var(--teal);
+}
+
+.update-safety small {
+  color: var(--ink-soft);
+}
+
 @media (max-width: 1100px) and (min-width: 841px) {
   .group-board {
     grid-template-columns: minmax(175px, .76fr) minmax(0, 1.48fr) minmax(175px, .76fr);
@@ -1323,5 +1421,10 @@ button:disabled {
 
   .group-mobile-tabs button {
     min-width: 104px;
+  }
+
+  .empty-state,
+  .subscription-empty {
+    min-height: 220px;
   }
 }
