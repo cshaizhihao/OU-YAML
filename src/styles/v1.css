@@ -389,17 +389,10 @@ label { color: var(--ink-soft); }
   .node-extra-actions.open .node-copy-label { display: inline; }
 }
 
-@media (min-width: 1300px) {
-  .node-copy-label { display: inline; }
-  .node-list-header,
-  .node-row { grid-template-columns: 72px minmax(180px, 1.6fr) 86px minmax(130px, 1fr) minmax(110px, .85fr) minmax(92px, .7fr) minmax(100px, .75fr) 270px; }
-}
-
 @media (max-width: 1100px) and (min-width: 841px) {
   .content-area { padding-inline: 22px; }
   .page-heading { padding-inline: 22px; }
   .group-board { grid-template-columns: minmax(190px, .75fr) minmax(320px, 1.4fr) minmax(190px, .75fr); }
-  .node-list-header, .node-row { grid-template-columns: 58px minmax(170px, 1.6fr) 70px minmax(110px, 1fr) minmax(90px, .8fr) 84px 82px 150px; gap: 7px; }
 }
 
 @media (max-width: 840px) {
@@ -429,9 +422,6 @@ label { color: var(--ink-soft); }
   .group-focus-shell.open .group-board.mobile-panel-canvas .group-canvas { min-height: calc(100dvh - 116px); }
   .group-focus-shell.open .group-board.mobile-panel-inspector .group-inspector { min-height: calc(100dvh - 116px); }
   .node-list-header { display: none; }
-  .node-row { grid-template-columns: 46px minmax(0, 1fr) auto; }
-  .node-probe-cluster { margin-left: auto; }
-  .node-row-actions { align-items: center; }
   .toast { right: 12px; left: 12px; bottom: max(74px, calc(env(safe-area-inset-bottom) + 68px)); width: auto; }
   .floating-help-button { bottom: max(12px, env(safe-area-inset-bottom)); }
   .guide-welcome-features { grid-template-columns: 1fr; }
@@ -449,6 +439,20 @@ label { color: var(--ink-soft); }
   .node-probe-cluster .tcp-latency { font-size: 9px; }
   .editor-publish { padding: 11px; }
   .group-focus-toolbar span { display: none; }
+  .main-shell > .section-tabs {
+    gap: 2px;
+    overflow: hidden;
+    padding: 4px;
+  }
+  .main-shell > .section-tabs button {
+    min-width: 0;
+    flex: 1 1 0;
+    justify-content: center;
+    gap: 4px;
+    padding-inline: 7px;
+    font-size: 11px;
+  }
+  .main-shell > .section-tabs button svg { flex: 0 0 auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -856,13 +860,6 @@ label { color: var(--ink-soft); }
   .generator-summary .panel-card { background: rgba(36, 26, 55, .78); }
 }
 
-@media (min-width: 1101px) {
-  .node-list-header,
-  .node-row {
-    grid-template-columns: 72px minmax(190px, 1.7fr) 86px minmax(140px, 1.1fr) minmax(120px, .9fr) minmax(100px, .8fr) 92px 220px;
-  }
-}
-
 @media (max-width: 840px) {
   .node-row-actions { flex-wrap: wrap; }
   .content-area { padding-bottom: max(104px, calc(env(safe-area-inset-bottom) + 96px)); }
@@ -990,5 +987,21 @@ label { color: var(--ink-soft); }
   .floating-help-button {
     right: 14px;
     left: auto;
+  }
+}
+
+@media (max-width: 840px) {
+  .rule-sentence-builder {
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+  }
+  .rule-sentence-builder > span {
+    grid-column: 1;
+    white-space: nowrap;
+  }
+  .rule-sentence-builder > label,
+  .rule-sentence-builder > label:last-child {
+    grid-column: 2;
+    min-width: 0;
   }
 }
