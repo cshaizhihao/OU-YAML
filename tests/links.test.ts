@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseShareLink, parseShareLinks } from "../src/shared/links";
+import { parseShareLink, parseShareLinks, serializeShareLink } from "../src/shared/links";
 
 const base64 = (value: string) => Buffer.from(value).toString("base64url");
 
@@ -44,4 +44,39 @@ test("链接协议大小写和 Hysteria 别名可以识别", () => {
   assert.equal(parseShareLink("VLESS://uuid@edge.example.com:443#Edge").type, "vless");
   assert.equal(parseShareLink("hysteria://pass@edge.example.com:443#Hysteria").type, "hysteria2");
   assert.equal(parseShareLink("hy2://pass@[2001:db8::1]:443#IPv6").server, "2001:db8::1");
+});
+
+test("复制协议链接可以往返解析并保留凭据字段", () => {
+  const vless = {
+    id: "vless-1",
+    name: "VLESS 测试",
+    type: "vless",
+    server: "edge.example.com",
+    port: 443,
+    uuid: "uuid@example/1",
+    tls: true,
+    sni: "cdn.example.com",
+    network: "ws",
+    wsPath: "/edge",
+    extra: {},
+  };
+  const ssr = {
+    id: "ssr-1",
+    name: "SSR 测试",
+    type: "ssr",
+    server: "ssr.example.com",
+    port: 443,
+    cipher: "aes-128-gcm",
+    password: "secret",
+    extra: { protocol: "auth_aes128_md5", obfs: "tls1.2_ticket_auth", "obfs-param": "cdn.example.com" },
+  };
+  const vlessLink = serializeShareLink(vless);
+  const ssrLink = serializeShareLink(ssr);
+  assert.ok(vlessLink);
+  assert.ok(ssrLink);
+  assert.equal(parseShareLink(vlessLink).uuid, vless.uuid);
+  assert.equal(parseShareLink(vlessLink).wsPath, vless.wsPath);
+  assert.equal(parseShareLink(ssrLink).password, ssr.password);
+  assert.equal(parseShareLink(ssrLink).extra["obfs-param"], "cdn.example.com");
+  assert.equal(serializeShareLink({ ...vless, type: "wireguard" }), null);
 });

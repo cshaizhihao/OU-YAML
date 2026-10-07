@@ -12,6 +12,14 @@ function decodeBase64(value: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+function encodeBase64(value: string): string {
+  if (typeof Buffer !== "undefined") return Buffer.from(value, "utf8").toString("base64");
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 function decodeName(value: string | undefined, fallback: string) {
   if (!value) return fallback;
   try { return decodeURIComponent(value); } catch { return value; }
@@ -97,8 +105,9 @@ function parseSsr(input: string): ProxyNode {
   const server = fields[0];
   const node = common(params.get("remarks") ? decodeBase64(params.get("remarks")!) : server, "ssr", server, port);
   node.cipher = fields[3];
-  node.password = decodeBase64(fields.slice(5).join(":"));
+  node.password = decodeBase64(fields[6] || "");
   node.extra = { protocol: fields[2], obfs: fields[4] };
+  if (fields[5]) node.extra["obfs-param"] = decodeBase64(fields[5]);
   const protocolParam = params.get("protoparam");
   const obfsParam = params.get("obfsparam");
   if (protocolParam) node.extra["protocol-param"] = decodeBase64(protocolParam);
@@ -170,4 +179,90 @@ export function parseShareLinks(source: string): LinkParseResult {
     catch (error) { errors.push({ line: index + 1, input: line.slice(0, 120), message: error instanceof Error ? error.message : "解析失败" }); }
   });
   return { nodes, errors };
+}
+
+function addressOf(node: ProxyNode) {
+  const server = node.server.includes(":") && !node.server.startsWith("[") ? `[${node.server}]` : node.server;
+  return `${server}:${node.port}`;
+}
+
+function fragmentOf(name: string) {
+  return name ? `#${encodeURIComponent(name)}` : "";
+}
+
+function addCommonParams(node: ProxyNode, params: URLSearchParams) {
+  if (node.tls) params.set("security", node.extra.security === "reality" || node.extra["reality-opts"] ? "reality" : "tls");
+  if (node.sni) params.set("sni", node.sni);
+  if (node.skipCertVerify) params.set("allowInsecure", "1");
+  if (node.network) params.set("type", node.network);
+  if (node.wsPath) params.set("path", node.wsPath);
+  if (node.wsHost) params.set("host", node.wsHost);
+  if (node.grpcServiceName) params.set("serviceName", node.grpcServiceName);
+  const fingerprint = node.extra["client-fingerprint"] || node.extra.fingerprint;
+  if (typeof fingerprint === "string" && fingerprint) params.set("fp", fingerprint);
+  const flow = node.extra.flow;
+  if (typeof flow === "string" && flow) params.set("flow", flow);
+  const alpn = node.extra.alpn;
+  if (Array.isArray(alpn) && alpn.length) params.set("alpn", alpn.map(String).join(","));
+  const reality = node.extra["reality-opts"];
+  if (reality && typeof reality === "object" && !Array.isArray(reality)) {
+    const values = reality as Record<string, unknown>;
+    if (typeof values["public-key"] === "string") params.set("pbk", values["public-key"]);
+    if (typeof values["short-id"] === "string") params.set("sid", values["short-id"]);
+  }
+}
+
+export function serializeShareLink(node: ProxyNode): string | null {
+  const address = addressOf(node);
+  const name = fragmentOf(node.name);
+  const type = node.type.toLowerCase();
+  if (type === "vmess") {
+    const payload = {
+      v: "2",
+      ps: node.name,
+      add: node.server,
+      port: String(node.port),
+      id: node.uuid || "",
+      aid: "0",
+      scy: node.cipher || "auto",
+      net: node.network || "tcp",
+      type: "none",
+      host: node.wsHost || "",
+      path: node.wsPath || node.grpcServiceName || "",
+      tls: node.tls ? "tls" : "",
+      sni: node.sni || "",
+    };
+    return `vmess://${encodeBase64(JSON.stringify(payload))}`;
+  }
+  if (type === "ss") {
+    if (!node.cipher || node.password === undefined) return null;
+    const plugin = typeof node.extra.plugin === "string" ? `?${new URLSearchParams({ plugin: node.extra.plugin })}` : "";
+    return `ss://${encodeBase64(`${node.cipher}:${node.password}`)}@${address}${plugin}${name}`;
+  }
+  if (type === "ssr") {
+    const protocol = String(node.extra.protocol || "origin");
+    const obfs = String(node.extra.obfs || "plain");
+    const obfsParam = typeof node.extra["obfs-param"] === "string" ? encodeBase64(node.extra["obfs-param"] as string) : "";
+    const password = encodeBase64(node.password || "");
+    const query = new URLSearchParams({ remarks: encodeBase64(node.name), protoparam: typeof node.extra["protocol-param"] === "string" ? encodeBase64(node.extra["protocol-param"] as string) : "", obfsparam: obfsParam });
+    const decoded = `${node.server}:${node.port}:${protocol}:${node.cipher || "none"}:${obfs}:${obfsParam}:${password}/?${query}`;
+    return `ssr://${encodeBase64(decoded)}`;
+  }
+  if (["vless", "trojan", "hysteria2", "snell"].includes(type)) {
+    const params = new URLSearchParams();
+    addCommonParams(node, params);
+    const user = encodeURIComponent(type === "vless" ? node.uuid || "" : node.password || "");
+    return `${type}://${user}@${address}${params.toString() ? `?${params}` : ""}${name}`;
+  }
+  if (type === "tuic") {
+    const params = new URLSearchParams();
+    addCommonParams(node, params);
+    return `tuic://${encodeURIComponent(node.uuid || "")}:${encodeURIComponent(node.password || "")}@${address}${params.toString() ? `?${params}` : ""}${name}`;
+  }
+  if (type === "socks5" || type === "http") {
+    const username = typeof node.extra.username === "string" ? node.extra.username : "";
+    const credentials = username || node.password ? `${encodeURIComponent(username)}:${encodeURIComponent(node.password || "")}@` : "";
+    return `${type}://${credentials}${address}${name}`;
+  }
+  return null;
 }

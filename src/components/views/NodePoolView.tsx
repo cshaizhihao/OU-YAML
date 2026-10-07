@@ -3,14 +3,18 @@ import { useEffect, useMemo, useState } from "react";
 import { closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Activity, Ban, CheckCircle2, CircleX, Copy, Database, FilePlus2, Flag, GripVertical, Link2, LoaderCircle, MapPin, Pencil, Plus, RefreshCw, Search, Server, Tags, Trash2, Unlink, WandSparkles } from "lucide-react";
+import { Activity, Ban, CheckCircle2, CircleX, Database, FilePlus2, Flag, GripVertical, Link2, LoaderCircle, MapPin, Pencil, Plus, RefreshCw, Search, Server, Tags, Trash2, Unlink, WandSparkles } from "lucide-react";
 import { api, type TcpPingResult } from "../../api";
 import { latencyLevel } from "../../shared/diagnostics";
 import type { ManagedNode, NodeSource } from "../../shared/domain";
 import type { MihomoConfig, ProxyNode } from "../../shared/types";
 import { createId } from "../../shared/id";
+import { copyText } from "../../shared/clipboard";
+import { serializeShareLink } from "../../shared/links";
 import { guideTargets } from "../../guides/registry";
 import { Drawer, ConfirmDialog } from "../Dialog";
+
+const Copy = Link2;
 
 type NodeDraft = {
   id?: string;
@@ -425,7 +429,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
       <SortableContext items={visibleIds.map((id) => `node:${id}`)} strategy={verticalListSortingStrategy}>
         <div className="node-list" data-guide-id={guideTargets.nodeList} role="table" aria-label="节点库">
           <div className="node-list-header" role="row"><span><input type="checkbox" checked={allVisibleSelected} onChange={(event) => setSelected(event.target.checked ? new Set([...selected, ...visibleIds]) : new Set([...selected].filter((id) => !visibleIds.includes(id))))} aria-label="选择当前节点" /></span><span>节点</span><span>协议</span><span>服务器</span><span>来源</span><span>标签</span><span>状态</span><span>操作</span></div>
-          {filtered.map((node) => <SortableNodeRow key={node.id} node={node} sourceName={node.sourceId ? sourceNames.get(node.sourceId) : undefined} selected={selected.has(node.id)} inProject={projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))} diagnostic={diagnostics[node.id]} probeBusy={probeBusy.has(node.id)} flagBusy={flagBusy.has(node.id)} onSelect={(checked) => toggleSelected(node.id, checked)} onToggle={() => void toggleEnabled(node)} onProbe={() => void probeNode(node)} onFlag={() => void applyCountryFlag(node)} onEdit={() => setEditing(nodeDraft(node))} onCopy={() => setEditing({ ...nodeDraft(node), id: undefined, name: `${node.name} 副本` })} onDelete={() => setDeleting(node)} />)}
+          {filtered.map((node) => <SortableNodeRow key={node.id} node={node} sourceName={node.sourceId ? sourceNames.get(node.sourceId) : undefined} selected={selected.has(node.id)} inProject={projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))} diagnostic={diagnostics[node.id]} probeBusy={probeBusy.has(node.id)} flagBusy={flagBusy.has(node.id)} onSelect={(checked) => toggleSelected(node.id, checked)} onToggle={() => void toggleEnabled(node)} onProbe={() => void probeNode(node)} onFlag={() => void applyCountryFlag(node)} onEdit={() => setEditing(nodeDraft(node))} onCopyLink={() => void copyNodeLink(node, onMessage)} onDelete={() => setDeleting(node)} />)}
         </div>
       </SortableContext>
       {createPortal(<DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(.16,1,.3,1)" }}>{activeId ? <div className="node-drag-overlay"><GripVertical size={16} /><strong>{nodes.find((node) => node.id === activeId)?.name || "节点"}</strong></div> : null}</DragOverlay>, document.body)}
@@ -480,7 +484,21 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   </>;
 }
 
-function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, probeBusy, flagBusy, onSelect, onToggle, onProbe, onFlag, onEdit, onCopy, onDelete }: {
+async function copyNodeLink(node: ManagedNode, onMessage?: (message: string) => void) {
+  const link = serializeShareLink(proxyFromManaged(node));
+  if (!link) {
+    onMessage?.(`${node.type.toUpperCase()} 暂不支持生成协议链接，请打开编辑查看配置`);
+    return;
+  }
+  try {
+    await copyText(link);
+    onMessage?.("节点协议链接已复制");
+  } catch (error) {
+    onMessage?.(error instanceof Error ? error.message : "复制协议链接失败");
+  }
+}
+
+function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, probeBusy, flagBusy, onSelect, onToggle, onProbe, onFlag, onEdit, onCopyLink, onDelete }: {
   node: ManagedNode;
   sourceName?: string;
   selected: boolean;
@@ -493,7 +511,7 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
   onProbe: () => void;
   onFlag: () => void;
   onEdit: () => void;
-  onCopy: () => void;
+  onCopyLink: () => void;
   onDelete: () => void;
 }) {
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -506,6 +524,6 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
     <span className="node-row-source" title={sourceName || "手动添加"}>{sourceName || "手动添加"}</span>
     <span className="node-row-tags" title={node.tags.join("、")}>{node.tags.length ? node.tags.map((tag) => <b key={tag}>{tag}</b>) : "-"}</span>
     <span className="node-row-status"><button className={node.enabled ? "status-toggle active" : "status-toggle"} onClick={onToggle}>{node.enabled ? <CheckCircle2 size={14} /> : <Ban size={14} />}{node.enabled ? "已启用" : "已停用"}</button></span>
-    <span className="node-row-actions"><span className="node-probe-cluster"><button className="icon-button compact diagnostic-action" disabled={probeBusy} onClick={onProbe} title="按上方所选模式检测节点" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}</button>{!probeBusy && diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined && <span className={`tcp-latency ${latencyLevel(diagnostic.latencyMs)}`} role="status" title={`${diagnostic.mode === "proxy" ? "代理实测" : "TCP 端口"} · ${diagnostic.checkedAt ? new Date(diagnostic.checkedAt).toLocaleTimeString("zh-CN") : ""}`}>{diagnostic.latencyMs}ms</span>}{!probeBusy && diagnostic?.reachable === false && <span className="tcp-latency bad" role="status" aria-label={diagnostic.error || "连接失败"} title={diagnostic.error || "连接失败"}><CircleX size={13} />失败</span>}</span><button className="icon-button compact diagnostic-action flag-action" disabled={flagBusy} onClick={onFlag} title="根据上方所选入口或出口 IP 添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={16} /> : <Flag size={16} />}</button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}>•••</button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button className="icon-button compact copy-action" onClick={onCopy} aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></span></span>
+    <span className="node-row-actions"><span className="node-probe-cluster"><button className="icon-button compact diagnostic-action" disabled={probeBusy} onClick={onProbe} title="按上方所选模式检测节点" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}</button>{!probeBusy && diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined && <span className={`tcp-latency ${latencyLevel(diagnostic.latencyMs)}`} role="status" title={`${diagnostic.mode === "proxy" ? "代理实测" : "TCP 端口"} · ${diagnostic.checkedAt ? new Date(diagnostic.checkedAt).toLocaleTimeString("zh-CN") : ""}`}>{diagnostic.latencyMs}ms</span>}{!probeBusy && diagnostic?.reachable === false && <span className="tcp-latency bad" role="status" aria-label={diagnostic.error || "连接失败"} title={diagnostic.error || "连接失败"}><CircleX size={13} />失败</span>}</span><button className="icon-button compact diagnostic-action flag-action" disabled={flagBusy} onClick={onFlag} title="根据上方所选入口或出口 IP 添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={16} /> : <Flag size={16} />}</button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}>•••</button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`} title="编辑节点"><Pencil size={16} /></button><button className="icon-button compact copy-action" onClick={onCopyLink} aria-label={`复制 ${node.name} 的协议链接`} title="复制节点协议链接"><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`} title="删除节点"><Trash2 size={16} /></button></span></span>
   </div>;
 }
