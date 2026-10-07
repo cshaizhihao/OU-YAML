@@ -78,9 +78,10 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   useEffect(() => {
     if (!focusMode) return;
     const previous = document.activeElement as HTMLElement | null;
-    const focusable = () => [...(focusShellRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])" ) || [])];
+    const focusable = () => [...(focusShellRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])" ) || [])].filter((element) => element.getClientRects().length > 0);
     const focusTimer = window.setTimeout(() => (focusable()[0] || focusShellRef.current)?.focus(), 0);
     const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !focusShellRef.current?.contains(event.target as Node)) return;
       if (event.key === "Escape") { event.preventDefault(); setFocusMode(false); return; }
       if (event.key !== "Tab") return;
       const elements = focusable();
@@ -194,11 +195,13 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   return <>
     <div className="view-toolbar group-board-toolbar"><div className="summary-inline"><span><strong>{config.proxies.length}</strong> 个节点</span><i /><span><strong>{config.proxyGroups.length}</strong> 个策略组</span><i /><span><strong>{config.proxyGroups.reduce((sum, item) => sum + item.proxies.length, 0)}</strong> 个引用</span></div><div className="toolbar-actions"><button className="secondary-button" onClick={() => setFocusMode(true)} aria-label="全屏编辑代理分组"><Maximize2 size={16} />全屏编辑</button><button className="primary-button" data-guide-id={guideTargets.groupCreate} onClick={() => setEditing(blankGroup())}><Plus size={17} />添加策略组</button></div></div>
     <div className="group-board-hint" role="note"><GripVertical size={15} />拖动节点到成员列表；拖动策略组可建立嵌套；链式代理请选择对应类型并按入口到出口放入具体节点</div>
-    {!!config.proxyGroups.length && <label className="mobile-group-switcher">当前编辑组<select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>}
     <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => { setActiveName(""); setActiveKind(""); }}>
       <div ref={focusShellRef} className={`group-focus-shell${focusMode ? " open" : ""}`} role={focusMode ? "dialog" : undefined} aria-modal={focusMode ? "true" : undefined} aria-labelledby={focusMode ? "group-focus-title" : undefined} tabIndex={focusMode ? -1 : undefined}>
         {focusMode && <header className="group-focus-toolbar"><div><strong id="group-focus-title">代理分组编辑</strong><span>拖动节点或策略组到成员区，实时预览嵌套关系</span></div><button className="secondary-button" onClick={() => setFocusMode(false)}><Minimize2 size={16} />退出全屏</button></header>}
-      <div className="group-mobile-tabs" role="tablist" aria-label="分组工作台区域"><button className={mobilePanel === "pool" ? "active" : ""} onClick={() => setMobilePanel("pool")} role="tab" aria-selected={mobilePanel === "pool"}><Network size={15} />节点池</button><button className={mobilePanel === "canvas" ? "active" : ""} onClick={() => setMobilePanel("canvas")} role="tab" aria-selected={mobilePanel === "canvas"}><Group size={15} />策略组</button><button className={mobilePanel === "inspector" ? "active" : ""} onClick={() => setMobilePanel("inspector")} role="tab" aria-selected={mobilePanel === "inspector"}><GitBranch size={15} />当前组</button></div>
+      <div className="group-workbench-controls">
+        {!!config.proxyGroups.length && <label className="mobile-group-switcher">当前编辑组<select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>}
+        <div className="group-mobile-tabs" role="tablist" aria-label="分组工作台区域"><button className={mobilePanel === "pool" ? "active" : ""} onClick={() => setMobilePanel("pool")} role="tab" aria-selected={mobilePanel === "pool"}><Network size={15} />节点池</button><button className={mobilePanel === "canvas" ? "active" : ""} onClick={() => setMobilePanel("canvas")} role="tab" aria-selected={mobilePanel === "canvas"}><Group size={15} />策略组</button><button className={mobilePanel === "inspector" ? "active" : ""} onClick={() => setMobilePanel("inspector")} role="tab" aria-selected={mobilePanel === "inspector"}><GitBranch size={15} />当前组</button></div>
+      </div>
       <div className={`group-board${activeName ? " is-dragging" : ""}${focusMode ? " focus-mode" : ""} mobile-panel-${mobilePanel}`} data-guide-id={guideTargets.groupBoard}>
         <aside className="node-pool" data-guide-id={guideTargets.groupNodePool} aria-label="当前配置节点">
           <header><div><Network size={18} /><strong>可编排节点</strong></div><span>{nodes.length}</span></header>
