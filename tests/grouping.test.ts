@@ -58,3 +58,12 @@ test("策略组可以嵌套到另一个策略组并保持插入位置", () => {
   assert.deepEqual(output[1].proxies, ["节点选择", "DIRECT"]);
   assert.equal(canAddGroupMember(output, "a", "自动选择"), false);
 });
+
+test("链式代理组拒绝策略组和内置目标", () => {
+  const relay: ProxyGroup[] = [{ id: "relay", name: "链式", type: "relay", proxies: [], extra: {} }];
+  assert.equal(canAddGroupMember(relay, "relay", "DIRECT"), false);
+  assert.equal(canAddGroupMember(relay, "relay", "另一个组"), false);
+  assert.equal(canAddGroupMember(relay, "relay", "香港 01", new Set(["香港 01"])), true);
+  assert.deepEqual(addGroupMembers(relay, "relay", ["DIRECT", "另一个组"])[0].proxies, []);
+  assert.deepEqual(addGroupMembers(relay, "relay", ["香港 01"], undefined, new Set(["香港 01"]))[0].proxies, ["香港 01"]);
+});

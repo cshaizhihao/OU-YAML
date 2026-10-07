@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/cshaizhihao/OU-YAML/main/public/brand/ou-yaml-logo.png" alt="OU-YAML Logo" width="176" />
   <h1>OU-YAML</h1>
   <p><strong>把零散节点，整理成清晰、可靠、可持续更新的配置订阅</strong></p>
-  <p>温暖而精致的可视化节点、策略组、规则与订阅发布工作台</p>
+  <p>紫色液态玻璃风格的可视化节点、策略组、规则与订阅发布工作台</p>
   <p>
     <a href="https://github.com/cshaizhihao/OU-YAML">项目主页</a> ·
     <a href="https://github.com/cshaizhihao/OU-YAML/releases">版本发布</a> ·
@@ -10,6 +10,7 @@
   </p>
   <p>
     <img src="https://img.shields.io/badge/version-1.8.0-A33D57?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/UI-V1.0.0-AD8BF2?style=flat-square" alt="UI baseline" />
     <img src="https://img.shields.io/badge/Node.js-22%2B-247B78?style=flat-square" alt="Node.js" />
     <img src="https://img.shields.io/badge/Mihomo-supported-D5962A?style=flat-square" alt="Mihomo" />
     <img src="https://img.shields.io/badge/sing--box-supported-76547D?style=flat-square" alt="sing-box" />
@@ -29,6 +30,15 @@ OU-YAML 是一个自托管的代理配置工作台。它把订阅 URL、配置�
 ```
 
 无需反复手写 YAML，也无需为每次节点变化重新更换客户端订阅地址。
+
+### ✨ V1.0.0 体验基线
+
+- 💜 紫色 Liquid Glass 工作台：清晰的材质层级、克制的环境光和丝滑微动效。
+- 🧭 导入 → 节点 → 分组 → 规则 → 生成的主流程更明确，新手只需跟随三步向导。
+- 🖥️ 代理分组提供桌面全屏工作台，📱 手机端使用节点池、策略组、当前组分区切换。
+- 🧪 TCP 探测结果紧邻节点按钮显示，按真实延迟呈现绿、黄、红三档状态。
+- 🧩 策略组支持节点拖入、组嵌套、循环引用拦截、排序和自动保存。
+- 🔁 已生成订阅可自定义名称、再次编辑分组/规则，并保持原订阅地址不变。
 
 已经发布过？回到「我的订阅」就能复制原链接、查看最近更新与异常；只有需要添加节点或修改配置时才重新进入向导。
 
@@ -98,11 +108,11 @@ http://服务器IP:8787
 
 - 首次登录可直接开始「三步创建第一个订阅」。
 - 教程自动切换到对应页面，并用聚光高亮当前操作区域。
-- 提供导入诊断、节点实测、代理分组、中文规则、发布和自动同步专项教程。
+- 主教程只保留「导入 → 分组 → 生成」三步；节点诊断、中文规则和同步能力按需查看。
 - 导入、发布和复制成功后自动前进；失败时停留原步骤。
 - 网站分流教程贯穿添加规则、保留当前配置发布、客户端刷新，不只是介绍菜单。
 - 支持暂停、继续、跳过、重新学习，并记住当前进度。
-- 手机端使用底部引导卡片，不遮挡主要操作。
+- 手机端使用底部引导卡片，不遮挡主要操作，并支持跳过和重播。
 - 教程采用独立流程版本，只有操作方式变化才提示更新，不因小修复反复弹欢迎页。
 - 稳定页面锚点和真实浏览器测试随功能同步维护。
 
@@ -237,14 +247,14 @@ http://服务器IP:8787
 
 ## 🎭 界面设计
 
-OU-YAML 使用暖象牙白、深李子色、石榴红、孔雀青、琥珀金与柔紫构成视觉系统：
+OU-YAML 使用深葡萄灰、蓝紫、薰衣草和少量暖色状态色构成 Liquid Glass 视觉系统：
 
-- 不是冷淡风，也不是赛博风。
-- 卡片层次清晰，重要状态使用丰富但克制的色彩。
+- 不是冷淡风，也不是过度发光的赛博风；玻璃只用于有层级的工作面。
+- 卡片层次清晰，重要状态使用丰富但克制的色彩，文字和输入始终优先。
 - 页面进入、抽屉、拖拽、悬停和进度反馈使用统一丝滑缓动。
-- 新手教程使用柔和遮罩、聚光定位和跨页面过渡，不采用冷淡或赛博风格。
+- 新手教程使用柔和遮罩、聚光定位和跨页面过渡，最多三步，不阻塞熟练用户。
 - 支持 `prefers-reduced-motion`，系统减少动态效果时自动关闭非必要动画。
-- 桌面、平板与手机独立布局；针对 `390px` 屏幕避免横向滚动和操作拥挤。
+- 桌面、平板与手机独立布局；针对 `390px` 屏幕避免横向滚动、瀑布流和操作拥挤。
 
 Logo 位于 `public/brand/ou-yaml-logo.png`。
 

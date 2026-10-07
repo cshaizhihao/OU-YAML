@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -58,12 +58,16 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   const [selectedGroupId, setSelectedGroupId] = useState(config.proxyGroups[0]?.id || "");
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [activeName, setActiveName] = useState("");
+  const [activeKind, setActiveKind] = useState<DragPayload["kind"] | "">("");
   const [focusMode, setFocusMode] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"pool" | "canvas" | "inspector">("canvas");
+  const focusShellRef = useRef<HTMLDivElement | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, scrollBehavior: "auto" }),
   );
   const nodes = useMemo(() => config.proxies.filter((node) => `${node.name} ${node.server} ${node.type}`.toLowerCase().includes(query.toLowerCase())), [config.proxies, query]);
+  const nodeNames = useMemo(() => new Set(config.proxies.map((node) => node.name)), [config.proxies]);
   const selectedGroup = config.proxyGroups.find((group) => group.id === selectedGroupId) || config.proxyGroups[0];
 
   useEffect(() => {
@@ -73,14 +77,34 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
 
   useEffect(() => {
     if (!focusMode) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFocusMode(false); };
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () => [...(focusShellRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])" ) || [])];
+    const focusTimer = window.setTimeout(() => (focusable()[0] || focusShellRef.current)?.focus(), 0);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setFocusMode(false); return; }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      if (!elements.length) { event.preventDefault(); return; }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", closeOnEscape);
+      if (previous?.isConnected) previous.focus();
+    };
   }, [focusMode]);
 
   function updateGroups(proxyGroups: ProxyGroup[]) { onChange({ ...config, proxyGroups }); }
   function save(group: ProxyGroup) {
-    const normalized = { ...group, name: group.name.trim(), proxies: [...new Set(group.proxies)] };
+    const normalized = {
+      ...group,
+      name: group.name.trim(),
+      proxies: [...new Set(group.proxies)].filter((member) => group.type !== "relay" || config.proxies.some((node) => node.name === member)),
+    };
     if (!normalized.name) { onMessage?.("策略组名称不能为空"); return; }
     if (config.proxyGroups.some((item) => item.id !== normalized.id && item.name === normalized.name)) { onMessage?.("策略组名称不能重复"); return; }
     const previous = config.proxyGroups.find((item) => item.id === normalized.id);
@@ -95,9 +119,9 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
     setEditing(null);
   }
   function addMembers(targetGroupId: string, names: string[], before?: string) {
-    const allowed = names.filter((name) => canAddGroupMember(config.proxyGroups, targetGroupId, name));
-    if (allowed.length !== names.length) onMessage?.("已跳过会造成循环引用的策略组");
-    if (allowed.length) updateGroups(addGroupMembers(config.proxyGroups, targetGroupId, allowed, before));
+    const allowed = names.filter((name) => canAddGroupMember(config.proxyGroups, targetGroupId, name, nodeNames));
+    if (allowed.length !== names.length) onMessage?.("部分成员不能加入当前策略组：链式代理只能放真实节点，普通策略组不能形成循环");
+    if (allowed.length) updateGroups(addGroupMembers(config.proxyGroups, targetGroupId, allowed, before, nodeNames));
   }
   function removeMember(targetGroupId: string, name: string) {
     updateGroups(removeGroupMember(config.proxyGroups, targetGroupId, name));
@@ -127,9 +151,11 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   function handleDragStart(event: DragStartEvent) {
     const payload = event.active.data.current as DragPayload | undefined;
     setActiveName(payload && "name" in payload ? payload.name : "");
+    setActiveKind(payload?.kind || "");
   }
   function handleDragEnd(event: DragEndEvent) {
     setActiveName("");
+    setActiveKind("");
     if (!event.over) return;
     const active = event.active.data.current as DragPayload | undefined;
     const over = event.over.data.current as DragPayload | undefined;
@@ -160,8 +186,8 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
       return;
     }
     const withoutSource = removeGroupMember(config.proxyGroups, active.groupId, active.name);
-    if (!canAddGroupMember(withoutSource, targetGroupId, active.name)) { onMessage?.("不能移动：策略组会形成循环引用"); return; }
-    updateGroups(moveGroupMember(config.proxyGroups, active.groupId, targetGroupId, active.name, before));
+    if (!canAddGroupMember(withoutSource, targetGroupId, active.name, nodeNames)) { onMessage?.("不能移动：策略组会形成循环引用"); return; }
+    updateGroups(moveGroupMember(config.proxyGroups, active.groupId, targetGroupId, active.name, before, nodeNames));
     setSelectedGroupId(targetGroupId);
   }
 
@@ -169,10 +195,11 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
     <div className="view-toolbar group-board-toolbar"><div className="summary-inline"><span><strong>{config.proxies.length}</strong> 个节点</span><i /><span><strong>{config.proxyGroups.length}</strong> 个策略组</span><i /><span><strong>{config.proxyGroups.reduce((sum, item) => sum + item.proxies.length, 0)}</strong> 个引用</span></div><div className="toolbar-actions"><button className="secondary-button" onClick={() => setFocusMode(true)} aria-label="全屏编辑代理分组"><Maximize2 size={16} />全屏编辑</button><button className="primary-button" data-guide-id={guideTargets.groupCreate} onClick={() => setEditing(blankGroup())}><Plus size={17} />添加策略组</button></div></div>
     <div className="group-board-hint" role="note"><GripVertical size={15} />拖动节点到成员列表；拖动策略组可建立嵌套；链式代理请选择对应类型并按入口到出口放入具体节点</div>
     {!!config.proxyGroups.length && <label className="mobile-group-switcher">当前编辑组<select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>}
-    <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveName("")}>
-      <div className={`group-focus-shell${focusMode ? " open" : ""}`}>
-        {focusMode && <header className="group-focus-toolbar"><div><strong>代理分组编辑</strong><span>拖动节点或策略组到成员区，实时预览嵌套关系</span></div><button className="secondary-button" onClick={() => setFocusMode(false)}><Minimize2 size={16} />退出全屏</button></header>}
-      <div className={`group-board${activeName ? " is-dragging" : ""}${focusMode ? " focus-mode" : ""}`} data-guide-id={guideTargets.groupBoard}>
+    <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => { setActiveName(""); setActiveKind(""); }}>
+      <div ref={focusShellRef} className={`group-focus-shell${focusMode ? " open" : ""}`} role={focusMode ? "dialog" : undefined} aria-modal={focusMode ? "true" : undefined} aria-labelledby={focusMode ? "group-focus-title" : undefined} tabIndex={focusMode ? -1 : undefined}>
+        {focusMode && <header className="group-focus-toolbar"><div><strong id="group-focus-title">代理分组编辑</strong><span>拖动节点或策略组到成员区，实时预览嵌套关系</span></div><button className="secondary-button" onClick={() => setFocusMode(false)}><Minimize2 size={16} />退出全屏</button></header>}
+      <div className="group-mobile-tabs" role="tablist" aria-label="分组工作台区域"><button className={mobilePanel === "pool" ? "active" : ""} onClick={() => setMobilePanel("pool")} role="tab" aria-selected={mobilePanel === "pool"}><Network size={15} />节点池</button><button className={mobilePanel === "canvas" ? "active" : ""} onClick={() => setMobilePanel("canvas")} role="tab" aria-selected={mobilePanel === "canvas"}><Group size={15} />策略组</button><button className={mobilePanel === "inspector" ? "active" : ""} onClick={() => setMobilePanel("inspector")} role="tab" aria-selected={mobilePanel === "inspector"}><GitBranch size={15} />当前组</button></div>
+      <div className={`group-board${activeName ? " is-dragging" : ""}${focusMode ? " focus-mode" : ""} mobile-panel-${mobilePanel}`} data-guide-id={guideTargets.groupBoard}>
         <aside className="node-pool" data-guide-id={guideTargets.groupNodePool} aria-label="当前配置节点">
           <header><div><Network size={18} /><strong>可编排节点</strong></div><span>{nodes.length}</span></header>
           <label className="board-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索节点" aria-label="搜索节点池" /></label>
@@ -191,13 +218,13 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
           {selectedGroup ? <>
             <header><span className="group-icon"><Group size={18} /></span><div><small>已选策略组</small><strong title={selectedGroup.name}>{selectedGroup.name}</strong></div><button className="icon-button compact" onClick={() => setEditing(structuredClone(selectedGroup))} aria-label="编辑当前策略组"><Pencil size={15} /></button></header>
             <div className="inspector-stats"><span>类型<strong>{groupTypes.find((item) => item.value === selectedGroup.type)?.label}</strong></span><span>成员<strong>{selectedGroup.proxies.length}</strong></span><span>嵌套组<strong>{selectedGroup.proxies.filter((name) => config.proxyGroups.some((group) => group.name === name)).length}</strong></span></div>
-            <section><div className="inspector-title"><GitBranch size={15} /><strong>已选组的快捷操作</strong></div><p>点击其他组即可把它嵌套到「{selectedGroup.name}」，不必拖拽。</p><div className="nest-group-list">{config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => { const included = selectedGroup.proxies.includes(group.name); const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name); return <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}><span><Group size={14} />{group.name}</span>{included ? <Check size={14} /> : <Plus size={14} />}</button>; })}{config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立嵌套策略。</small>}</div></section>
+            <section><div className="inspector-title"><GitBranch size={15} /><strong>正在编辑：{selectedGroup.name}</strong></div><p>可点击其他策略组快速嵌套，也可以把策略组拖到当前组成员区。</p><div className="nest-group-list">{config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => { const included = selectedGroup.proxies.includes(group.name); const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name, nodeNames); return <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}><span><Group size={14} />{group.name}</span>{included ? <Check size={14} /> : <Plus size={14} />}</button>; })}{config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立嵌套策略。</small>}</div></section>
             <section><div className="inspector-title"><GripVertical size={15} /><strong>触摸排序</strong></div><p>手机或平板无法精准拖动时，使用按钮调整组顺序。</p><div className="inspector-actions"><button className="secondary-button compact-button" disabled={config.proxyGroups[0]?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, -1)}><ArrowUp size={14} />上移</button><button className="secondary-button compact-button" disabled={config.proxyGroups.at(-1)?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, 1)}><ArrowDown size={14} />下移</button></div></section>
           </> : <div className="inspector-empty"><Group size={21} /><span>选择一个策略组查看属性</span></div>}
         </aside>
       </div>
       </div>
-      {createPortal(<DragOverlay dropAnimation={{ duration: 160, easing: "ease-out" }}>{activeName ? <div className="drag-overlay"><GripVertical size={16} /><strong>{activeName}</strong></div> : null}</DragOverlay>, document.body)}
+      {createPortal(<DragOverlay dropAnimation={{ duration: 160, easing: "ease-out" }}>{activeName ? <div className={`drag-overlay ${activeKind === "group" ? "group-drag-overlay" : "node-drag-overlay"}`}><GripVertical size={16} /><strong>{activeName}</strong><small>{activeKind === "group" ? "策略组 · 可嵌套" : "节点 · 拖入目标组"}</small></div> : null}</DragOverlay>, document.body)}
     </DndContext>
     <GroupEditor key={editing?.id || "closed"} config={config} group={editing} onClose={() => setEditing(null)} onSave={save} />
     <ConfirmDialog open={!!deleting} title="删除策略组" message={`确定删除“${deleting?.name}”吗？其他策略组和规则中的相关引用会自动清理。`} onClose={() => setDeleting(null)} onConfirm={() => {
@@ -236,14 +263,15 @@ function SortableMember({ name, groupId: ownerId, node, nestedGroup, canMoveUp, 
 function GroupEditor({ config, group, onClose, onSave }: { config: MihomoConfig; group: ProxyGroup | null; onClose: () => void; onSave: (group: ProxyGroup) => void }) {
   const [draft, setDraft] = useState<ProxyGroup | null>(group);
   if (!group || !draft) return null;
+  const nodeNames = new Set(config.proxies.map((node) => node.name));
   const memberOptions = ["DIRECT", "REJECT", ...config.proxies.map((item) => item.name), ...config.proxyGroups.filter((item) => item.id !== draft.id).map((item) => item.name)];
   const draftGroups = config.proxyGroups.map((item) => item.id === draft.id ? draft : item);
   const toggleMember = (member: string) => {
     if (draft.proxies.includes(member)) setDraft({ ...draft, proxies: draft.proxies.filter((item) => item !== member) });
-    else if (canAddGroupMember(draftGroups, draft.id, member)) setDraft({ ...draft, proxies: [...draft.proxies, member] });
+    else if (canAddGroupMember(draftGroups, draft.id, member, nodeNames)) setDraft({ ...draft, proxies: [...draft.proxies, member] });
   };
   return <Drawer title={group.name === "新策略组" ? "添加策略组" : `编辑 ${group.name}`} open onClose={onClose} footer={<><button className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" disabled={!draft.name.trim()} onClick={() => onSave(draft)}>保存策略组</button></>}>
     <div className="form-grid"><label className="span-2">策略组名称<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label><label className="span-2">类型<select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as GroupType })}>{groupTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>{draft.type !== "select" && draft.type !== "relay" && <><label className="span-2">测速 URL<input value={draft.url || "https://www.gstatic.com/generate_204"} onChange={(event) => setDraft({ ...draft, url: event.target.value })} /></label><label>间隔（秒）<input type="number" min={10} value={draft.interval || 300} onChange={(event) => setDraft({ ...draft, interval: Number(event.target.value) })} /></label><label>容差（毫秒）<input type="number" min={0} value={draft.tolerance || 50} onChange={(event) => setDraft({ ...draft, tolerance: Number(event.target.value) })} /></label></>}</div>
-    <fieldset className="member-selector"><legend>成员</legend><div className="member-options">{memberOptions.map((member) => { const checked = draft.proxies.includes(member); const allowed = checked || canAddGroupMember(draftGroups, draft.id, member); return <label key={member} className={!allowed ? "disabled" : ""}><input type="checkbox" checked={checked} disabled={!allowed} onChange={() => toggleMember(member)} /><span>{ruleTargetLabel(member)}</span></label>; })}</div></fieldset>
+    <fieldset className="member-selector"><legend>成员</legend><div className="member-options">{memberOptions.map((member) => { const checked = draft.proxies.includes(member); const allowed = checked || canAddGroupMember(draftGroups, draft.id, member, nodeNames); return <label key={member} className={!allowed ? "disabled" : ""}><input type="checkbox" checked={checked} disabled={!allowed} onChange={() => toggleMember(member)} /><span>{ruleTargetLabel(member)}</span></label>; })}</div></fieldset>
   </Drawer>;
 }

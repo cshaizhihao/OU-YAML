@@ -8,7 +8,7 @@ async function login(page: Page) {
   page.on("pageerror", (error) => errors.push(error.message));
   if (loginCookies) await page.context().addCookies(loginCookies);
   await page.goto("/");
-  if (!loginCookies) {
+  if (await page.getByLabel("账号", { exact: true }).isVisible().catch(() => false)) {
     await page.getByLabel("账号", { exact: true }).fill("admin");
     await page.locator('input[autocomplete="current-password"]').fill("ou-yaml-e2e-12345");
     await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -40,8 +40,7 @@ test("三步教程真实导入、发布、复制与原链接同步", async ({ pa
   await expect(page.getByRole("heading", { name: "订阅已发布", exact: true })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true }));
   await page.getByRole("button", { name: "复制订阅链接", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: /随时继续学习/ })).toBeVisible();
-  await page.getByRole("button", { name: "完成教程" }).click();
+  await expect(page.getByRole("button", { name: /打开新手教程/ })).toBeVisible();
   const url = await page.locator(".quick-result code").innerText();
   const before = await page.request.get(url);
   expect(before.ok()).toBeTruthy();
@@ -168,9 +167,7 @@ test("已生成订阅可改名、再次编辑分组和分流，更新仍保留�
   await expect(page.getByRole("region", { name: "更新原订阅确认" })).toContainText("原地址与有效期保持不变");
   await noOverflow(page);
   await page.getByRole("button", { name: "确认更新原订阅", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: /最后在客户端刷新/ })).toBeVisible();
   expect(await (await page.request.get(url)).text()).toContain("DOMAIN-SUFFIX,novice.example.com,DIRECT");
-  await page.getByRole("button", { name: "完成教程", exact: true }).click();
   await page.getByRole("button", { name: "返回我的订阅", exact: true }).click();
   await page.getByRole("button", { name: /订阅不能用，怎么办/ }).click();
   await expect(page.getByRole("dialog", { name: /先判断哪里出了问题/ })).toBeVisible();
@@ -179,8 +176,6 @@ test("已生成订阅可改名、再次编辑分组和分流，更新仍保留�
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await expect(page.getByRole("dialog", { name: /地址正常但连不上网络/ })).toBeVisible();
   await noOverflow(page);
-  await page.getByRole("button", { name: "下一步", exact: true }).click();
-  await page.getByRole("button", { name: "完成教程", exact: true }).click();
   expect(errors).toEqual([]);
 });
 

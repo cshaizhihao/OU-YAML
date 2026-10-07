@@ -94,6 +94,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   const [kernelBusy, setKernelBusy] = useState(false);
   const [kernelResult, setKernelResult] = useState<KernelValidationResult | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
+  const messageTimer = useRef<number | undefined>(undefined);
   const editRevision = useRef(0);
   const saveInFlight = useRef<Promise<void> | null>(null);
   const savedVersion = useRef("");
@@ -113,6 +114,12 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   }, []);
 
   useEffect(() => { loadProjects().catch((error) => setMessage(error.message)); }, [loadProjects]);
+  useEffect(() => {
+    window.clearTimeout(messageTimer.current);
+    if (!message) return;
+    messageTimer.current = window.setTimeout(() => setMessage(""), 4200);
+    return () => window.clearTimeout(messageTimer.current);
+  }, [message]);
   useEffect(() => {
     const syncRoute = () => {
       const knownPath = routeEntries.some(([, path]) => window.location.pathname === path);
@@ -309,7 +316,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       <section className="content-area" key={view}>
         {view === "home" && <><SubscriptionHomeView key={project.id} project={project} canPublish={status === "saved"} onReload={reloadCurrentProject} onNavigate={(next) => { guide.pause(); navigate(next); }} onStartGuide={guide.start} onEdit={editSubscription} onCreate={() => { if (status !== "saved") { setMessage("请等待当前配置保存成功"); return; } void createProject().then(() => guide.start("quickstart")).catch((error) => setMessage(error.message)); }} /><details className="advanced-dashboard"><summary>高级配置详情与历史流程</summary><QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} onStartGuide={() => guide.start("quickstart")} /></details></>}
         {view === "sources" && <SourceManagerView onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
-        {view === "nodes" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
+        {view === "nodes" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onProjectReload={reloadCurrentProject} onMessage={setMessage} onOpenSources={() => navigate("sources")} />}
         {view === "groups" && <><div className="draft-flow"><span>导入节点 → 编辑分组 → 检查并生成订阅</span><button className="primary-button" disabled={status !== "saved"} onClick={openQuickPublish}>下一步：生成订阅</button></div><GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} /></>}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "preview" && <>{previewExport(project.config, project.targetFormat).issues.filter((issue) => issue.level === "error").map((issue, index) => <p role="alert" key={index}>{issue.message}</p>)}<SourceView config={project.config} format={project.targetFormat} source={previewExport(project.config, project.targetFormat).content} onApply={(config) => updateProject((current) => ({ ...current, config }))} /></>}

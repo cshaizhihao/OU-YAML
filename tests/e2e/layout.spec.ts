@@ -2,9 +2,12 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function login(page: Page) {
   await page.goto("/");
-  await page.getByLabel("账号", { exact: true }).fill("admin");
-  await page.locator('input[autocomplete="current-password"]').fill("ou-yaml-e2e-12345");
-  await page.getByRole("button", { name: "登录", exact: true }).click();
+  const loginForm = page.getByLabel("账号", { exact: true });
+  if (await loginForm.isVisible().catch(() => false)) {
+    await loginForm.fill("admin");
+    await page.locator('input[autocomplete="current-password"]').fill("ou-yaml-e2e-12345");
+    await page.getByRole("button", { name: "登录", exact: true }).click();
+  }
   await expect(page.getByRole("button", { name: "开始三步教程" })).toBeVisible();
   await page.getByRole("button", { name: "暂时跳过" }).click();
 }
@@ -92,7 +95,7 @@ test("TCP 探测结果紧邻按钮并按延迟显示颜色", async ({ page }) =>
   const result = row.locator(".tcp-latency");
   await expect(result).toHaveText("42ms");
   await expect(result).toHaveClass(/good/);
-  await expect(probe.locator("xpath=following-sibling::*[1]")).toHaveClass(/tcp-latency/);
+  await expect(probe.locator("xpath=ancestor::span[contains(@class, 'node-probe-cluster')]//span[contains(@class, 'tcp-latency')]")).toHaveClass(/tcp-latency/);
   const probeBox = await probe.boundingBox();
   const resultBox = await result.boundingBox();
   expect(probeBox).not.toBeNull();

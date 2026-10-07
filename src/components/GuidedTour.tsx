@@ -270,13 +270,14 @@ function GuideCard({ guide, completed, resume, onStart }: { guide: GuideDefiniti
 }
 
 export function GuideExperience({ controller, username, currentView, navigate }: { controller: GuideController; username: string; currentView: GuideView; navigate: (view: GuideView) => void }) {
+  const visibleGuides = guideRegistry.filter((guide) => ["quickstart", "nodes", "groups", "rules", "publish"].includes(guide.id));
   return <>
     <button className="floating-help-button" data-guide-id={guideTargets.helpButton} onClick={controller.openCenter} aria-label="打开新手教程"><CircleHelp size={20} /><span>{controller.hasUpdates ? "教程有更新" : "新手教程"}</span></button>
     <WelcomeGuide controller={controller} username={username} />
     <GuidedPopover controller={controller} currentView={currentView} navigate={navigate} />
     <Drawer title="新手教程与帮助" open={controller.centerOpen} onClose={controller.closeCenter}>
       <div className="guide-library-intro"><span><Compass size={22} /></span><div><strong>从当前进度继续，或学习单项功能</strong><p>教程会自动跳转并高亮对应操作，不会修改你的配置。</p></div></div>
-      <div className="guide-library-list">{guideRegistry.map((guide) => <GuideCard key={guide.id} guide={guide} completed={controller.completed.includes(guide.id)} resume={controller.resume || undefined} onStart={(step) => controller.start(guide.id, step)} />)}</div>
+      <div className="guide-library-list">{visibleGuides.map((guide) => <GuideCard key={guide.id} guide={guide} completed={controller.completed.includes(guide.id)} resume={controller.resume || undefined} onStart={(step) => controller.start(guide.id, step)} />)}</div>
       <div className="guide-maintenance-note"><Sparkles size={16} /><span><strong>教程版本 {GUIDE_VERSION}</strong><small>这里只在操作流程变化时提示新教程，日常修复不会重复弹出欢迎页。</small></span></div>
     </Drawer>
   </>;

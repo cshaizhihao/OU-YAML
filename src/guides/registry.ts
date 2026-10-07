@@ -68,8 +68,7 @@ export const guideRegistry: readonly GuideDefinition[] = [
     steps: [
       { id: "choose", view: "home", target: guideTargets.homeSubscriptions, advanceOn: "subscription-rules-opened", title: "先选中要修改的订阅", description: "在这份订阅的卡片上点击“编辑分流”，不是新建订阅。尚未生成过链接时，请先用三步教程创建。" },
       { id: "rule", view: "subscription", target: guideTargets.subscriptionRules, advanceOn: "website-rule-added", title: "为网站选择连接方式", description: "填写域名，例如 example.com；选择直接连接或代理组，点击“添加网站规则”。这些修改尚未影响客户端。" },
-      { id: "publish", view: "subscription", target: guideTargets.subscriptionSave, advanceOn: "subscription-updated", title: "把规则更新到原订阅", description: "点击“检查并更新原订阅”，确认名称、数量变化与原地址不变，再点击“确认更新原订阅”。失败不会推进或覆盖旧内容。" },
-      { id: "client", view: "subscription", target: guideTargets.subscriptionSaved, title: "最后在客户端刷新", description: "更新成功只改变服务器内容。回到手机或电脑代理客户端，点击更新订阅，再访问目标网站验证。不用重新填写地址。" },
+      { id: "publish", view: "subscription", target: guideTargets.subscriptionSave, advanceOn: "subscription-updated", title: "把规则更新到原订阅", description: "点击“检查并更新原订阅”，确认名称、数量变化与原地址不变，再点击确认。成功后回到手机或电脑客户端刷新订阅，不用重新填写地址。" },
     ],
   },
   {
@@ -77,8 +76,7 @@ export const guideRegistry: readonly GuideDefinition[] = [
     steps: [
       { id: "start", view: "home", target: guideTargets.homeTasks, title: "先判断哪里出了问题", description: "首页状态只表示链接是否过期、撤销或同步报错，不代表节点已通过实测。来源失败时上次发布内容仍保留，不要先重置地址。" },
       { id: "source", view: "sources", target: guideTargets.sourceList, title: "客户端能导入，服务器却报错？", description: "点击来源的“诊断连接”，查看 404、权限、DNS 或 TLS 建议。服务器网络与手机不同，404 不能靠换请求头保证修复。" },
-      { id: "node", view: "nodes", target: guideTargets.nodeDiagnostics, title: "地址正常但连不上网络？", description: "使用“代理实测”验证鉴权和 HTTPS 转发。TCP 可达不等于代理可用，服务器实测也不等于你的手机网络情况。" },
-      { id: "client", view: "home", target: guideTargets.homeTasks, title: "确认客户端拿到新内容", description: "规则变化需要检查发布，节点库变化可同步原订阅。随后在客户端更新订阅并确认选中的节点；不要重复安装应用。" },
+      { id: "node", view: "nodes", target: guideTargets.nodeDiagnostics, title: "地址正常但连不上网络？", description: "使用“代理实测”验证鉴权和 HTTPS 转发。TCP 可达不等于代理可用；确认发布后还要在客户端刷新订阅，通常不需要重装应用。" },
     ],
   },
   {
@@ -90,7 +88,6 @@ export const guideRegistry: readonly GuideDefinition[] = [
       { id: "import", view: "home", target: guideTargets.quickImport, quickStep: 0, advanceOn: "imported", title: "粘贴并导入订阅", description: "填写订阅或节点链接，点击“导入并继续”。如果已有节点，可以直接使用。导入成功后教程自动前进。", tip: "只想了解流程时，可以暂停教程并点击“先看演示”。" },
       { id: "configure", view: "home", target: guideTargets.quickConfigure, quickStep: 1, advanceOn: "published", title: "选择推荐配置并发布", description: "基础分流适合 Mihomo。点击“生成我的订阅”（已有链接时为“检查发布变化”），阅读变化摘要，再点击“确认并发布”。只有发布成功后教程才会前进。" },
       { id: "copy", view: "home", target: guideTargets.quickResult, quickStep: 2, advanceOn: "copied", title: "复制到客户端", description: "复制订阅链接，在客户端的“订阅 / 配置”中从 URL 添加，然后更新订阅。后续可以继续使用同一个地址。" },
-      { id: "help", view: "home", target: guideTargets.helpButton, title: "随时继续学习", description: "右下角可以学习节点实测、分流和自动同步。日后有新的操作方式，会在这里提示新增教程。" },
     ],
   },
   {
@@ -112,8 +109,7 @@ export const guideRegistry: readonly GuideDefinition[] = [
     steps: [
       { id: "node-toolbar", view: "nodes", target: guideTargets.nodeToolbar, title: "筛选或添加节点", description: "可以按名称、服务器、协议、标签和来源筛选节点。" },
       { id: "node-list", view: "nodes", target: guideTargets.nodeList, title: "节点库与当前项目相互独立", description: "勾选节点后再加入当前项目。删除节点库数据前，系统会同步清理项目引用。" },
-      { id: "node-diagnostics", view: "nodes", target: guideTargets.nodeDiagnostics, title: "选择真实检测方式", description: "TCP 只检查端口。代理实测通过服务器上的 Mihomo 内核验证鉴权、HTTPS 转发并读取出口 IP。Hysteria2 / TUIC 请选代理实测。国旗可按入口或出口添加，不会把入口误当出口。", tip: "检测从服务器发起，并不代表你的手机网络速度；出口检测会访问 Cloudflare，IP 定位可能有误差。" },
-      { id: "node-selection", view: "nodes", target: guideTargets.nodeSelection, title: "批量操作", description: "选择节点后可以批量加入项目、检测 TCP、添加国旗、启停和整理名称。" },
+      { id: "node-diagnostics", view: "nodes", target: guideTargets.nodeDiagnostics, title: "检测并批量整理", description: "TCP 只检查端口；代理实测验证鉴权、HTTPS 转发和出口 IP。选择节点后还可以批量加入项目、检测、添加国旗、启停和整理名称。", tip: "检测从服务器发起，并不代表你的手机网络速度；出口检测会访问 Cloudflare，IP 定位可能有误差。" },
     ],
   },
   {
@@ -135,9 +131,8 @@ export const guideRegistry: readonly GuideDefinition[] = [
     steps: [
       { id: "rule-mode", view: "rules", target: guideTargets.ruleMode, title: "新手与高级模式", description: "新手模式使用自然语言；高级模式保留完整表格和原始参数。" },
       { id: "rule-template", view: "rules", target: guideTargets.ruleTemplates, title: "一键应用模板", description: "模板会自动生成常用规则，并保证最终兜底规则位于末尾。" },
-      { id: "rule-scenario", view: "rules", target: guideTargets.ruleScenario, title: "像写中文句子一样分流", description: "填写网站域名，选择“含子域名”和目标策略，即可添加标准英文规则。匹配检查会说明先命中哪一条；涉及规则集或 IP 时会标为不能仅凭域名确定。" },
-      { id: "rule-add", view: "rules", target: guideTargets.ruleAdd, title: "添加自定义规则", description: "选择中文匹配方式后，输入框会展示对应示例和说明。" },
-      { id: "rule-list", view: "rules", target: guideTargets.ruleList, title: "从上到下依次匹配", description: "规则命中后不会继续向下检查，因此越具体的规则越应该放在前面。" },
+      { id: "rule-scenario", view: "rules", target: guideTargets.ruleScenario, title: "像写中文句子一样分流", description: "填写网站域名，选择“含子域名”和目标策略，即可添加标准英文规则；高级自定义入口会展示对应示例和说明。" },
+      { id: "rule-list", view: "rules", target: guideTargets.ruleList, title: "检查顺序后再发布", description: "规则从上到下匹配，越具体的规则越应该放在前面。模板和自定义规则最终仍写入标准英文值，检查无误后再发布。" },
     ],
   },
   {

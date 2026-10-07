@@ -47,7 +47,9 @@ app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 
 const publicSubscriptionLimiter = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false });
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
+const loginLimit = z.coerce.number().int().min(10).max(200).catch(10).parse(process.env.LOGIN_RATE_LIMIT ?? 10);
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: loginLimit, standardHeaders: "draft-8", legacyHeaders: false });
+const importLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "订阅请求过于频繁，请一分钟后重试" } });
 const nodeProbeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 240, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "节点检测请求过于频繁，请稍后再试" } });
 const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(256) });
 const userSchema = z.object({
@@ -507,7 +509,7 @@ app.put("/api/node-sources/:id", requireAuth, (req, res) => {
   if (!updated) return res.status(404).json({ error: "节点来源不存在" });
   res.json(updated);
 });
-app.post("/api/node-sources/:id/refresh", requireAuth, async (req, res) => {
+app.post("/api/node-sources/:id/refresh", requireAuth, importLimiter, async (req, res) => {
   const sourceId = String(req.params.id);
   if (!listNodeSources(req.user!.id).some((item) => item.id === sourceId)) return res.status(404).json({ error: "节点来源不存在" });
   try { res.json(await refreshNodeSource(req.user!.id, sourceId)); }
@@ -517,7 +519,7 @@ app.post("/api/node-sources/:id/refresh", requireAuth, async (req, res) => {
     res.status(message === "该来源已停用" ? 409 : 422).json({ error: message });
   }
 });
-app.post("/api/node-sources/:id/import", requireAuth, express.text({ type: "text/plain", limit: "2mb" }), async (req, res) => {
+app.post("/api/node-sources/:id/import", requireAuth, importLimiter, express.text({ type: "text/plain", limit: "2mb" }), async (req, res) => {
   const sourceId = String(req.params.id);
   const source = listNodeSources(req.user!.id).find((item) => item.id === sourceId);
   if (!source) return res.status(404).json({ error: "节点来源不存在" });
@@ -739,6 +741,19 @@ app.get("/sub/:token", publicSubscriptionLimiter, (req, res) => {
   if (!item) return res.status(404).type("text/plain").send("订阅不存在、已撤销或已过期");
   res.setHeader("Cache-Control", "private, max-age=60");
   res.type(item.targetFormat === "sing-box" ? "application/json" : "application/yaml").send(item.content);
+});
+
+app.post("/api/tools/import-preview", requireAuth, importLimiter, async (req, res) => {
+  const parsed = z.object({ content: z.string().trim().min(1).max(2_000_000), format: z.enum(["auto", "links", "mihomo", "sing-box"]).default("auto"), remote: z.boolean().default(false), userAgent: z.string().max(300).optional(), skipCertVerify: z.boolean().default(false) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "导入内容或格式无效" });
+  try {
+    const { content, remote, format, userAgent, skipCertVerify } = parsed.data;
+    const fetched = remote ? await safeFetchSubscription(content, 2_000_000, { userAgent, skipCertVerify }) : undefined;
+    const imported = parseImportedContent(fetched?.text ?? content, format);
+    res.json({ ...imported, requestProfile: fetched?.requestProfile, issues: imported.config ? validateConfig(imported.config) : [] });
+  } catch (error) {
+    res.status(422).json({ error: error instanceof Error ? error.message : "订阅预览失败" });
+  }
 });
 
 app.post("/api/tools/parse", requireAuth, (req, res) => {

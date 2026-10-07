@@ -5,6 +5,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from "@dnd-kit/utilities";
 import { Activity, Ban, CheckCircle2, CircleX, Copy, Database, FilePlus2, Flag, GripVertical, Link2, LoaderCircle, MapPin, Pencil, Plus, RefreshCw, Search, Server, Tags, Trash2, Unlink, WandSparkles } from "lucide-react";
 import { api, type TcpPingResult } from "../../api";
+import { latencyLevel } from "../../shared/diagnostics";
 import type { ManagedNode, NodeSource } from "../../shared/domain";
 import type { MihomoConfig, ProxyNode } from "../../shared/types";
 import { createId } from "../../shared/id";
@@ -35,7 +36,7 @@ type NodeDraft = {
 };
 
 type BatchDraft = { addTags: string; removeTags: string; prefix: string; find: string; replace: string };
-type NodeDiagnostic = Partial<TcpPingResult> & { country?: string; countryCode?: string; flag?: string; exitIp?: string };
+type NodeDiagnostic = Partial<TcpPingResult> & { country?: string; countryCode?: string; flag?: string; exitIp?: string; mode?: "tcp" | "proxy"; checkedAt?: string };
 
 const blank: NodeDraft = { name: "新节点", type: "ss", server: "", port: 443, enabled: true, extra: {}, tags: [] };
 const emptyBatch = (): BatchDraft => ({ addTags: "", removeTags: "", prefix: "", find: "", replace: "" });
@@ -92,17 +93,20 @@ function withoutProjectNodes(config: MihomoConfig, ids: Set<string>, names: Set<
   };
 }
 
-export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: { config: MihomoConfig; onConfig: (config: MihomoConfig) => void; onProjectReload: () => Promise<void>; onMessage: (value: string) => void }) {
+export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onOpenSources }: { config: MihomoConfig; onConfig: (config: MihomoConfig) => void; onProjectReload: () => Promise<void>; onMessage: (value: string) => void; onOpenSources: () => void }) {
   const [sources, setSources] = useState<NodeSource[]>([]);
   const [nodes, setNodes] = useState<ManagedNode[]>([]);
   const [sourceId, setSourceId] = useState("");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<NodeDraft | null>(null);
   const [deleting, setDeleting] = useState<ManagedNode | null>(null);
+  const [batchDeleting, setBatchDeleting] = useState<ManagedNode[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchDraft, setBatchDraft] = useState<BatchDraft | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkText, setLinkText] = useState("");
+  const [linkMode, setLinkMode] = useState<"auto" | "links">("auto");
+  const [linkError, setLinkError] = useState("");
   const [linkPreview, setLinkPreview] = useState<{ nodes: ProxyNode[]; warnings: string[] } | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
@@ -251,12 +255,12 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
     setBusy(setProbeBusy, node.id, true);
     try {
       const result = probeMode === "proxy" ? await api.proxyTestManagedNode(node.id) : await api.tcpPingManagedNode(node.id);
-      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], error: undefined, exitIp: undefined, ...result } }));
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], error: undefined, exitIp: undefined, ...result, mode: probeMode, checkedAt: new Date().toISOString() } }));
       if (announce) onMessage(result.reachable ? `${node.name} ${probeMode === "proxy" ? "代理实测" : "TCP 连接"}成功，延迟 ${result.latencyMs}ms` : `${node.name} 无法连接：${result.error || "TCP 连接失败"}`);
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : "检测失败";
-      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], exitIp: undefined, reachable: false, latencyMs: null, error: message } }));
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], exitIp: undefined, reachable: false, latencyMs: null, error: message, mode: probeMode, checkedAt: new Date().toISOString() } }));
       if (announce) onMessage(message);
       return null;
     } finally {
@@ -283,7 +287,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
       setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], resolvedAddress: result.location.ip, country: result.location.country, countryCode: result.location.countryCode, flag: result.location.flag } }));
       if (announce) {
         await onProjectReload();
-        onMessage(`已根据服务器 IP ${result.location.ip} 添加 ${result.location.country || result.location.countryCode} 国旗`);
+        onMessage(`已根据${flagBasis === "exit" ? "代理出口" : "服务器入口"} IP ${result.location.ip} 添加 ${result.location.country || result.location.countryCode} 国旗（替换原国旗，不重复叠加）`);
       }
       return true;
     } catch (error) {
@@ -306,12 +310,14 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
   async function previewLinks() {
     if (!linkText.trim()) return;
     setLinkBusy(true);
+    setLinkError("");
     try {
-      const parsed = await api.parseContent(linkText, "links");
+      const remote = linkMode === "auto" && /^https?:\/\/\S+$/i.test(linkText.trim());
+      const parsed = await api.previewImport(linkText, remote, linkMode);
       setLinkPreview({ nodes: parsed.nodes, warnings: parsed.warnings });
     } catch (error) {
       setLinkPreview(null);
-      onMessage(error instanceof Error ? error.message : "节点链接解析失败");
+      setLinkError(error instanceof Error ? error.message : "节点链接解析失败");
     } finally {
       setLinkBusy(false);
     }
@@ -391,9 +397,9 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
         <select value={sourceId} onChange={(event) => setSourceId(event.target.value)}><option value="">全部来源</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
       </div>
       <div className="row-actions">
-        <button className="secondary-button" onClick={() => void load()} disabled={orderBusy}><RefreshCw size={16} />刷新</button>
-        <button className="secondary-button" data-guide-id={guideTargets.nodeImport} onClick={() => { setLinkOpen(true); setLinkPreview(null); }}><Link2 size={16} />导入链接</button>
-        <button className="primary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button>
+        <button className="secondary-button" onClick={() => void load().catch((error) => onMessage(error.message))} disabled={orderBusy}><RefreshCw size={16} />刷新</button>
+        <button className="primary-button" data-guide-id={guideTargets.nodeImport} onClick={() => { setLinkOpen(true); setLinkPreview(null); setLinkError(""); }}><Link2 size={16} />导入链接</button>
+        <button className="secondary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button>
       </div>
     </div>
 
@@ -412,7 +418,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
       <button className="secondary-button compact-button" disabled={probeBusy.size > 0} onClick={() => void probeSelectedNodes()}>{probeBusy.size ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}{probeMode === "proxy" ? "代理实测" : "TCP 检测"}</button>
       <button className="secondary-button compact-button" disabled={flagBusy.size > 0} onClick={() => void applySelectedCountryFlags()}>{flagBusy.size ? <LoaderCircle className="spin" size={15} /> : <Flag size={15} />}添加国旗</button>
       <button className="secondary-button compact-button" onClick={() => setBatchDraft(emptyBatch())}><WandSparkles size={15} />整理</button>
-      <button className="secondary-button compact-button danger-outline" onClick={() => void deleteNodes(selectedNodes)} disabled={orderBusy}><Trash2 size={15} />删除</button>
+      <button className="secondary-button compact-button danger-outline" onClick={() => setBatchDeleting(selectedNodes)} disabled={orderBusy}><Trash2 size={15} />删除</button>
     </div>}
 
     {filtered.length ? <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => setActiveId(String(event.active.id).replace(/^node:/, ""))} onDragCancel={() => setActiveId(null)} onDragEnd={handleDragEnd}>
@@ -423,7 +429,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
         </div>
       </SortableContext>
       {createPortal(<DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(.16,1,.3,1)" }}>{activeId ? <div className="node-drag-overlay"><GripVertical size={16} /><strong>{nodes.find((node) => node.id === activeId)?.name || "节点"}</strong></div> : null}</DragOverlay>, document.body)}
-    </DndContext> : <div className="empty-state" data-guide-id={guideTargets.nodeList}><div><Database size={24} /></div><h2>{query ? "没有匹配的节点" : "节点库还是空的"}</h2><p>{query ? "换个关键词或来源筛选试试。" : "从订阅、节点链接或手动添加第一个节点。"}</p>{!query && <div className="empty-actions"><button className="secondary-button" onClick={() => setLinkOpen(true)}><Link2 size={16} />导入链接</button><button className="primary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button></div>}</div>}
+    </DndContext> : <div className="empty-state" data-guide-id={guideTargets.nodeList}><div><Database size={24} /></div><h2>{query ? "没有匹配的节点" : "节点库还是空的"}</h2><p>{query ? "换个关键词或来源筛选试试。" : "从订阅、节点链接或手动添加第一个节点。"}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => setLinkOpen(true)}><Link2 size={16} />导入链接</button><button className="secondary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button></div>}</div>}
 
     {pageCount > 1 && <div className="pagination-controls"><button className="secondary-button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {pageCount} · {matchingNodes.length} 个节点</span><button className="secondary-button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</button></div>}
     <Drawer open={!!editing} onClose={() => setEditing(null)} title={editing?.id ? "编辑节点" : "添加节点"} footer={<><button className="secondary-button" onClick={() => setEditing(null)}>取消</button><button className="primary-button" disabled={!editing || !editing.name.trim() || !editing.server.trim() || !Number.isInteger(editing.port) || editing.port < 1 || editing.port > 65535} onClick={() => void save()}>保存节点</button></>}>
@@ -462,11 +468,14 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
     </Drawer>
 
     <Drawer open={linkOpen} onClose={() => { setLinkOpen(false); setLinkPreview(null); }} title="导入节点链接" footer={<><button className="secondary-button" onClick={() => { setLinkOpen(false); setLinkPreview(null); }}>取消</button>{linkPreview ? <button className="primary-button" disabled={linkBusy || !linkPreview.nodes.length} onClick={() => void importLinks()}>{linkBusy ? <RefreshCw className="spin" size={16} /> : <FilePlus2 size={16} />}导入预览节点</button> : <button className="primary-button" disabled={linkBusy || !linkText.trim()} onClick={() => void previewLinks()}>{linkBusy ? <RefreshCw className="spin" size={16} /> : <Search size={16} />}解析预览</button>}</>}>
-      <label className="import-textarea">VLESS / VMess / Trojan / SS 等链接<textarea autoFocus value={linkText} onChange={(event) => { setLinkText(event.target.value); setLinkPreview(null); }} placeholder={"vless://...\nvmess://...\nss://..."} spellCheck={false} /></label>
+      <label>输入类型<select disabled={linkBusy} value={linkMode} onChange={(event) => { setLinkMode(event.target.value as "auto" | "links"); setLinkPreview(null); setLinkError(""); }}><option value="auto">自动识别（HTTP 地址按订阅 URL 获取）</option><option value="links">节点协议链接（含 HTTP 代理） / Base64</option></select></label>
+      <label className="import-textarea">订阅 URL 或节点链接<textarea autoFocus disabled={linkBusy} value={linkText} onChange={(event) => { setLinkText(event.target.value); setLinkPreview(null); setLinkError(""); }} placeholder={"https://example.com/subscribe\n或一行一个 vless://、vmess://、ss:// 链接"} spellCheck={false} /></label>
+      {linkError && <p className="form-error" role="alert">{linkError}</p>}
       {linkPreview && <div className="import-preview"><strong>解析结果：{linkPreview.nodes.length} 个节点</strong>{linkPreview.nodes.slice(0, 8).map((node) => <div key={node.id}><span>{node.name}</span><small>{node.type.toUpperCase()} · {node.server}:{node.port}</small></div>)}{linkPreview.nodes.length > 8 && <small>还有 {linkPreview.nodes.length - 8} 个节点</small>}{linkPreview.warnings.length > 0 && <div className="import-warnings"><strong>以下内容未识别：</strong>{linkPreview.warnings.slice(0, 12).map((warning, index) => <small key={`${warning}-${index}`}>{warning}</small>)}{linkPreview.warnings.length > 12 && <small>还有 {linkPreview.warnings.length - 12} 条</small>}</div>}</div>}
-      <p className="form-hint"><Link2 size={15} />支持一行一个链接，也支持整段 Base64 订阅内容。</p>
+      <p className="form-hint"><Link2 size={15} />预览不会写入节点库。确认后导入所见节点；需要定时同步，请在「订阅来源」添加远程来源。</p><button className="text-button" onClick={onOpenSources}>前往订阅来源设置自动同步</button>
     </Drawer>
 
+    <ConfirmDialog open={!!batchDeleting} title="批量删除节点" message={`将永久删除 ${batchDeleting?.length || 0} 个节点，并清理项目引用。此操作无法撤销。`} onClose={() => setBatchDeleting(null)} onConfirm={async () => { if (batchDeleting) await deleteNodes(batchDeleting); setBatchDeleting(null); }} />
     <ConfirmDialog open={!!deleting} title="删除节点" message={`确定从节点库删除“${deleting?.name}”吗？如果当前项目正在使用它，相关分组引用也会一并清理。`} onClose={() => setDeleting(null)} onConfirm={async () => { if (!deleting) return; await deleteNodes([deleting]); setDeleting(null); }} />
   </>;
 }
@@ -497,6 +506,6 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
     <span className="node-row-source" title={sourceName || "手动添加"}>{sourceName || "手动添加"}</span>
     <span className="node-row-tags" title={node.tags.join("、")}>{node.tags.length ? node.tags.map((tag) => <b key={tag}>{tag}</b>) : "-"}</span>
     <span className="node-row-status"><button className={node.enabled ? "status-toggle active" : "status-toggle"} onClick={onToggle}>{node.enabled ? <CheckCircle2 size={14} /> : <Ban size={14} />}{node.enabled ? "已启用" : "已停用"}</button></span>
-    <span className="node-row-actions"><button className="icon-button compact diagnostic-action" disabled={probeBusy} onClick={onProbe} title="按上方所选模式检测节点" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}</button>{diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined && <span className={`tcp-latency ${diagnostic.latencyMs <= 50 ? "good" : diagnostic.latencyMs <= 160 ? "warn" : "bad"}`} title={`探测延迟 ${diagnostic.latencyMs}ms`}>{diagnostic.latencyMs}ms</span>}{diagnostic?.reachable === false && <span className="tcp-latency bad" title={diagnostic.error || "连接失败"}><CircleX size={13} />失败</span>}<button className="icon-button compact diagnostic-action" disabled={flagBusy} onClick={onFlag} title="根据上方所选入口或出口 IP 添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={16} /> : <Flag size={16} />}</button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}>•••</button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button className="icon-button compact copy-action" onClick={onCopy} aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></span></span>
+    <span className="node-row-actions"><span className="node-probe-cluster"><button className="icon-button compact diagnostic-action" disabled={probeBusy} onClick={onProbe} title="按上方所选模式检测节点" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}</button>{!probeBusy && diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined && <span className={`tcp-latency ${latencyLevel(diagnostic.latencyMs)}`} role="status" title={`${diagnostic.mode === "proxy" ? "代理实测" : "TCP 端口"} · ${diagnostic.checkedAt ? new Date(diagnostic.checkedAt).toLocaleTimeString("zh-CN") : ""}`}>{diagnostic.latencyMs}ms</span>}{!probeBusy && diagnostic?.reachable === false && <span className="tcp-latency bad" role="status" aria-label={diagnostic.error || "连接失败"} title={diagnostic.error || "连接失败"}><CircleX size={13} />失败</span>}</span><button className="icon-button compact diagnostic-action flag-action" disabled={flagBusy} onClick={onFlag} title="根据上方所选入口或出口 IP 添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={16} /> : <Flag size={16} />}</button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}>•••</button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button className="icon-button compact copy-action" onClick={onCopy} aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></span></span>
   </div>;
 }

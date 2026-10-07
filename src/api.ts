@@ -9,6 +9,7 @@ export type UpdateStatus = { status: "idle" | "requested" | "running" | "complet
 export type TcpPingResult = { reachable: boolean; latencyMs: number | null; resolvedAddress: string | null; error?: string };
 export type ProxyProbeResult = TcpPingResult & { exitIp: string; countryCode?: string; checkedAt: string };
 export type NodeCountryResult = { node: ManagedNode; location: { ip: string; countryCode: string; country: string; flag: string } };
+export type ImportPreview = { config?: MihomoConfig; nodes: MihomoConfig["proxies"]; format: TargetFormat | "links"; warnings: string[]; issues: ValidationIssue[]; requestProfile?: string };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -27,6 +28,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  previewImport: (content: string, remote = false, format: "auto" | "links" | TargetFormat = "auto", options: { userAgent?: string; skipCertVerify?: boolean } = {}) => request<ImportPreview>("/api/tools/import-preview", { method: "POST", body: JSON.stringify({ content, remote, format, ...options }) }),
   me: () => request<{ username: string | null; isAdmin: boolean }>("/api/auth/me"),
   login: (username: string, password: string) => request<SessionUser>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),

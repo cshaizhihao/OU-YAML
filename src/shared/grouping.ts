@@ -4,6 +4,8 @@ function groupByName(groups: ProxyGroup[], name: string) {
   return groups.find((group) => group.name === name);
 }
 
+type NodeNames = ReadonlySet<string>;
+
 function reachesGroup(groups: ProxyGroup[], startName: string, targetName: string, visited = new Set<string>()): boolean {
   if (startName === targetName) return true;
   if (visited.has(startName)) return false;
@@ -12,10 +14,12 @@ function reachesGroup(groups: ProxyGroup[], startName: string, targetName: strin
   return !!group?.proxies.some((member) => groupByName(groups, member) && reachesGroup(groups, member, targetName, visited));
 }
 
-export function canAddGroupMember(groups: ProxyGroup[], targetGroupId: string, memberName: string) {
+export function canAddGroupMember(groups: ProxyGroup[], targetGroupId: string, memberName: string, nodeNames?: NodeNames) {
   const target = groups.find((group) => group.id === targetGroupId);
   const memberGroup = groupByName(groups, memberName);
-  if (!target || !memberGroup) return true;
+  if (!target) return false;
+  if (target.type === "relay" && (memberGroup || !nodeNames?.has(memberName))) return false;
+  if (!memberGroup) return true;
   if (target.id === memberGroup.id) return false;
   return !reachesGroup(groups, memberGroup.name, target.name);
 }
@@ -24,10 +28,10 @@ export function hasGroupCycle(groups: ProxyGroup[]) {
   return groups.some((group) => group.proxies.some((member) => groupByName(groups, member) && reachesGroup(groups, member, group.name)));
 }
 
-export function addGroupMembers(groups: ProxyGroup[], targetGroupId: string, names: string[], before?: string) {
+export function addGroupMembers(groups: ProxyGroup[], targetGroupId: string, names: string[], before?: string, nodeNames?: NodeNames) {
   return groups.map((group) => {
     if (group.id !== targetGroupId) return group;
-    const additions = names.filter((name) => !group.proxies.includes(name));
+    const additions = [...new Set(names)].filter((name) => !group.proxies.includes(name) && canAddGroupMember(groups, targetGroupId, name, nodeNames));
     if (!additions.length) return group;
     const index = before ? group.proxies.indexOf(before) : -1;
     const proxies = index >= 0 ? [...group.proxies.slice(0, index), ...additions, ...group.proxies.slice(index)] : [...group.proxies, ...additions];
@@ -42,16 +46,17 @@ export function removeGroupMember(groups: ProxyGroup[], targetGroupId: string, n
 export function reorderGroupMember(groups: ProxyGroup[], targetGroupId: string, name: string, before: string) {
   return groups.map((group) => {
     if (group.id !== targetGroupId || name === before) return group;
-    const from = group.proxies.indexOf(name); const to = group.proxies.indexOf(before);
+    const from = group.proxies.indexOf(name); const to = before ? group.proxies.indexOf(before) : group.proxies.length;
     if (from < 0 || to < 0) return group;
     const proxies = [...group.proxies]; const [member] = proxies.splice(from, 1); proxies.splice(from < to ? to - 1 : to, 0, member);
     return { ...group, proxies };
   });
 }
 
-export function moveGroupMember(groups: ProxyGroup[], sourceGroupId: string, targetGroupId: string, name: string, before?: string) {
+export function moveGroupMember(groups: ProxyGroup[], sourceGroupId: string, targetGroupId: string, name: string, before?: string, nodeNames?: NodeNames) {
+  if (!canAddGroupMember(groups, targetGroupId, name, nodeNames)) return groups;
   const removed = removeGroupMember(groups, sourceGroupId, name);
-  return addGroupMembers(removed, targetGroupId, [name], before);
+  return addGroupMembers(removed, targetGroupId, [name], before, nodeNames);
 }
 
 export function reorderGroups(groups: ProxyGroup[], groupId: string, beforeGroupId: string) {
