@@ -246,11 +246,11 @@ function WelcomeGuide({ controller, username }: { controller: GuideController; u
       <div className="guide-welcome-art"><span><GraduationCap size={29} /></span><i /><i /><i /></div>
       <span className="eyebrow">OU-YAML · 新手模式</span>
       <h1 id="guide-welcome-title">欢迎使用，{username}</h1>
-      <p>不需要会写 YAML。跟随三步引导完成导入、推荐配置和发布，操作成功后会自动进入下一步。</p>
+      <p>不需要会写 YAML。只做三件事：粘贴链接、选择设置、复制订阅地址。</p>
       <div className="guide-welcome-features">
-        <span><ListChecks size={18} /><strong>自动跳转</strong><small>每一步都会打开正确页面</small></span>
-        <span><BookOpenCheck size={18} /><strong>中文解释</strong><small>英文规则保留为标准输出</small></span>
-        <span><Clock3 size={18} /><strong>随时继续</strong><small>退出后会记住当前进度</small></span>
+        <span><ListChecks size={18} /><strong>第一步</strong><small>粘贴订阅或节点链接</small></span>
+        <span><BookOpenCheck size={18} /><strong>第二步</strong><small>选择推荐设置并发布</small></span>
+        <span><Clock3 size={18} /><strong>第三步</strong><small>复制地址到客户端</small></span>
       </div>
       <div className="guide-welcome-actions">
         <button className="text-button" onClick={controller.skipWelcome}>暂时跳过</button>

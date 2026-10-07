@@ -1,0 +1,398 @@
+:root {
+  --workbench-sidebar: 238px;
+  --workbench-gap: 14px;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+.workspace {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  grid-template-columns: var(--workbench-sidebar) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.sidebar {
+  position: relative;
+  top: auto;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.main-shell {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar,
+.page-heading,
+.main-shell > .section-tabs,
+.main-shell > .issues-panel {
+  flex: 0 0 auto;
+}
+
+.topbar {
+  position: relative;
+  top: auto;
+}
+
+.page-heading {
+  width: min(1360px, 100%);
+  max-width: none;
+}
+
+.main-shell > .section-tabs {
+  width: min(1288px, calc(100% - 72px));
+  max-width: none;
+}
+
+.main-shell > .issues-panel {
+  width: min(1288px, calc(100% - 72px));
+  max-width: none;
+  max-height: min(30dvh, 280px);
+  overflow-y: auto;
+}
+
+.content-area {
+  width: min(1360px, 100%);
+  max-width: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-bottom: 28px;
+  animation: none;
+  transform: none;
+  scrollbar-gutter: stable;
+}
+
+.guided-tour-popover {
+  pointer-events: none;
+}
+
+.guided-tour-popover > header > button,
+.guided-tour-popover > footer {
+  pointer-events: auto;
+}
+
+.panel-card,
+.settings-section,
+.source-card,
+.workflow-panel,
+.health-panel {
+  padding: 16px;
+}
+
+.rule-scenario {
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.rule-scenario h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.rules-onboarding-note {
+  margin-bottom: 9px;
+  padding: 9px 11px;
+  border-radius: 11px;
+}
+
+.rules-onboarding-note > span {
+  width: 29px;
+  height: 29px;
+}
+
+.rules-onboarding-note p {
+  display: none;
+}
+
+.view-toolbar {
+  min-height: 44px;
+  margin-bottom: 8px;
+}
+
+.rule-overview {
+  margin-bottom: 8px;
+}
+
+.rule-order-hint {
+  margin-bottom: 8px;
+  padding: 7px 10px;
+}
+
+.beginner-rule-list {
+  gap: 7px;
+}
+
+.beginner-rule-card {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.beginner-rule-card > header {
+  min-height: 42px;
+  padding: 5px 9px;
+}
+
+.rule-order {
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+}
+
+.rule-sentence-builder {
+  padding: 8px 10px;
+  gap: 6px;
+}
+
+.rule-sentence-builder select,
+.rule-sentence-builder input {
+  min-height: 34px;
+  height: 34px;
+  padding-block: 5px;
+}
+
+.rule-explanation {
+  margin: 0 10px 7px;
+  padding: 6px 8px;
+}
+
+.rule-explanation small {
+  display: none;
+}
+
+.rule-advanced-details {
+  margin: 0 10px 7px;
+}
+
+.beginner-rule-card > footer {
+  min-height: 31px;
+}
+
+.group-board {
+  height: min(650px, max(360px, calc(100dvh - 490px)));
+  min-height: 360px;
+  grid-template-columns: minmax(220px, .72fr) minmax(340px, 1.18fr) minmax(220px, .72fr);
+  gap: var(--workbench-gap);
+}
+
+.node-pool,
+.group-inspector {
+  position: static;
+  height: 100%;
+  max-height: none;
+}
+
+.node-pool-list {
+  max-height: none;
+  height: calc(100% - 142px);
+}
+
+.group-canvas {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  padding: 1px 5px 12px 1px;
+  scrollbar-gutter: stable;
+}
+
+.group-column {
+  border-radius: 13px;
+}
+
+.group-column-header {
+  padding: 8px 9px;
+}
+
+.group-member-list {
+  min-height: 66px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: border-color var(--ease), background var(--ease);
+}
+
+.group-member-list.nesting-target-active {
+  border-color: color-mix(in srgb, var(--plum) 52%, var(--line));
+  background: color-mix(in srgb, var(--plum-soft) 42%, transparent);
+}
+
+.group-nest-drop,
+.group-drop-empty {
+  min-height: 42px;
+  margin-top: 5px;
+  padding: 7px;
+}
+
+.group-nest-drop.active,
+.group-drop-empty.active {
+  min-height: 54px;
+}
+
+.group-quick-add {
+  min-height: 37px;
+}
+
+.group-inspector {
+  padding: 12px;
+}
+
+.group-inspector section {
+  padding: 10px 0;
+}
+
+.group-inspector section > p {
+  margin: 3px 0 7px;
+}
+
+.editor-identity {
+  padding: 13px 16px;
+}
+
+.subscription-editor {
+  gap: 12px;
+}
+
+.editor-publish {
+  position: sticky;
+  bottom: 8px;
+  z-index: 9;
+  padding: 12px 14px;
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--line));
+  box-shadow: 0 -8px 26px rgba(65, 44, 35, .08), var(--shadow-card);
+}
+
+.editor-publish h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.editor-publish p {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.quick-setup,
+.dashboard-hero,
+.home-subscription-card {
+  border-radius: 16px;
+}
+
+@media (max-width: 1280px) and (min-width: 841px) {
+  .workspace {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .group-board {
+    grid-template-columns: minmax(205px, .72fr) minmax(320px, 1.2fr) minmax(205px, .72fr);
+  }
+}
+
+@media (max-width: 840px) {
+  .workspace:has(.guided-tour-popover) .main-shell {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .workspace {
+    display: block;
+  }
+
+  .main-shell {
+    width: 100%;
+  }
+
+  .main-shell > .section-tabs,
+  .main-shell > .issues-panel {
+    width: auto;
+    margin-inline: 18px;
+  }
+
+  .content-area {
+    width: 100%;
+  }
+
+  .group-board {
+    height: auto;
+    min-height: 0;
+  }
+
+  .node-pool,
+  .group-inspector {
+    height: auto;
+    max-height: none;
+  }
+
+  .node-pool-list {
+    height: auto;
+    max-height: 230px;
+  }
+
+  .group-canvas {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .editor-publish {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  .main-shell > .section-tabs,
+  .main-shell > .issues-panel {
+    margin-inline: 14px;
+  }
+
+  .content-area {
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .rule-sentence-builder {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .rule-sentence-builder > span {
+    grid-column: 1;
+  }
+
+  .rule-sentence-builder > label,
+  .rule-sentence-builder > label:last-child {
+    grid-column: 2;
+  }
+
+  .beginner-rule-card > header {
+    min-height: 38px;
+  }
+
+  .group-board.is-dragging .group-canvas .group-column {
+    display: block;
+  }
+}
