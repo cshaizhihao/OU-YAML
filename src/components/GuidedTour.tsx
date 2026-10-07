@@ -269,10 +269,14 @@ function GuideCard({ guide, completed, resume, onStart }: { guide: GuideDefiniti
   </article>;
 }
 
+export function GuideTrigger({ controller, className = "" }: { controller: GuideController; className?: string }) {
+  return <button className={`floating-help-button${className ? ` ${className}` : ""}`} data-guide-id={guideTargets.helpButton} onClick={controller.openCenter} aria-label="打开新手教程"><CircleHelp size={20} /><span>{controller.hasUpdates ? "教程有更新" : "新手教程"}</span></button>;
+}
+
 export function GuideExperience({ controller, username, currentView, navigate }: { controller: GuideController; username: string; currentView: GuideView; navigate: (view: GuideView) => void }) {
   const visibleGuides = guideRegistry.filter((guide) => ["quickstart", "nodes", "groups", "rules", "publish"].includes(guide.id));
   return <>
-    <button className="floating-help-button" data-guide-id={guideTargets.helpButton} onClick={controller.openCenter} aria-label="打开新手教程"><CircleHelp size={20} /><span>{controller.hasUpdates ? "教程有更新" : "新手教程"}</span></button>
+    <GuideTrigger controller={controller} />
     <WelcomeGuide controller={controller} username={username} />
     <GuidedPopover controller={controller} currentView={currentView} navigate={navigate} />
     <Drawer title="新手教程与帮助" open={controller.centerOpen} onClose={controller.closeCenter}>

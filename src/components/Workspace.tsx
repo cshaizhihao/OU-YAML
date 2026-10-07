@@ -18,7 +18,7 @@ import { GeneratedSubscriptionsView } from "./views/GeneratedSubscriptionsView";
 import { GeneratorView } from "./views/GeneratorView";
 import { TemplatesView } from "./views/TemplatesView";
 import { QuickStartView, type GuideTarget } from "./views/QuickStartView";
-import { GuideExperience, useGuideController } from "./GuidedTour";
+import { GuideExperience, GuideTrigger, useGuideController } from "./GuidedTour";
 import { guideTargets, type GuideView } from "../guides/registry";
 import { SubscriptionHomeView } from "./views/SubscriptionHomeView";
 import { SubscriptionEditorView } from "./views/SubscriptionEditorView";
@@ -303,6 +303,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
           <button className="primary-button" onClick={() => void download()} disabled={errors > 0}><Download size={17} /><span>导出</span></button>
         </div></>}
       </header>
+      <div className="mobile-guide-slot"><GuideTrigger controller={guide} className="mobile-guide-trigger" /></div>
 
       <div className="page-heading">
         <div><div className="eyebrow">{meta.eyebrow}</div><h1>{meta.title}</h1><p>{meta.description}</p></div>

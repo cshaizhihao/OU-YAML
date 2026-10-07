@@ -453,6 +453,14 @@ label { color: var(--ink-soft); }
     font-size: 11px;
   }
   .main-shell > .section-tabs button svg { flex: 0 0 auto; }
+  .mobile-guide-slot .floating-help-button {
+    width: auto;
+    padding-inline: 11px;
+  }
+  .mobile-guide-slot .floating-help-button span {
+    display: inline;
+    font-size: 11px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -988,6 +996,28 @@ label { color: var(--ink-soft); }
     right: 14px;
     left: auto;
   }
+  .workspace > .floating-help-button { display: none; }
+  .mobile-guide-slot {
+    display: flex;
+    justify-content: flex-end;
+    padding: 7px 14px 0;
+  }
+  .mobile-guide-slot .floating-help-button {
+    position: static;
+    right: auto;
+    left: auto;
+    z-index: auto;
+    min-height: 34px;
+    padding-inline: 11px;
+    font-size: 11px;
+    box-shadow: 0 10px 22px -16px rgba(180, 125, 245, .9);
+  }
+}
+
+.mobile-guide-slot { display: none; }
+
+@media (max-width: 840px) {
+  .mobile-guide-slot { display: flex; }
 }
 
 @media (max-width: 840px) {
