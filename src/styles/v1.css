@@ -1927,3 +1927,28 @@ textarea::placeholder {
     padding-inline: 8px;
   }
 }
+
+@media (min-width: 521px) and (max-width: 840px) {
+  .group-board-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .group-board-toolbar .summary-inline {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .group-board-toolbar > .toolbar-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .group-board-toolbar > .toolbar-actions > button {
+    width: 100%;
+    min-width: 0;
+  }
+}
