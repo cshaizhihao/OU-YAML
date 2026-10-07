@@ -461,6 +461,24 @@ label { color: var(--ink-soft); }
     display: inline;
     font-size: 11px;
   }
+  .generator-shell .wizard-steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+    padding: 0;
+  }
+  .generator-shell .wizard-step {
+    min-width: 0;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 7px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+  .generator-shell .wizard-step:nth-child(5) { grid-column: 1 / -1; }
+  .generator-shell .wizard-step span { width: 22px; height: 22px; flex: 0 0 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
