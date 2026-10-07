@@ -200,6 +200,68 @@ body {
   gap: var(--workbench-gap);
 }
 
+.group-focus-shell {
+  display: contents;
+}
+
+.group-focus-shell.open {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 18px;
+  background: rgba(47, 30, 39, .58);
+  backdrop-filter: blur(9px);
+}
+
+.group-focus-toolbar {
+  min-height: 48px;
+  padding: 7px 10px 7px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 14px;
+  color: #fffaf6;
+  background: linear-gradient(100deg, #4c3543, #6f4056);
+  box-shadow: 0 16px 35px rgba(38, 20, 30, .22);
+}
+
+.group-focus-toolbar > div {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.group-focus-toolbar span {
+  overflow: hidden;
+  color: #e7d2d8;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-focus-toolbar .secondary-button {
+  color: #fffaf6;
+  border-color: rgba(255, 255, 255, .25);
+  background: rgba(255, 255, 255, .1);
+}
+
+.group-focus-shell.open .group-board {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 14px;
+  grid-template-columns: minmax(250px, .8fr) minmax(360px, 1.4fr) minmax(250px, .8fr);
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 18px;
+  background: var(--canvas);
+  box-shadow: 0 28px 70px rgba(30, 15, 24, .32);
+}
+
 .node-pool,
 .group-inspector {
   position: static;
@@ -242,6 +304,39 @@ body {
   background: color-mix(in srgb, var(--plum-soft) 42%, transparent);
 }
 
+.group-column.nesting-over {
+  border-color: var(--plum);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--plum) 18%, transparent), 0 18px 35px color-mix(in srgb, var(--plum) 22%, transparent);
+  animation: group-nesting-pulse 720ms ease-in-out infinite alternate;
+}
+
+.group-member-list.nesting-target-active::before {
+  content: "释放后嵌套到此策略组";
+  min-height: 28px;
+  margin: -2px 0 5px;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--plum) 55%, var(--line));
+  border-radius: 8px;
+  color: #68436f;
+  background: #f2e5f5;
+  font-size: 11px;
+  font-weight: 750;
+  animation: group-target-in 180ms ease-out both;
+}
+
+@keyframes group-nesting-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.06); }
+}
+
+@keyframes group-target-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .group-nest-drop,
 .group-drop-empty {
   min-height: 42px;
@@ -268,6 +363,47 @@ body {
 
 .group-inspector section > p {
   margin: 3px 0 7px;
+}
+
+.nest-group-list {
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-width: thin;
+}
+
+.node-row-actions {
+  align-items: center;
+}
+
+.tcp-latency {
+  min-height: 25px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+.tcp-latency.good {
+  color: #24774b;
+  border-color: #b9dec3;
+  background: #e9f6ec;
+}
+
+.tcp-latency.warn {
+  color: #946b08;
+  border-color: #ecd58a;
+  background: #fff7d9;
+}
+
+.tcp-latency.bad {
+  color: #ae3c35;
+  border-color: #edb8b0;
+  background: #fff0ed;
 }
 
 .editor-identity {
@@ -362,6 +498,21 @@ body {
 
   .editor-publish {
     position: static;
+  }
+
+  .group-focus-shell.open {
+    padding: 10px;
+  }
+
+  .group-focus-shell.open .group-board {
+    height: 100%;
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .group-focus-shell.open .group-canvas {
+    height: auto;
+    overflow: visible;
   }
 }
 

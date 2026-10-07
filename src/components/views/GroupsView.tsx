@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Gauge, GitBranch, GripVertical, Group, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Gauge, GitBranch, GripVertical, Group, Maximize2, Minimize2, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { createId } from "../../shared/id";
 import { guideTargets } from "../../guides/registry";
 import { addGroupMembers, canAddGroupMember, hasGroupCycle, moveGroupMember, removeGroupMember, reorderGroupMember, reorderGroups } from "../../shared/grouping";
@@ -58,6 +58,7 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   const [selectedGroupId, setSelectedGroupId] = useState(config.proxyGroups[0]?.id || "");
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [activeName, setActiveName] = useState("");
+  const [focusMode, setFocusMode] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, scrollBehavior: "auto" }),
@@ -69,6 +70,13 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
     if (selectedGroupId && config.proxyGroups.some((group) => group.id === selectedGroupId)) return;
     setSelectedGroupId(config.proxyGroups[0]?.id || "");
   }, [config.proxyGroups, selectedGroupId]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFocusMode(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [focusMode]);
 
   function updateGroups(proxyGroups: ProxyGroup[]) { onChange({ ...config, proxyGroups }); }
   function save(group: ProxyGroup) {
@@ -158,11 +166,13 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   }
 
   return <>
-    <div className="view-toolbar group-board-toolbar"><div className="summary-inline"><span><strong>{config.proxies.length}</strong> 个节点</span><i /><span><strong>{config.proxyGroups.length}</strong> 个策略组</span><i /><span><strong>{config.proxyGroups.reduce((sum, item) => sum + item.proxies.length, 0)}</strong> 个引用</span></div><button className="primary-button" data-guide-id={guideTargets.groupCreate} onClick={() => setEditing(blankGroup())}><Plus size={17} />添加策略组</button></div>
+    <div className="view-toolbar group-board-toolbar"><div className="summary-inline"><span><strong>{config.proxies.length}</strong> 个节点</span><i /><span><strong>{config.proxyGroups.length}</strong> 个策略组</span><i /><span><strong>{config.proxyGroups.reduce((sum, item) => sum + item.proxies.length, 0)}</strong> 个引用</span></div><div className="toolbar-actions"><button className="secondary-button" onClick={() => setFocusMode(true)} aria-label="全屏编辑代理分组"><Maximize2 size={16} />全屏编辑</button><button className="primary-button" data-guide-id={guideTargets.groupCreate} onClick={() => setEditing(blankGroup())}><Plus size={17} />添加策略组</button></div></div>
     <div className="group-board-hint" role="note"><GripVertical size={15} />拖动节点到成员列表；拖动策略组可建立嵌套；链式代理请选择对应类型并按入口到出口放入具体节点</div>
     {!!config.proxyGroups.length && <label className="mobile-group-switcher">当前编辑组<select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>}
     <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveName("")}>
-      <div className={`group-board${activeName ? " is-dragging" : ""}`} data-guide-id={guideTargets.groupBoard}>
+      <div className={`group-focus-shell${focusMode ? " open" : ""}`}>
+        {focusMode && <header className="group-focus-toolbar"><div><strong>代理分组编辑</strong><span>拖动节点或策略组到成员区，实时预览嵌套关系</span></div><button className="secondary-button" onClick={() => setFocusMode(false)}><Minimize2 size={16} />退出全屏</button></header>}
+      <div className={`group-board${activeName ? " is-dragging" : ""}${focusMode ? " focus-mode" : ""}`} data-guide-id={guideTargets.groupBoard}>
         <aside className="node-pool" data-guide-id={guideTargets.groupNodePool} aria-label="当前配置节点">
           <header><div><Network size={18} /><strong>可编排节点</strong></div><span>{nodes.length}</span></header>
           <label className="board-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索节点" aria-label="搜索节点池" /></label>
@@ -179,12 +189,13 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
 
         <aside className="group-inspector" aria-label="策略组属性">
           {selectedGroup ? <>
-            <header><span className="group-icon"><Group size={18} /></span><div><small>当前策略组</small><strong title={selectedGroup.name}>{selectedGroup.name}</strong></div><button className="icon-button compact" onClick={() => setEditing(structuredClone(selectedGroup))} aria-label="编辑当前策略组"><Pencil size={15} /></button></header>
+            <header><span className="group-icon"><Group size={18} /></span><div><small>已选策略组</small><strong title={selectedGroup.name}>{selectedGroup.name}</strong></div><button className="icon-button compact" onClick={() => setEditing(structuredClone(selectedGroup))} aria-label="编辑当前策略组"><Pencil size={15} /></button></header>
             <div className="inspector-stats"><span>类型<strong>{groupTypes.find((item) => item.value === selectedGroup.type)?.label}</strong></span><span>成员<strong>{selectedGroup.proxies.length}</strong></span><span>嵌套组<strong>{selectedGroup.proxies.filter((name) => config.proxyGroups.some((group) => group.name === name)).length}</strong></span></div>
-            <section><div className="inspector-title"><GitBranch size={15} /><strong>加入策略组</strong></div><p>点击即可把另一个组作为当前组成员，不依赖拖拽。</p><div className="nest-group-list">{config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => { const included = selectedGroup.proxies.includes(group.name); const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name); return <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}><span><Group size={14} />{group.name}</span>{included ? <Check size={14} /> : <Plus size={14} />}</button>; })}{config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立嵌套策略。</small>}</div></section>
+            <section><div className="inspector-title"><GitBranch size={15} /><strong>已选组的快捷操作</strong></div><p>点击其他组即可把它嵌套到「{selectedGroup.name}」，不必拖拽。</p><div className="nest-group-list">{config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => { const included = selectedGroup.proxies.includes(group.name); const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name); return <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}><span><Group size={14} />{group.name}</span>{included ? <Check size={14} /> : <Plus size={14} />}</button>; })}{config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立嵌套策略。</small>}</div></section>
             <section><div className="inspector-title"><GripVertical size={15} /><strong>触摸排序</strong></div><p>手机或平板无法精准拖动时，使用按钮调整组顺序。</p><div className="inspector-actions"><button className="secondary-button compact-button" disabled={config.proxyGroups[0]?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, -1)}><ArrowUp size={14} />上移</button><button className="secondary-button compact-button" disabled={config.proxyGroups.at(-1)?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, 1)}><ArrowDown size={14} />下移</button></div></section>
           </> : <div className="inspector-empty"><Group size={21} /><span>选择一个策略组查看属性</span></div>}
         </aside>
+      </div>
       </div>
       {createPortal(<DragOverlay dropAnimation={{ duration: 160, easing: "ease-out" }}>{activeName ? <div className="drag-overlay"><GripVertical size={16} /><strong>{activeName}</strong></div> : null}</DragOverlay>, document.body)}
     </DndContext>
