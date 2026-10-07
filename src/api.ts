@@ -4,6 +4,8 @@ import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, Project
 
 export type UpdateInfo = { currentVersion: string; latestVersion: string | null; currentCommit: string | null; latestCommit: string | null; updateKind: "version" | "build" | null; hasUpdate: boolean; releaseUrl: string | null; releaseNotes: string; publishedAt: string | null; agentAvailable: boolean };
 export type UpdateStatus = { status: "idle" | "requested" | "running" | "completed" | "failed"; message: string; progress: number; updatedAt: string | null };
+export type TcpPingResult = { reachable: boolean; latencyMs: number | null; resolvedAddress: string | null; error?: string };
+export type NodeCountryResult = { node: ManagedNode; location: { ip: string; countryCode: string; country: string; flag: string } };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -45,6 +47,8 @@ export const api = {
   updateManagedNode: (id: string, data: Partial<ManagedNode> & Pick<ManagedNode, "name" | "type" | "server" | "port">) => request<ManagedNode>(`/api/managed-nodes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   reorderManagedNodes: (ids: string[]) => request<ManagedNode[]>("/api/managed-nodes/order", { method: "PUT", body: JSON.stringify({ ids }) }),
   batchUpdateManagedNodes: (data: { ids: string[]; enabled?: boolean; addTags?: string[]; removeTags?: string[]; prefix?: string; find?: string; replace?: string }) => request<ManagedNode[]>("/api/managed-nodes/batch", { method: "PUT", body: JSON.stringify(data) }),
+  tcpPingManagedNode: (id: string) => request<TcpPingResult>(`/api/managed-nodes/${id}/tcp-ping`, { method: "POST" }),
+  applyManagedNodeCountryFlag: (id: string) => request<NodeCountryResult>(`/api/managed-nodes/${id}/country-flag`, { method: "POST" }),
   deleteNodeSource: (id: string) => request<{ deleted: boolean }>(`/api/node-sources/${id}`, { method: "DELETE" }),
   deleteManagedNode: (id: string) => request<{ deleted: boolean }>(`/api/managed-nodes/${id}`, { method: "DELETE" }),
   listProxyGroups: () => request<any[]>("/api/proxy-groups"),

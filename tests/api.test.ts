@@ -180,3 +180,16 @@ test("节点 API 支持批量启停、标签和改名", async () => {
   const selected = nodes.filter((node) => ids.includes(node.id));
   assert.equal(selected.every((node) => !node.enabled && node.tags.includes("测试") && node.name.startsWith("优选-") && node.name.endsWith("线路")), true);
 });
+
+test("节点 TCP 检测阻止探测本机和局域网", async () => {
+  const created = await api("/api/managed-nodes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "本机端口", type: "socks5", server: "127.0.0.1", port: 22, extra: {} }),
+  });
+  assert.equal(created.status, 201);
+  const node = await created.json() as { id: string };
+  const response = await api(`/api/managed-nodes/${node.id}/tcp-ping`, { method: "POST" });
+  assert.equal(response.status, 422);
+  assert.match((await response.json() as { error: string }).error, /本机或局域网/);
+});

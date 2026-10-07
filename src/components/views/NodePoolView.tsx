@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Ban, CheckCircle2, Copy, Database, FilePlus2, GripVertical, Link2, Pencil, Plus, RefreshCw, Search, Server, Tags, Trash2, Unlink, WandSparkles } from "lucide-react";
-import { api } from "../../api";
+import { Activity, Ban, CheckCircle2, CircleX, Copy, Database, FilePlus2, Flag, GripVertical, Link2, LoaderCircle, MapPin, Pencil, Plus, RefreshCw, Search, Server, Tags, Trash2, Unlink, WandSparkles } from "lucide-react";
+import { api, type TcpPingResult } from "../../api";
 import type { ManagedNode, NodeSource } from "../../shared/domain";
 import type { MihomoConfig, ProxyNode } from "../../shared/types";
 import { createId } from "../../shared/id";
+import { guideTargets } from "../../guides/registry";
 import { Drawer, ConfirmDialog } from "../Dialog";
 
 type NodeDraft = {
@@ -33,10 +34,22 @@ type NodeDraft = {
 };
 
 type BatchDraft = { addTags: string; removeTags: string; prefix: string; find: string; replace: string };
+type NodeDiagnostic = Partial<TcpPingResult> & { country?: string; countryCode?: string; flag?: string };
 
 const blank: NodeDraft = { name: "新节点", type: "ss", server: "", port: 443, enabled: true, extra: {}, tags: [] };
 const emptyBatch = (): BatchDraft => ({ addTags: "", removeTags: "", prefix: "", find: "", replace: "" });
 const splitTags = (value: string) => [...new Set(value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean))];
+
+async function runLimited<T>(items: readonly T[], limit: number, worker: (item: T) => Promise<void>) {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const item = items[cursor++];
+      await worker(item);
+    }
+  });
+  await Promise.all(runners);
+}
 
 function nodeDraft(node: ManagedNode): NodeDraft {
   return { ...node, extra: node.extra || {}, tags: node.tags || [] };
@@ -93,6 +106,9 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
   const [linkBusy, setLinkBusy] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [probeBusy, setProbeBusy] = useState<Set<string>>(new Set());
+  const [flagBusy, setFlagBusy] = useState<Set<string>>(new Set());
+  const [diagnostics, setDiagnostics] = useState<Record<string, NodeDiagnostic>>({});
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
   const load = async (keepSelection = false) => {
@@ -185,6 +201,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
     try {
       const next = await api.batchUpdateManagedNodes(input);
       setNodes(next);
+      if (input.prefix || input.find) await onProjectReload();
       setBatchDraft(null);
       onMessage(message);
     } catch (error) {
@@ -212,6 +229,68 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
     } catch (error) {
       onMessage(error instanceof Error ? error.message : "节点状态更新失败");
     }
+  }
+
+  function setBusy(setter: typeof setProbeBusy, id: string, busy: boolean) {
+    setter((current) => {
+      const next = new Set(current);
+      busy ? next.add(id) : next.delete(id);
+      return next;
+    });
+  }
+
+  async function probeNode(node: ManagedNode, announce = true) {
+    setBusy(setProbeBusy, node.id, true);
+    try {
+      const result = await api.tcpPingManagedNode(node.id);
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], ...result } }));
+      if (announce) onMessage(result.reachable ? `${node.name} TCP 连接成功，延迟 ${result.latencyMs}ms` : `${node.name} 无法连接：${result.error || "TCP 连接失败"}`);
+      return result;
+    } catch (error) {
+      if (announce) onMessage(error instanceof Error ? error.message : "TCP 检测失败");
+      return null;
+    } finally {
+      setBusy(setProbeBusy, node.id, false);
+    }
+  }
+
+  async function probeSelectedNodes() {
+    const targets = selectedNodes.slice(0, 100);
+    if (!targets.length) return;
+    let reachable = 0;
+    await runLimited(targets, 4, async (node) => {
+      const result = await probeNode(node, false);
+      if (result?.reachable) reachable += 1;
+    });
+    onMessage(`TCP 检测完成：${reachable}/${targets.length} 个节点可连接${selectedNodes.length > 100 ? "，单次最多检测 100 个" : ""}`);
+  }
+
+  async function applyCountryFlag(node: ManagedNode, announce = true) {
+    setBusy(setFlagBusy, node.id, true);
+    try {
+      const result = await api.applyManagedNodeCountryFlag(node.id);
+      setNodes((current) => current.map((item) => item.id === node.id ? result.node : item));
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], resolvedAddress: result.location.ip, country: result.location.country, countryCode: result.location.countryCode, flag: result.location.flag } }));
+      if (announce) {
+        await onProjectReload();
+        onMessage(`已根据服务器 IP ${result.location.ip} 添加 ${result.location.country || result.location.countryCode} 国旗`);
+      }
+      return true;
+    } catch (error) {
+      if (announce) onMessage(error instanceof Error ? error.message : "添加节点国旗失败");
+      return false;
+    } finally {
+      setBusy(setFlagBusy, node.id, false);
+    }
+  }
+
+  async function applySelectedCountryFlags() {
+    const targets = selectedNodes.slice(0, 30);
+    if (!targets.length) return;
+    let completed = 0;
+    await runLimited(targets, 3, async (node) => { if (await applyCountryFlag(node, false)) completed += 1; });
+    if (completed) await onProjectReload();
+    onMessage(`国旗识别完成：成功 ${completed}/${targets.length} 个${selectedNodes.length > 30 ? "，单次最多处理 30 个" : ""}`);
   }
 
   async function previewLinks() {
@@ -296,19 +375,19 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
   const updateEditing = (key: keyof NodeDraft, value: string | number | boolean | string[]) => setEditing((current) => current ? { ...current, [key]: value } : current);
 
   return <>
-    <div className="view-toolbar node-pool-toolbar">
+    <div className="view-toolbar node-pool-toolbar" data-guide-id={guideTargets.nodeToolbar}>
       <div className="filter-cluster">
         <label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、地址、协议、标签或备注" /></label>
         <select value={sourceId} onChange={(event) => setSourceId(event.target.value)}><option value="">全部来源</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
       </div>
       <div className="row-actions">
         <button className="secondary-button" onClick={() => void load()} disabled={orderBusy}><RefreshCw size={16} />刷新</button>
-        <button className="secondary-button" onClick={() => { setLinkOpen(true); setLinkPreview(null); }}><Link2 size={16} />导入链接</button>
+        <button className="secondary-button" data-guide-id={guideTargets.nodeImport} onClick={() => { setLinkOpen(true); setLinkPreview(null); }}><Link2 size={16} />导入链接</button>
         <button className="primary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button>
       </div>
     </div>
 
-    <div className="summary-inline node-pool-summary">
+    <div className="summary-inline node-pool-summary" data-guide-id={guideTargets.nodeSelection}>
       <span><strong>{nodes.length}</strong> 个节点</span><i /><span><strong>{sources.length}</strong> 个来源</span><i /><span><strong>{nodes.filter((node) => node.enabled).length}</strong> 个已启用</span><i /><span><strong>{nodes.filter((node) => projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))).length}</strong> 个在当前项目</span>
       {orderBusy && <><i /><span className="status-ok"><RefreshCw className="spin" size={14} />保存排序中</span></>}
     </div>
@@ -319,19 +398,21 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
       <button className="secondary-button compact-button" onClick={removeSelectedFromProject} disabled={orderBusy}><Unlink size={15} />移出当前项目</button>
       <button className="secondary-button compact-button" onClick={() => void updateBatch({ ids: [...selected], enabled: true }, `已启用 ${selected.size} 个节点`)}><CheckCircle2 size={15} />启用</button>
       <button className="secondary-button compact-button" onClick={() => void updateBatch({ ids: [...selected], enabled: false }, `已停用 ${selected.size} 个节点`)}><Ban size={15} />停用</button>
+      <button className="secondary-button compact-button" disabled={probeBusy.size > 0} onClick={() => void probeSelectedNodes()}>{probeBusy.size ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}TCP 检测</button>
+      <button className="secondary-button compact-button" disabled={flagBusy.size > 0} onClick={() => void applySelectedCountryFlags()}>{flagBusy.size ? <LoaderCircle className="spin" size={15} /> : <Flag size={15} />}添加国旗</button>
       <button className="secondary-button compact-button" onClick={() => setBatchDraft(emptyBatch())}><WandSparkles size={15} />整理</button>
       <button className="secondary-button compact-button danger-outline" onClick={() => void deleteNodes(selectedNodes)} disabled={orderBusy}><Trash2 size={15} />删除</button>
     </div>}
 
     {filtered.length ? <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => setActiveId(String(event.active.id).replace(/^node:/, ""))} onDragCancel={() => setActiveId(null)} onDragEnd={handleDragEnd}>
       <SortableContext items={visibleIds.map((id) => `node:${id}`)} strategy={verticalListSortingStrategy}>
-        <div className="node-list" role="table" aria-label="节点库">
+        <div className="node-list" data-guide-id={guideTargets.nodeList} role="table" aria-label="节点库">
           <div className="node-list-header" role="row"><span><input type="checkbox" checked={allVisibleSelected} onChange={(event) => setSelected(event.target.checked ? new Set([...selected, ...visibleIds]) : new Set([...selected].filter((id) => !visibleIds.includes(id))))} aria-label="选择当前节点" /></span><span>节点</span><span>协议</span><span>服务器</span><span>来源</span><span>标签</span><span>状态</span><span>操作</span></div>
-          {filtered.map((node) => <SortableNodeRow key={node.id} node={node} sourceName={node.sourceId ? sourceNames.get(node.sourceId) : undefined} selected={selected.has(node.id)} inProject={projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))} onSelect={(checked) => toggleSelected(node.id, checked)} onToggle={() => void toggleEnabled(node)} onEdit={() => setEditing(nodeDraft(node))} onCopy={() => setEditing({ ...nodeDraft(node), id: undefined, name: `${node.name} 副本` })} onDelete={() => setDeleting(node)} />)}
+          {filtered.map((node) => <SortableNodeRow key={node.id} node={node} sourceName={node.sourceId ? sourceNames.get(node.sourceId) : undefined} selected={selected.has(node.id)} inProject={projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))} diagnostic={diagnostics[node.id]} probeBusy={probeBusy.has(node.id)} flagBusy={flagBusy.has(node.id)} onSelect={(checked) => toggleSelected(node.id, checked)} onToggle={() => void toggleEnabled(node)} onProbe={() => void probeNode(node)} onFlag={() => void applyCountryFlag(node)} onEdit={() => setEditing(nodeDraft(node))} onCopy={() => setEditing({ ...nodeDraft(node), id: undefined, name: `${node.name} 副本` })} onDelete={() => setDeleting(node)} />)}
         </div>
       </SortableContext>
       <DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(.16,1,.3,1)" }}>{activeId ? <div className="node-drag-overlay"><GripVertical size={16} /><strong>{nodes.find((node) => node.id === activeId)?.name || "节点"}</strong></div> : null}</DragOverlay>
-    </DndContext> : <div className="empty-state"><div><Database size={24} /></div><h2>{query ? "没有匹配的节点" : "节点库还是空的"}</h2><p>{query ? "换个关键词或来源筛选试试。" : "从订阅、节点链接或手动添加第一个节点。"}</p>{!query && <div className="empty-actions"><button className="secondary-button" onClick={() => setLinkOpen(true)}><Link2 size={16} />导入链接</button><button className="primary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button></div>}</div>}
+    </DndContext> : <div className="empty-state" data-guide-id={guideTargets.nodeList}><div><Database size={24} /></div><h2>{query ? "没有匹配的节点" : "节点库还是空的"}</h2><p>{query ? "换个关键词或来源筛选试试。" : "从订阅、节点链接或手动添加第一个节点。"}</p>{!query && <div className="empty-actions"><button className="secondary-button" onClick={() => setLinkOpen(true)}><Link2 size={16} />导入链接</button><button className="primary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button></div>}</div>}
 
     <Drawer open={!!editing} onClose={() => setEditing(null)} title={editing?.id ? "编辑节点" : "添加节点"} footer={<><button className="secondary-button" onClick={() => setEditing(null)}>取消</button><button className="primary-button" disabled={!editing || !editing.name.trim() || !editing.server.trim() || !Number.isInteger(editing.port) || editing.port < 1 || editing.port > 65535} onClick={() => void save()}>保存节点</button></>}>
       <div className="form-grid">
@@ -378,13 +459,18 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
   </>;
 }
 
-function SortableNodeRow({ node, sourceName, selected, inProject, onSelect, onToggle, onEdit, onCopy, onDelete }: {
+function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, probeBusy, flagBusy, onSelect, onToggle, onProbe, onFlag, onEdit, onCopy, onDelete }: {
   node: ManagedNode;
   sourceName?: string;
   selected: boolean;
   inProject: boolean;
+  diagnostic?: NodeDiagnostic;
+  probeBusy: boolean;
+  flagBusy: boolean;
   onSelect: (checked: boolean) => void;
   onToggle: () => void;
+  onProbe: () => void;
+  onFlag: () => void;
   onEdit: () => void;
   onCopy: () => void;
   onDelete: () => void;
@@ -392,12 +478,12 @@ function SortableNodeRow({ node, sourceName, selected, inProject, onSelect, onTo
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: `node:${node.id}`, data: { kind: "managed-node", nodeId: node.id } });
   return <div ref={setNodeRef} className={`node-row${isDragging ? " dragging" : ""}${node.enabled ? "" : " is-disabled"}`} style={{ transform: CSS.Transform.toString(transform), transition }} role="row">
     <span className="node-row-check"><button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动节点 ${node.name}`}><GripVertical size={16} /></button><input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} aria-label={`选择 ${node.name}`} /></span>
-    <span className="node-row-name"><span className="entity-icon"><Server size={16} /></span><span className="node-name-stack"><strong title={node.name}>{node.name}</strong>{inProject && <small><CheckCircle2 size={12} />当前项目</small>}{node.note && <small title={node.note}>{node.note}</small>}</span></span>
+    <span className="node-row-name"><span className="entity-icon"><Server size={16} /></span><span className="node-name-stack"><strong title={node.name}>{node.name}</strong>{inProject && <small><CheckCircle2 size={12} />当前项目</small>}{diagnostic && <small className={`node-diagnostic${diagnostic.reachable === true ? " reachable" : diagnostic.reachable === false ? " unreachable" : " location"}`} title={diagnostic.error || diagnostic.resolvedAddress || undefined}>{diagnostic.reachable === true && <><Activity size={12} />{diagnostic.latencyMs}ms</>}{diagnostic.reachable === false && <><CircleX size={12} />{diagnostic.error || "不可连接"}</>}{diagnostic.country && <><MapPin size={11} />{diagnostic.flag} {diagnostic.country}</>}</small>}{node.note && <small title={node.note}>{node.note}</small>}</span></span>
     <span className="node-row-type"><span className="type-badge">{node.type.toUpperCase()}</span></span>
     <span className="node-row-server mono" title={`${node.server}:${node.port}`}>{node.server}:{node.port}</span>
     <span className="node-row-source" title={sourceName || "手动添加"}>{sourceName || "手动添加"}</span>
     <span className="node-row-tags" title={node.tags.join("、")}>{node.tags.length ? node.tags.map((tag) => <b key={tag}>{tag}</b>) : "-"}</span>
     <span className="node-row-status"><button className={node.enabled ? "status-toggle active" : "status-toggle"} onClick={onToggle}>{node.enabled ? <CheckCircle2 size={14} /> : <Ban size={14} />}{node.enabled ? "已启用" : "已停用"}</button></span>
-    <span className="node-row-actions"><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button className="icon-button compact" onClick={onCopy} aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></span>
+    <span className="node-row-actions"><button className="icon-button compact diagnostic-action" disabled={probeBusy} onClick={onProbe} title="检测 TCP 端口真实连通性" aria-label={`TCP 检测 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}</button><button className="icon-button compact diagnostic-action" disabled={flagBusy} onClick={onFlag} title="根据服务器公网 IP 添加国家或地区国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={16} /> : <Flag size={16} />}</button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button className="icon-button compact copy-action" onClick={onCopy} aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></span>
   </div>;
 }

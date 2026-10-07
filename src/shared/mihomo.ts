@@ -2,6 +2,7 @@ import YAML from "yaml";
 import type { MihomoConfig, ProxyGroup, ProxyNode, RuleItem, ValidationIssue } from "./types";
 import { createId } from "./id";
 import { readMihomoConfig } from "./schema";
+import { ruleTypeLabel } from "./ruleCatalog";
 
 const TOP_LEVEL_KEYS = new Set(["mixed-port", "allow-lan", "mode", "log-level", "ipv6", "external-controller", "proxies", "proxy-groups", "rules"]);
 const PROXY_KEYS = new Set(["name", "type", "server", "port", "udp", "tls", "skip-cert-verify", "servername", "sni", "uuid", "password", "cipher", "network", "ws-opts", "grpc-opts"]);
@@ -208,9 +209,13 @@ export function validateConfig(config: MihomoConfig): ValidationIssue[] {
   for (const rule of config.rules) {
     if (!rule.enabled) continue;
     if (!rule.type.trim()) issues.push({ level: "error", scope: "rule", id: rule.id, message: "规则类型不能为空" });
-    if (rule.type !== "MATCH" && !rule.value.trim()) issues.push({ level: "error", scope: "rule", id: rule.id, message: `${rule.type} 规则缺少匹配内容` });
+    if (rule.type !== "MATCH" && !rule.value.trim()) issues.push({ level: "error", scope: "rule", id: rule.id, message: `${ruleTypeLabel(rule.type)}缺少匹配内容` });
     if (!groupNames.has(rule.target) && !builtins.has(rule.target)) issues.push({ level: "error", scope: "rule", id: rule.id, message: `规则引用了不存在的策略：${rule.target}` });
   }
-  if (!config.rules.some((rule) => rule.enabled && rule.type === "MATCH")) issues.push({ level: "warning", scope: "config", message: "建议在规则末尾添加 MATCH 兜底规则" });
+  const enabledRules = config.rules.filter((rule) => rule.enabled);
+  const matchRules = enabledRules.filter((rule) => rule.type === "MATCH");
+  if (!matchRules.length) issues.push({ level: "warning", scope: "config", message: "建议在规则末尾添加最终兜底规则（MATCH）" });
+  else if (matchRules.length > 1) issues.push({ level: "warning", scope: "config", message: "存在多条最终兜底规则（MATCH），建议只保留一条" });
+  else if (enabledRules.at(-1)?.type !== "MATCH") issues.push({ level: "warning", scope: "config", message: "最终兜底规则（MATCH）应该放在启用规则的最后" });
   return issues;
 }

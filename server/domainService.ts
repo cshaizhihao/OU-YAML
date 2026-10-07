@@ -122,6 +122,29 @@ function touchProjectsForNodes(userId: string, nodeIds: string[]) {
   }
 }
 
+function renameDefaultProjectAliases(userId: string, nodeId: string, previousName: string, nextName: string) {
+  if (previousName === nextName) return;
+  const projects = db.prepare(`SELECT projects.id, projects.config_json, projects.updated_at
+    FROM projects JOIN project_nodes ON project_nodes.project_id = projects.id
+    WHERE projects.user_id = ? AND project_nodes.node_id = ? AND project_nodes.alias = ?`)
+    .all(userId, nodeId, previousName) as { id: string; config_json: string; updated_at: string }[];
+  const updateProject = db.prepare("UPDATE projects SET config_json = ?, updated_at = ? WHERE id = ? AND user_id = ?");
+  const updateAlias = db.prepare("UPDATE project_nodes SET alias = ?, updated_at = ? WHERE project_id = ? AND node_id = ? AND alias = ?");
+  for (const project of projects) {
+    const config = readJson<MihomoConfig>(project.config_json, {} as MihomoConfig);
+    if (!Array.isArray(config.proxies) || !Array.isArray(config.proxyGroups) || !Array.isArray(config.rules)) continue;
+    const updatedAt = new Date(Math.max(Date.now(), new Date(project.updated_at).getTime() + 1 || 0)).toISOString();
+    const next: MihomoConfig = {
+      ...config,
+      proxies: config.proxies.map((node) => node.id === nodeId && node.name === previousName ? { ...node, name: nextName } : node),
+      proxyGroups: config.proxyGroups.map((group) => ({ ...group, proxies: group.proxies.map((member) => member === previousName ? nextName : member) })),
+      rules: config.rules.map((rule) => rule.target === previousName ? { ...rule, target: nextName } : rule),
+    };
+    updateAlias.run(nextName, updatedAt, project.id, nodeId, previousName);
+    updateProject.run(JSON.stringify(next), updatedAt, project.id, userId);
+  }
+}
+
 export function syncProjectNodes(userId: string, projectId: string, proxies: ProxyNode[]) {
   const project = db.prepare("SELECT id FROM projects WHERE id = ? AND user_id = ?").get(projectId, userId);
   if (!project) throw new Error("项目不存在");
@@ -346,15 +369,22 @@ export function createManagedNode(userId: string, input: ManagedNodeInput) {
   return listManagedNodes(userId).find(item => item.id === id)!;
 }
 
+export function getManagedNode(userId: string, id: string) {
+  const row = db.prepare("SELECT * FROM managed_nodes WHERE id = ? AND user_id = ?").get(id, userId) as Record<string, unknown> | undefined;
+  return row ? readManagedNode(row) : undefined;
+}
+
 export function updateManagedNode(userId: string, id: string, input: ManagedNodeInput) {
   const existing = db.prepare("SELECT * FROM managed_nodes WHERE id = ? AND user_id = ?").get(id, userId) as Record<string, unknown> | undefined;
   if (!existing) return undefined;
   const stamp = now();
+  const previousName = String(existing.name);
   const nextConfig = managedInputConfig(input, id);
   const configChanged = proxyConfigChanged(managedNodeConfig(existing), nextConfig);
   db.transaction(() => {
     db.prepare(`UPDATE managed_nodes SET name = ?, type = ?, server = ?, port = ?, config_json = ?, raw_config_json = ?, enabled = ?, tags_json = ?, note = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
       .run(input.name, input.type, input.server, input.port, JSON.stringify(nextConfig), JSON.stringify(input.extra || {}), input.enabled === undefined ? Number(existing.enabled) : input.enabled ? 1 : 0, JSON.stringify(input.tags || []), input.note || null, stamp, id, userId);
+    renameDefaultProjectAliases(userId, id, previousName, input.name);
     if (configChanged) touchProjectsForNodes(userId, [id]);
   })();
   return listManagedNodes(userId).find(item => item.id === id);
@@ -394,6 +424,7 @@ export function batchUpdateManagedNodes(userId: string, ids: string[], input: { 
       const tags = [...new Set([...readJson<string[]>(row.tags_json, []).filter((tag) => !removeTags.has(tag)), ...addTags])].slice(0, 30);
       const enabled = input.enabled === undefined ? Number(row.enabled) : input.enabled ? 1 : 0;
       update.run(name, JSON.stringify({ ...node, name }), enabled, JSON.stringify(tags), stamp, row.id, userId);
+      renameDefaultProjectAliases(userId, String(row.id), node.name, name);
     }
   })();
   return listManagedNodes(userId);

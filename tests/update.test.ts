@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { checkForUpdate, compareVersions } from "../server/update";
+
+const currentVersion = (JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 test("版本比较支持 v 前缀和补零版本", () => {
   assert.equal(compareVersions("v1.1.0", "1.0.9") > 0, true);
@@ -35,14 +38,14 @@ test("版本号相同时通过 main 提交发现新构建", async () => {
   process.env.APP_COMMIT = "a".repeat(40);
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes("/releases/latest")) return new Response(JSON.stringify({ tag_name: "v1.4.0", body: "release" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (url.includes("/releases/latest")) return new Response(JSON.stringify({ tag_name: `v${currentVersion}`, body: "release" }), { status: 200, headers: { "Content-Type": "application/json" } });
     if (url.includes("/commits/main")) return new Response(JSON.stringify({ sha: "b".repeat(40), commit: { message: "new build" } }), { status: 200, headers: { "Content-Type": "application/json" } });
-    return new Response(JSON.stringify({ version: "1.4.0" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ version: currentVersion }), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
   try {
     const result = await checkForUpdate();
-    assert.equal(result.currentVersion, "1.4.0");
-    assert.equal(result.latestVersion, "1.4.0");
+    assert.equal(result.currentVersion, currentVersion);
+    assert.equal(result.latestVersion, currentVersion);
     assert.equal(result.hasUpdate, true);
     assert.equal(result.updateKind, "build");
     assert.equal(result.currentCommit, "a".repeat(40));

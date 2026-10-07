@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Clock3, FileUp, Globe2, Link2, Pencil, Plus, RefreshCw, ShieldAlert, Trash2, UploadCloud } from "lucide-react";
 import { api } from "../../api";
+import { guideTargets } from "../../guides/registry";
 import type { NodeSource } from "../../shared/domain";
 import { ConfirmDialog, Drawer } from "../Dialog";
 
@@ -147,18 +148,18 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
   }
 
   return <>
-    <div className="view-toolbar source-manager-toolbar">
+    <div className="view-toolbar source-manager-toolbar" data-guide-id={guideTargets.sourceToolbar}>
       <div>
         <div className="summary-inline"><span><strong>{items.length}</strong> 个来源</span><i /><span><strong>{items.reduce((sum, item) => sum + item.nodeCount, 0)}</strong> 个节点</span></div>
         <p className="toolbar-description">订阅 URL、配置文件和节点分享链接统一在这里管理。</p>
       </div>
       <div className="row-actions">
         <button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} />刷新</button>
-        <button className="primary-button" onClick={() => { setDraft(emptySource()); setPreview(null); }}><Plus size={17} />添加来源</button>
+        <button className="primary-button" data-guide-id={guideTargets.sourceAdd} onClick={() => { setDraft(emptySource()); setPreview(null); }}><Plus size={17} />添加来源</button>
       </div>
     </div>
 
-    {items.length ? <div className="source-card-grid">{items.map((item) =>
+    {items.length ? <div className="source-card-grid" data-guide-id={guideTargets.sourceList}>{items.map((item) =>
       <article className={`source-card${item.lastError ? " has-error" : ""}`} key={item.id}>
         <header>
           <span className="source-card-icon">{item.kind === "remote-url" ? <Globe2 size={20} /> : item.kind === "file" ? <FileUp size={20} /> : <Link2 size={20} />}</span>
@@ -177,7 +178,7 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
           <button className="icon-button compact" onClick={() => { setDraft(sourceDraft(item)); setPreview(null); }} aria-label={`编辑 ${item.name}`}><Pencil size={16} /></button>
           <button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button>
         </footer>
-      </article>)}</div> : <div className="empty-state featured-empty">
+      </article>)}</div> : <div className="empty-state featured-empty" data-guide-id={guideTargets.sourceList}>
       <div><UploadCloud size={25} /></div><h2>建立第一个节点来源</h2><p>可粘贴订阅 URL、批量分享链接，或者上传 Mihomo 与 sing-box 配置。</p><button className="primary-button" onClick={() => setDraft(emptySource())}><Plus size={17} />添加来源</button>
     </div>}
 

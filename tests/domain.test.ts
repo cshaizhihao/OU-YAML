@@ -163,6 +163,28 @@ test("项目节点绑定保留别名并让未覆写字段跟随节点库更新",
   assert.ok(String((db.prepare("SELECT updated_at FROM projects WHERE id = ?").get(projectId) as { updated_at: string }).updated_at) > beforeUpdate);
 });
 
+test("节点库默认名称更新会同步项目代理组和规则引用", () => {
+  const isolatedProjectId = randomUUID();
+  const node = domain.createManagedNode(userId, { name: "东京节点", type: "vless", server: "tokyo.example.com", port: 443, uuid: "rename-node", extra: {} });
+  const isolatedConfig: MihomoConfig = {
+    ...config,
+    proxies: [{ ...node, name: "东京节点" }],
+    proxyGroups: [{ id: randomUUID(), name: "默认代理", type: "select", proxies: ["东京节点"], extra: {} }],
+    rules: [{ id: randomUUID(), type: "MATCH", value: "", target: "默认代理", options: [], enabled: true }],
+  };
+  const createdAt = new Date().toISOString();
+  db.prepare("INSERT INTO projects (id,user_id,name,config_json,created_at,updated_at) VALUES (?,?,?,?,?,?)")
+    .run(isolatedProjectId, userId, "节点改名同步", JSON.stringify(isolatedConfig), createdAt, createdAt);
+  domain.syncProjectNodes(userId, isolatedProjectId, isolatedConfig.proxies);
+
+  domain.updateManagedNode(userId, node.id, { ...node, name: "🇯🇵 东京节点" });
+  const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(isolatedProjectId) as Record<string, unknown>;
+  const hydrated = domain.hydrateProject(row);
+  assert.equal(hydrated.config.proxies[0].name, "🇯🇵 东京节点");
+  assert.deepEqual(hydrated.config.proxyGroups[0].proxies, ["🇯🇵 东京节点"]);
+  assert.equal(hydrated.config.rules[0].target, "默认代理");
+});
+
 test("删除项目最后一个节点会同步清理引用且不会被旧配置重新迁回", () => {
   const isolatedProjectId = randomUUID();
   const node = domain.createManagedNode(userId, { name: "待删除节点", type: "vless", server: "delete.example.com", port: 443, uuid: "delete-node", extra: {} });

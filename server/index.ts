@@ -16,9 +16,10 @@ import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from 
 import { safeFetchSubscription, safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
-import { batchUpdateManagedNodes, createManagedNode, createNodeSource, createProfile, deleteManagedNode, deleteProfile, deletePublishedSubscription, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, rotatePublishedSubscription, listRuleTemplates, createRuleTemplate, updateRuleTemplate, deleteRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, markNodeSourceError, recordAudit, recordJob, updateJob, updateManagedNode, updateNodeSource, replaceManagedNodesForSource, reorderManagedNodes, hydrateProject, syncProjectNodes, updateProfile, updatePublishedSubscription } from "./domainService";
+import { batchUpdateManagedNodes, createManagedNode, createNodeSource, createProfile, deleteManagedNode, deleteProfile, deletePublishedSubscription, getManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, rotatePublishedSubscription, listRuleTemplates, createRuleTemplate, updateRuleTemplate, deleteRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, markNodeSourceError, recordAudit, recordJob, updateJob, updateManagedNode, updateNodeSource, replaceManagedNodesForSource, reorderManagedNodes, hydrateProject, syncProjectNodes, updateProfile, updatePublishedSubscription } from "./domainService";
 import { checkForUpdate, readUpdateLog, readUpdateStatus, requestWebUpdate } from "./update";
 import { csrfOriginGuard } from "./csrf";
+import { addCountryFlag, lookupNodeCountry, tcpPingNode } from "./nodeProbe";
 
 declare global {
   namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
@@ -42,6 +43,7 @@ app.use(cookieParser());
 
 const publicSubscriptionLimiter = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
+const nodeProbeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 240, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "节点检测请求过于频繁，请稍后再试" } });
 const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(256) });
 const userSchema = z.object({
   username: z.string().trim().regex(/^[a-zA-Z0-9._-]{3,64}$/),
@@ -552,6 +554,31 @@ app.put("/api/managed-nodes/batch", requireAuth, (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "批量节点参数无效" });
   try { res.json(batchUpdateManagedNodes(req.user!.id, parsed.data.ids, parsed.data)); }
   catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "批量节点操作失败" }); }
+});
+app.post("/api/managed-nodes/:id/tcp-ping", requireAuth, nodeProbeLimiter, async (req, res) => {
+  const node = getManagedNode(req.user!.id, String(req.params.id));
+  if (!node) return res.status(404).json({ error: "节点不存在" });
+  try {
+    const result = await tcpPingNode(node.server, node.port);
+    recordAudit(req.user!.id, "tcp-ping", "managed-node", node.id, { reachable: result.reachable, latencyMs: result.latencyMs });
+    res.json(result);
+  } catch (error) {
+    res.status(422).json({ error: error instanceof Error ? error.message : "TCP 检测失败" });
+  }
+});
+app.post("/api/managed-nodes/:id/country-flag", requireAuth, nodeProbeLimiter, async (req, res) => {
+  const node = getManagedNode(req.user!.id, String(req.params.id));
+  if (!node) return res.status(404).json({ error: "节点不存在" });
+  try {
+    const location = await lookupNodeCountry(node.server);
+    const nextName = addCountryFlag(node.name, location.flag);
+    const updated = updateManagedNode(req.user!.id, node.id, { ...node, name: nextName });
+    if (!updated) return res.status(404).json({ error: "节点不存在" });
+    recordAudit(req.user!.id, "country-flag", "managed-node", node.id, { ip: location.ip, countryCode: location.countryCode });
+    res.json({ node: updated, location });
+  } catch (error) {
+    res.status(422).json({ error: error instanceof Error ? error.message : "IP 归属地查询失败" });
+  }
 });
 app.put("/api/managed-nodes/:id", requireAuth, (req, res) => {
   const parsed = managedNodeSchema.omit({ sourceId: true }).safeParse(req.body);

@@ -17,8 +17,10 @@ import { GeneratedSubscriptionsView } from "./views/GeneratedSubscriptionsView";
 import { GeneratorView } from "./views/GeneratorView";
 import { TemplatesView } from "./views/TemplatesView";
 import { QuickStartView, type GuideTarget } from "./views/QuickStartView";
+import { GuideExperience, useGuideController } from "./GuidedTour";
+import { guideTargets, type GuideView } from "../guides/registry";
 
-type View = "home" | "sources" | "nodes" | "groups" | "rules" | "preview" | "history" | "generator" | "links" | "templates" | "settings" | "admin";
+type View = GuideView;
 type NavItem = { id: View; label: string; hint: string; icon: typeof Database; match: View[] };
 
 const routes: Record<View, string> = {
@@ -39,29 +41,33 @@ const routes: Record<View, string> = {
 const routeEntries = Object.entries(routes) as [View, string][];
 const viewFromPath = () => routeEntries.find(([, path]) => window.location.pathname === path)?.[0] || "home";
 
-const baseNav: NavItem[] = [
-  { id: "home", label: "首页", hint: "项目概览与进度", icon: LayoutDashboard, match: ["home"] },
-  { id: "sources", label: "订阅来源", hint: "URL、文件与分享链接", icon: FolderPlus, match: ["sources"] },
-  { id: "nodes", label: "节点库", hint: "筛选、整理与批量操作", icon: Database, match: ["nodes"] },
-  { id: "groups", label: "配置工作台", hint: "分组、规则与预览", icon: Boxes, match: ["groups", "rules", "preview", "history"] },
-  { id: "generator", label: "发布中心", hint: "生成方案与订阅链接", icon: Rocket, match: ["generator", "links"] },
+const primaryNav: NavItem[] = [
+  { id: "home", label: "开始配置", hint: "查看进度与下一步", icon: LayoutDashboard, match: ["home"] },
+  { id: "sources", label: "① 导入节点", hint: "订阅、文件与分享链接", icon: FolderPlus, match: ["sources"] },
+  { id: "nodes", label: "② 选择节点", hint: "整理、检测并加入项目", icon: Database, match: ["nodes"] },
+  { id: "groups", label: "③ 设置代理", hint: "选择、测速与链式代理", icon: Boxes, match: ["groups", "preview", "history"] },
+  { id: "rules", label: "④ 设置分流", hint: "中文规则与常用模板", icon: ScrollText, match: ["rules"] },
+  { id: "generator", label: "⑤ 生成订阅", hint: "检查并发布稳定链接", icon: Rocket, match: ["generator", "links"] },
+];
+
+const secondaryNav: NavItem[] = [
   { id: "templates", label: "模板资源", hint: "复用规则与配置片段", icon: Library, match: ["templates"] },
-  { id: "settings", label: "系统管理", hint: "项目、备份与更新", icon: Settings, match: ["settings", "admin"] },
+  { id: "settings", label: "系统设置", hint: "项目、备份、账号与更新", icon: Settings, match: ["settings", "admin"] },
 ];
 
 const viewMeta: Record<View, { eyebrow: string; title: string; description: string }> = {
-  home: { eyebrow: "OVERVIEW", title: "项目首页", description: "查看配置完成度，并继续当前工作流。" },
-  sources: { eyebrow: "LIBRARY / SOURCES", title: "订阅来源", description: "统一管理远程订阅、配置文件与分享链接。" },
-  nodes: { eyebrow: "LIBRARY / NODES", title: "节点库", description: "整理所有来源节点，再选择加入当前项目。" },
-  groups: { eyebrow: "WORKSPACE / GROUPS", title: "代理分组", description: "通过拖拽编排节点、策略组和链式代理。" },
-  rules: { eyebrow: "WORKSPACE / RULES", title: "分流规则", description: "编辑匹配顺序、目标策略与规则模板。" },
-  preview: { eyebrow: "WORKSPACE / PREVIEW", title: "预览校验", description: "检查最终配置源码并运行内核验证。" },
-  history: { eyebrow: "WORKSPACE / HISTORY", title: "历史版本", description: "创建快照，或回滚到可靠配置。" },
-  generator: { eyebrow: "PUBLISH / BUILDER", title: "生成订阅", description: "选择节点和模板，保存可复用生成方案。" },
-  links: { eyebrow: "PUBLISH / LINKS", title: "发布链接", description: "管理公开地址、版本、过期时间与撤销状态。" },
-  templates: { eyebrow: "RESOURCES / TEMPLATES", title: "模板资源", description: "创建和复用规则模板。" },
-  settings: { eyebrow: "SYSTEM / SETTINGS", title: "系统设置", description: "管理项目参数、账号、备份与网页更新。" },
-  admin: { eyebrow: "SYSTEM / USERS", title: "用户管理", description: "管理用户、权限和账号状态。" },
+  home: { eyebrow: "配置向导", title: "开始配置", description: "跟随五个步骤完成你的订阅。" },
+  sources: { eyebrow: "第 1 步", title: "导入节点", description: "添加远程订阅、配置文件或节点分享链接。" },
+  nodes: { eyebrow: "第 2 步", title: "选择节点", description: "整理节点、检测连通性，再加入当前项目。" },
+  groups: { eyebrow: "第 3 步", title: "设置代理", description: "通过拖拽设置节点选择、自动测速和链式代理。" },
+  rules: { eyebrow: "第 4 步", title: "设置分流", description: "使用中文规则决定不同流量的连接方式。" },
+  preview: { eyebrow: "高级工具", title: "预览校验", description: "检查最终配置源码并运行内核验证。" },
+  history: { eyebrow: "安全保护", title: "历史版本", description: "创建快照，或回滚到可靠配置。" },
+  generator: { eyebrow: "第 5 步", title: "生成订阅", description: "跟随向导检查配置并发布稳定订阅链接。" },
+  links: { eyebrow: "订阅管理", title: "发布链接", description: "管理公开地址、版本、过期时间与撤销状态。" },
+  templates: { eyebrow: "高级工具", title: "模板资源", description: "创建和复用规则模板。" },
+  settings: { eyebrow: "系统管理", title: "系统设置", description: "管理项目参数、账号、备份与网页更新。" },
+  admin: { eyebrow: "系统管理", title: "用户管理", description: "管理用户、权限和账号状态。" },
 };
 
 const workspaceTabs = [{ id: "groups" as View, label: "代理分组", icon: Group }, { id: "rules" as View, label: "分流规则", icon: ScrollText }, { id: "preview" as View, label: "预览校验", icon: FileCode2 }, { id: "history" as View, label: "历史版本", icon: History }];
@@ -118,10 +124,10 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     setMobileNav(false);
     window.history[replace ? "replaceState" : "pushState"]({}, "", routes[next]);
   }, []);
+  const guide = useGuideController(user.username);
 
   const issues = useMemo(() => project ? validateConfig(project.config) : [], [project]);
   const errors = issues.filter((issue) => issue.level === "error").length;
-  const nav = baseNav;
   const meta = viewMeta[view];
 
   const updateProject = useCallback((updater: (current: Project) => Project) => {
@@ -236,8 +242,8 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   return <div className="workspace">
     <aside className={mobileNav ? "sidebar mobile-open" : "sidebar"}>
       <div className="sidebar-brand"><div className="brand-mark"><img src="/brand/ou-yaml-logo.png" alt="OU-YAML" /></div><div><strong>OU-YAML</strong><small>Configuration Studio</small></div><button className="icon-button mobile-only" onClick={() => setMobileNav(false)} aria-label="关闭导航"><XCircle size={20} /></button></div>
-      <nav aria-label="主要导航">{nav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}</button>)}</nav>
-      <div className="sidebar-help"><CircleHelp size={17} /><span><strong>需要从哪里开始？</strong><small>首页会根据当前配置提示下一步。</small></span></div>
+      <nav aria-label="主要导航" data-guide-id={guideTargets.mainNavigation}>{primaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}</button>)}<span className="sidebar-section-label">更多工具</span>{secondaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</nav>
+      <button className="sidebar-help" onClick={guide.openCenter}><CircleHelp size={17} /><span><strong>不知道怎么操作？</strong><small>打开跳转式新手教程。</small></span></button>
       <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={async () => { await api.logout(); onLogout(); }}><LogOut size={18} /></button></div>
     </aside>
     {mobileNav && <button className="mobile-nav-backdrop" onClick={() => setMobileNav(false)} aria-label="关闭导航菜单" />}
@@ -245,7 +251,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     <main className="main-shell">
       <header className="topbar">
         <button className="icon-button mobile-only" onClick={() => setMobileNav(true)} aria-label="打开导航"><Menu size={20} /></button>
-        <div className="project-select-wrap"><select aria-label="当前配置" value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
+        <div className="project-select-wrap" data-guide-id={guideTargets.projectSelector}><select aria-label="当前配置" value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
         <button className="icon-button new-project-action" onClick={() => void createProject()} title="新建配置" aria-label="新建配置"><FolderPlus size={18} /></button>
         <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />保存中</> : status === "error" ? <><XCircle size={15} />保存失败</> : <><CheckCircle2 size={15} />已保存</>}</div>
         <div className="top-actions">
@@ -265,7 +271,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={() => void kernelValidate()}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
 
       <section className="content-area" key={view}>
-        {view === "home" && <QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} />}
+        {view === "home" && <QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} onStartGuide={() => guide.start("quickstart")} />}
         {view === "sources" && <SourceManagerView onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
         {view === "nodes" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
@@ -281,5 +287,6 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       <ImportCenter open={showImport} onClose={() => setShowImport(false)} onImport={importContent} />
       {message && <div className="toast" role="status"><CircleHelp size={18} /><span>{message}</span><button className="icon-button compact" onClick={() => setMessage("")} aria-label="关闭"><XCircle size={17} /></button></div>}
     </main>
+    <GuideExperience controller={guide} username={user.username} currentView={view} navigate={navigate} />
   </div>;
 }
