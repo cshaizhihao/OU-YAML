@@ -47,3 +47,14 @@ test("策略组拖放会阻止自引用和循环引用", () => {
   assert.equal(hasGroupCycle(nested), false);
   assert.equal(hasGroupCycle([{ ...nested[1], proxies: ["A"] }, nested[0]]), true);
 });
+
+test("策略组可以嵌套到另一个策略组并保持插入位置", () => {
+  const nested: ProxyGroup[] = [
+    { id: "a", name: "节点选择", type: "select", proxies: [], extra: {} },
+    { id: "b", name: "自动选择", type: "url-test", proxies: ["DIRECT"], extra: {} },
+  ];
+  assert.equal(canAddGroupMember(nested, "b", "节点选择"), true);
+  const output = addGroupMembers(nested, "b", ["节点选择"], "DIRECT");
+  assert.deepEqual(output[1].proxies, ["节点选择", "DIRECT"]);
+  assert.equal(canAddGroupMember(output, "a", "自动选择"), false);
+});

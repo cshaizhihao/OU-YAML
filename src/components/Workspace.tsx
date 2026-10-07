@@ -159,6 +159,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       <nav aria-label="主要导航">{nav.map(({ id, label, hint, section, icon: Icon }, index) => <div key={id}>{(index === 0 || nav[index - 1].section !== section) && <div className="nav-section-label">{section}</div>}<button className={view === id ? "nav-item active" : "nav-item"} onClick={() => { setView(id); setMobileNav(false); }}><Icon size={18} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}{id === "groups" && <b>{project.config.proxyGroups.length}</b>}{id === "rules" && <b>{project.config.rules.length}</b>}</button></div>)}</nav>
       <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={async () => { await api.logout(); onLogout(); }}><LogOut size={18} /></button></div>
     </aside>
+    {mobileNav && <button className="mobile-nav-backdrop" onClick={() => setMobileNav(false)} aria-label="关闭导航菜单" />}
 
     <main className="main-shell">
       <header className="topbar">
