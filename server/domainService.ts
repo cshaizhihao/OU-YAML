@@ -3,6 +3,8 @@ import { db, hashToken } from './db';
 import type { MihomoConfig, ProxyNode, TargetFormat } from '../src/shared/types';
 import { readMihomoConfig } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/mihomo';
+import { previewExport } from "../src/shared/exportConfig";
+import { sealToken } from './tokenVault';
 
 function now() { return new Date().toISOString(); }
 function readJson<T>(value: unknown, fallback: T): T { try { return JSON.parse(String(value)) as T; } catch { return fallback; } }
@@ -142,6 +144,19 @@ function renameDefaultProjectAliases(userId: string, nodeId: string, previousNam
     };
     updateAlias.run(nextName, updatedAt, project.id, nodeId, previousName);
     updateProject.run(JSON.stringify(next), updatedAt, project.id, userId);
+  }
+  for (const profile of listProfiles(userId)) {
+    const config = profile.config;
+    if (!config.proxies.some((node) => node.id === nodeId && node.name === previousName)) continue;
+    if (config.proxies.some((node) => node.id !== nodeId && node.name === nextName) || config.proxyGroups.some((group) => group.name === nextName)) continue;
+    const next = {
+      ...config,
+      proxies: config.proxies.map((node) => node.id === nodeId ? { ...node, name: nextName } : node),
+      proxyGroups: config.proxyGroups.map((group) => ({ ...group, proxies: group.proxies.map((member) => member === previousName ? nextName : member) })),
+      rules: config.rules.map((rule) => rule.target === previousName ? { ...rule, target: nextName } : rule),
+    };
+    const updatedAt = new Date(Math.max(Date.now(), new Date(profile.updatedAt).getTime() + 1)).toISOString();
+    db.prepare("UPDATE generation_profiles SET config_json = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(JSON.stringify(next), updatedAt, profile.id, userId);
   }
 }
 
@@ -309,7 +324,7 @@ export function replaceManagedNodesForSource(userId: string, sourceId: string, i
     return index;
   };
   for (const item of existing) {
-    const index = take(byIdentity.get(managedNodeIdentity(item.node))) ?? take(byName.get(item.node.name));
+    const index = take(byIdentity.get(managedNodeIdentity(item.node))) ?? take(byName.get(String(item.row.original_name || item.node.name)));
     if (index !== undefined) matched.set(String(item.row.id), index);
   }
 
@@ -342,12 +357,15 @@ export function replaceManagedNodesForSource(userId: string, sourceId: string, i
       }
       const previous = item.existing;
       retainedSourceIds.add(item.id);
+      const upstreamName = item.node.name;
+      if (previous && readFlag(previous.name_override)) item.node = { ...item.node, name: String(previous.name) };
       const serialized = JSON.stringify({ ...item.node, id: item.id });
       if (previous) {
         if (proxyConfigChanged(managedNodeConfig(previous), { ...item.node, id: item.id })) changedSourceIds.add(item.id);
         update.run(item.node.name, item.node.type, item.node.server, item.node.port, serialized, JSON.stringify(item.node.extra || {}), position, stamp, item.id, userId, sourceId);
       }
       else insert.run(item.id, userId, sourceId, item.node.name, item.node.type, item.node.server, item.node.port, serialized, JSON.stringify(item.node.extra || {}), 1, position, "[]", null, stamp, stamp);
+      db.prepare("UPDATE managed_nodes SET original_name = ? WHERE id = ?").run(upstreamName, item.id);
     });
     touchProjectsForNodes(userId, [...changedSourceIds]);
     const obsolete = existing.map((item) => String(item.row.id)).filter((id) => !retainedSourceIds.has(id));
@@ -365,6 +383,7 @@ export function createManagedNode(userId: string, input: ManagedNodeInput) {
   if (input.sourceId && !db.prepare("SELECT id FROM node_sources WHERE id = ? AND user_id = ?").get(input.sourceId, userId)) throw new Error("节点来源不存在");
   const max = db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS value FROM managed_nodes WHERE user_id = ?").get(userId) as { value: number };
   db.prepare(`INSERT INTO managed_nodes (id,user_id,source_id,name,type,server,port,config_json,raw_config_json,enabled,sort_order,tags_json,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id, userId, input.sourceId || null, input.name, input.type, input.server, input.port, JSON.stringify(managedInputConfig(input, id)), JSON.stringify(input.extra || {}), input.enabled === false ? 0 : 1, Number(max.value) + 1, JSON.stringify(input.tags || []), input.note || null, stamp, stamp);
+  db.prepare("UPDATE managed_nodes SET original_name = ? WHERE id = ?").run(input.name, id);
   if (input.sourceId) db.prepare("UPDATE node_sources SET node_count = (SELECT COUNT(*) FROM managed_nodes WHERE source_id = ?), updated_at = ? WHERE id = ? AND user_id = ?").run(input.sourceId, stamp, input.sourceId, userId);
   return listManagedNodes(userId).find(item => item.id === id)!;
 }
@@ -384,6 +403,7 @@ export function updateManagedNode(userId: string, id: string, input: ManagedNode
   db.transaction(() => {
     db.prepare(`UPDATE managed_nodes SET name = ?, type = ?, server = ?, port = ?, config_json = ?, raw_config_json = ?, enabled = ?, tags_json = ?, note = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
       .run(input.name, input.type, input.server, input.port, JSON.stringify(nextConfig), JSON.stringify(input.extra || {}), input.enabled === undefined ? Number(existing.enabled) : input.enabled ? 1 : 0, JSON.stringify(input.tags || []), input.note || null, stamp, id, userId);
+    if (previousName !== input.name) db.prepare("UPDATE managed_nodes SET name_override = 1, original_name = COALESCE(original_name, ?) WHERE id = ? AND user_id = ?").run(previousName, id, userId);
     renameDefaultProjectAliases(userId, id, previousName, input.name);
     if (configChanged) touchProjectsForNodes(userId, [id]);
   })();
@@ -424,6 +444,7 @@ export function batchUpdateManagedNodes(userId: string, ids: string[], input: { 
       const tags = [...new Set([...readJson<string[]>(row.tags_json, []).filter((tag) => !removeTags.has(tag)), ...addTags])].slice(0, 30);
       const enabled = input.enabled === undefined ? Number(row.enabled) : input.enabled ? 1 : 0;
       update.run(name, JSON.stringify({ ...node, name }), enabled, JSON.stringify(tags), stamp, row.id, userId);
+      if (node.name !== name) db.prepare("UPDATE managed_nodes SET name_override = 1, original_name = COALESCE(original_name, ?) WHERE id = ? AND user_id = ?").run(node.name, row.id, userId);
       renameDefaultProjectAliases(userId, String(row.id), node.name, name);
     }
   })();
@@ -445,7 +466,7 @@ export function deleteManagedNode(userId: string, id: string) {
 function validateProfileInput(userId: string, input: { targetFormat: TargetFormat; config: MihomoConfig; nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) {
   const parsedConfig = readMihomoConfig(input.config);
   if (!parsedConfig.success) throw new Error("生成配置格式无效");
-  if (validateConfig(input.config).some((issue) => issue.level === "error")) throw new Error("生成配置存在错误，请先修复配置");
+  if (previewExport(input.config, input.targetFormat).issues.some((issue) => issue.level === "error")) throw new Error("生成配置存在错误，请先修复配置");
   const nodeIds = [...new Set(input.nodeIds || [])];
   const sourceIds = [...new Set(input.sourceIds || [])];
   if (nodeIds.length > 5000 || sourceIds.length > 500) throw new Error("生成配置引用数量超过限制");
@@ -470,7 +491,7 @@ export function createProfile(userId: string, input: { name: string; targetForma
 export function getProfile(userId: string, id: string) {
   const row = db.prepare('SELECT * FROM generation_profiles WHERE id = ? AND user_id = ?').get(id, userId) as Record<string, unknown> | undefined;
   if (!row) return undefined;
-  return { id: String(row.id), userId: String(row.user_id), name: String(row.name), targetFormat: String(row.target_format) as TargetFormat, config: readJson<MihomoConfig>(row.config_json, {} as MihomoConfig), nodeIds: readJson<string[]>(row.node_ids_json, []), sourceIds: readJson<string[]>(row.source_ids_json, []), templateId: row.template_id ? String(row.template_id) : undefined, status: String(row.status), createdAt: String(row.created_at), updatedAt: String(row.updated_at) };
+  return { projectId: row.project_id ? String(row.project_id) : undefined, autoUpdate: readFlag(row.auto_update), includeNewNodes: readFlag(row.include_new_nodes), lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : undefined, lastSyncError: row.last_sync_error ? String(row.last_sync_error) : undefined, id: String(row.id), userId: String(row.user_id), name: String(row.name), targetFormat: String(row.target_format) as TargetFormat, config: readJson<MihomoConfig>(row.config_json, {} as MihomoConfig), nodeIds: readJson<string[]>(row.node_ids_json, []), sourceIds: readJson<string[]>(row.source_ids_json, []), templateId: row.template_id ? String(row.template_id) : undefined, status: String(row.status), createdAt: String(row.created_at), updatedAt: String(row.updated_at) };
 }
 
 export function listProfiles(userId: string) { return (db.prepare('SELECT id FROM generation_profiles WHERE user_id = ? ORDER BY updated_at DESC').all(userId) as { id: string }[]).map(item => getProfile(userId, item.id)!); }
@@ -480,7 +501,7 @@ export function updateProfile(userId: string, id: string, input: { name: string;
   if (!existing) return undefined;
   const { nodeIds, sourceIds } = validateProfileInput(userId, input);
   db.prepare("UPDATE generation_profiles SET name=?,target_format=?,config_json=?,node_ids_json=?,source_ids_json=?,template_id=?,updated_at=? WHERE id=? AND user_id=?")
-    .run(input.name, input.targetFormat, JSON.stringify(input.config), JSON.stringify(nodeIds), JSON.stringify(sourceIds), input.templateId || null, now(), id, userId);
+    .run(input.name, input.targetFormat, JSON.stringify(input.config), JSON.stringify(nodeIds), JSON.stringify(sourceIds), input.templateId || null, new Date(Math.max(Date.now(), new Date(existing.updatedAt).getTime() + 1)).toISOString(), id, userId);
   return getProfile(userId, id);
 }
 
@@ -495,8 +516,10 @@ export function publishSubscription(userId: string, profileId: string, name: str
   if (!Number.isInteger(nodeCount) || nodeCount < 0 || nodeCount > profile.config.proxies.length) throw new Error('节点数量无效');
   if (expiresAt && !Number.isFinite(new Date(expiresAt).getTime())) throw new Error('过期时间无效');
   const id = randomUUID(); const token = randomBytes(32).toString('base64url'); const stamp = now();
+  const tokenCipher = sealToken(token, id);
   const previous = db.prepare('SELECT MAX(version) AS version FROM generated_subscriptions WHERE profile_id = ?').get(profileId) as { version?: number };
   db.prepare(`INSERT INTO generated_subscriptions (id,profile_id,user_id,name,target_format,token_hash,content,version,node_count,expires_at,revoked,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)`).run(id, profileId, userId, name, targetFormat, hashToken(token), content, Number(previous?.version || 0) + 1, nodeCount, expiresAt || null, stamp, stamp);
+  db.prepare("UPDATE generated_subscriptions SET token_cipher = ? WHERE id = ?").run(tokenCipher, id);
   return { id, profileId, name, targetFormat, token, version: Number(previous?.version || 0) + 1, nodeCount, expiresAt, revoked: false, createdAt: stamp, updatedAt: stamp };
 }
 
@@ -534,7 +557,7 @@ export function revokePublishedSubscription(userId: string, id: string) { return
 
 export function rotatePublishedSubscription(userId: string, id: string) {
   const token = randomBytes(32).toString('base64url');
-  const result = db.prepare("UPDATE generated_subscriptions SET token_hash = ?, updated_at = ? WHERE id = ? AND user_id = ? AND revoked = 0").run(hashToken(token), now(), id, userId);
+  const result = db.prepare("UPDATE generated_subscriptions SET token_hash = ?, token_cipher = ?, updated_at = ? WHERE id = ? AND user_id = ? AND revoked = 0").run(hashToken(token), sealToken(token, id), now(), id, userId);
   if (!result.changes) return undefined;
   return { token };
 }

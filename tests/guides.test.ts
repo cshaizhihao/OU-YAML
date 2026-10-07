@@ -5,6 +5,10 @@ import { test } from "node:test";
 import { GUIDE_VERSION, guideRegistry, guideTargets } from "../src/guides/registry";
 
 const targetOwners = {
+  quickSetup: "src/components/views/QuickSetupView.tsx",
+  quickImport: "src/components/views/QuickSetupView.tsx",
+  quickConfigure: "src/components/views/QuickSetupView.tsx",
+  quickResult: "src/components/views/QuickSetupView.tsx",
   homeHero: "src/components/views/QuickStartView.tsx",
   homeContinue: "src/components/views/QuickStartView.tsx",
   mainNavigation: "src/components/Workspace.tsx",
@@ -12,6 +16,9 @@ const targetOwners = {
   sourceToolbar: "src/components/views/SourceManagerView.tsx",
   sourceAdd: "src/components/views/SourceManagerView.tsx",
   sourceList: "src/components/views/SourceManagerView.tsx",
+  nodeDiagnostics: "src/components/views/NodePoolView.tsx",
+  publicationSync: "src/components/views/GeneratedSubscriptionsView.tsx",
+  ruleScenario: "src/components/views/RulesView.tsx",
   nodeToolbar: "src/components/views/NodePoolView.tsx",
   nodeImport: "src/components/views/NodePoolView.tsx",
   nodeList: "src/components/views/NodePoolView.tsx",
@@ -29,9 +36,12 @@ const targetOwners = {
   helpButton: "src/components/GuidedTour.tsx",
 } satisfies Record<keyof typeof guideTargets, string>;
 
-test("教程版本与应用版本同步", () => {
+test("教程版本是独立的流程版本，不能超过应用版本", () => {
   const pkg = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as { version: string };
-  assert.equal(GUIDE_VERSION, pkg.version);
+  assert.match(GUIDE_VERSION, /^\d+\.\d+$/);
+  const appFlow = pkg.version.split(".").slice(0, 2).map(Number);
+  const guideFlow = GUIDE_VERSION.split(".").map(Number);
+  assert.ok(guideFlow[0] < appFlow[0] || (guideFlow[0] === appFlow[0] && guideFlow[1] <= appFlow[1]));
 });
 
 test("教程和步骤标识唯一且覆盖核心流程", () => {

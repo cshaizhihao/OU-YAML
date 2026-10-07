@@ -15,7 +15,7 @@ async function executable(candidates: (string | undefined)[]) {
   return undefined;
 }
 
-async function kernelBinary(format: TargetFormat) {
+export async function kernelBinary(format: TargetFormat) {
   return format === "sing-box"
     ? executable([process.env.SING_BOX_BINARY, "/usr/local/bin/sing-box", "/usr/bin/sing-box"])
     : executable([process.env.MIHOMO_BINARY, "/usr/local/bin/mihomo", "/usr/bin/mihomo"]);

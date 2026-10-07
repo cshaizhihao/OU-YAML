@@ -3,6 +3,7 @@ import { AlertTriangle, Boxes, CheckCircle2, ChevronDown, CircleHelp, Database, 
 import { api } from "../api";
 import { exportMihomoYaml, validateConfig } from "../shared/mihomo";
 import { exportSingBoxJson } from "../shared/singbox";
+import { previewExport } from "../shared/exportConfig";
 import type { KernelValidationResult, MihomoConfig, Project, ProjectSummary, SessionUser, TargetFormat, ValidationIssue } from "../shared/types";
 import { ImportCenter } from "./ImportCenter";
 import { GroupsView } from "./views/GroupsView";
@@ -19,6 +20,7 @@ import { TemplatesView } from "./views/TemplatesView";
 import { QuickStartView, type GuideTarget } from "./views/QuickStartView";
 import { GuideExperience, useGuideController } from "./GuidedTour";
 import { guideTargets, type GuideView } from "../guides/registry";
+import { QuickSetupView } from "./views/QuickSetupView";
 
 type View = GuideView;
 type NavItem = { id: View; label: string; hint: string; icon: typeof Database; match: View[] };
@@ -43,11 +45,11 @@ const viewFromPath = () => routeEntries.find(([, path]) => window.location.pathn
 
 const primaryNav: NavItem[] = [
   { id: "home", label: "开始配置", hint: "查看进度与下一步", icon: LayoutDashboard, match: ["home"] },
-  { id: "sources", label: "① 导入节点", hint: "订阅、文件与分享链接", icon: FolderPlus, match: ["sources"] },
-  { id: "nodes", label: "② 选择节点", hint: "整理、检测并加入项目", icon: Database, match: ["nodes"] },
-  { id: "groups", label: "③ 设置代理", hint: "选择、测速与链式代理", icon: Boxes, match: ["groups", "preview", "history"] },
-  { id: "rules", label: "④ 设置分流", hint: "中文规则与常用模板", icon: ScrollText, match: ["rules"] },
-  { id: "generator", label: "⑤ 生成订阅", hint: "检查并发布稳定链接", icon: Rocket, match: ["generator", "links"] },
+  { id: "sources", label: "订阅来源", hint: "订阅、文件与分享链接", icon: FolderPlus, match: ["sources"] },
+  { id: "nodes", label: "节点库", hint: "整理、检测并加入项目", icon: Database, match: ["nodes"] },
+  { id: "groups", label: "代理分组", hint: "选择、测速与链式代理", icon: Boxes, match: ["groups", "preview", "history"] },
+  { id: "rules", label: "中文分流", hint: "中文规则与常用模板", icon: ScrollText, match: ["rules"] },
+  { id: "generator", label: "高级发布", hint: "检查并发布稳定链接", icon: Rocket, match: ["generator", "links"] },
 ];
 
 const secondaryNav: NavItem[] = [
@@ -56,14 +58,14 @@ const secondaryNav: NavItem[] = [
 ];
 
 const viewMeta: Record<View, { eyebrow: string; title: string; description: string }> = {
-  home: { eyebrow: "配置向导", title: "开始配置", description: "跟随五个步骤完成你的订阅。" },
-  sources: { eyebrow: "第 1 步", title: "导入节点", description: "添加远程订阅、配置文件或节点分享链接。" },
-  nodes: { eyebrow: "第 2 步", title: "选择节点", description: "整理节点、检测连通性，再加入当前项目。" },
-  groups: { eyebrow: "第 3 步", title: "设置代理", description: "通过拖拽设置节点选择、自动测速和链式代理。" },
-  rules: { eyebrow: "第 4 步", title: "设置分流", description: "使用中文规则决定不同流量的连接方式。" },
+  home: { eyebrow: "配置向导", title: "开始配置", description: "导入、推荐配置、获取链接，三步即可开始。" },
+  sources: { eyebrow: "来源管理", title: "导入节点", description: "添加远程订阅、配置文件或节点分享链接。" },
+  nodes: { eyebrow: "节点管理", title: "选择节点", description: "整理节点、检测连通性，再加入当前项目。" },
+  groups: { eyebrow: "高级配置", title: "设置代理", description: "通过拖拽设置节点选择、自动测速和链式代理。" },
+  rules: { eyebrow: "高级配置", title: "设置分流", description: "使用中文规则决定不同流量的连接方式。" },
   preview: { eyebrow: "高级工具", title: "预览校验", description: "检查最终配置源码并运行内核验证。" },
   history: { eyebrow: "安全保护", title: "历史版本", description: "创建快照，或回滚到可靠配置。" },
-  generator: { eyebrow: "第 5 步", title: "生成订阅", description: "跟随向导检查配置并发布稳定订阅链接。" },
+  generator: { eyebrow: "高级发布", title: "生成订阅", description: "跟随向导检查配置并发布稳定订阅链接。" },
   links: { eyebrow: "订阅管理", title: "发布链接", description: "管理公开地址、版本、过期时间与撤销状态。" },
   templates: { eyebrow: "高级工具", title: "模板资源", description: "创建和复用规则模板。" },
   settings: { eyebrow: "系统管理", title: "系统设置", description: "管理项目参数、账号、备份与网页更新。" },
@@ -271,12 +273,12 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={() => void kernelValidate()}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
 
       <section className="content-area" key={view}>
-        {view === "home" && <QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} onStartGuide={() => guide.start("quickstart")} />}
+        {view === "home" && <><QuickSetupView key={project.id} project={project} onReload={reloadCurrentProject} onAdvanced={() => navigate("groups")} onStartGuide={() => guide.start("quickstart")} /><details className="advanced-dashboard"><summary>查看当前项目详情与高级流程</summary><QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} onStartGuide={() => guide.start("quickstart")} /></details></>}
         {view === "sources" && <SourceManagerView onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
         {view === "nodes" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
-        {view === "preview" && <SourceView config={project.config} format={project.targetFormat} source={project.targetFormat === "sing-box" ? exportSingBoxJson(project.config) : exportMihomoYaml(project.config)} onApply={(config) => updateProject((current) => ({ ...current, config }))} />}
+        {view === "preview" && <>{previewExport(project.config, project.targetFormat).issues.filter((issue) => issue.level === "error").map((issue, index) => <p role="alert" key={index}>{issue.message}</p>)}<SourceView config={project.config} format={project.targetFormat} source={previewExport(project.config, project.targetFormat).content} onApply={(config) => updateProject((current) => ({ ...current, config }))} /></>}
         {view === "history" && <HistoryView project={project} onRestore={(restored) => { savedVersion.current = restored.updatedAt; setProject(restored); setStatus("saved"); }} onMessage={setMessage} />}
         {view === "generator" && <GeneratorView project={project} onMessage={setMessage} />}
         {view === "links" && <GeneratedSubscriptionsView onMessage={setMessage} />}

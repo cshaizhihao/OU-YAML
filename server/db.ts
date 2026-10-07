@@ -239,6 +239,17 @@ if (!db.prepare("SELECT 1 FROM schema_meta WHERE key = 'managed-node-sort-v1'").
 
 db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema-version', '4') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
 
+for (const [table, additions] of Object.entries({
+  managed_nodes: { original_name: "TEXT", name_override: "INTEGER NOT NULL DEFAULT 0" },
+  generation_profiles: { project_id: "TEXT REFERENCES projects(id) ON DELETE SET NULL", auto_update: "INTEGER NOT NULL DEFAULT 0", include_new_nodes: "INTEGER NOT NULL DEFAULT 0", last_sync_at: "TEXT", last_sync_error: "TEXT" },
+  generated_subscriptions: { token_cipher: "TEXT" },
+})) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  for (const [column, definition] of Object.entries(additions)) if (!columns.some((item) => item.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+db.prepare("UPDATE managed_nodes SET original_name = name WHERE original_name IS NULL").run();
+db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema-version', '5') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
+
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
 if (!userColumns.some((column) => column.name === "is_admin")) db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
 if (!userColumns.some((column) => column.name === "is_disabled")) db.exec("ALTER TABLE users ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0");

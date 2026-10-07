@@ -1,8 +1,10 @@
+import { guideTargets } from "../../guides/registry";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, Copy, ExternalLink, FileCode2, Link2, RefreshCw, Rss, Search, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { api } from "../../api";
 import type { GeneratedSubscription, GenerationProfile } from "../../shared/domain";
 import { ConfirmDialog } from "../Dialog";
+import { copyText } from "../../shared/clipboard";
 
 export function GeneratedSubscriptionsView({ onMessage }: { onMessage: (value: string) => void }) {
   const [items, setItems] = useState<GeneratedSubscription[]>([]);
@@ -13,6 +15,7 @@ export function GeneratedSubscriptionsView({ onMessage }: { onMessage: (value: s
   const [refreshing, setRefreshing] = useState(false);
   const [revoking, setRevoking] = useState<GeneratedSubscription | null>(null);
   const [deleting, setDeleting] = useState<GeneratedSubscription | null>(null);
+  const [resetting, setResetting] = useState<GeneratedSubscription | null>(null);
 
   async function load() {
     const [nextItems, nextProfiles] = await Promise.all([api.listGeneratedSubscriptions(), api.listGenerationProfiles()]);
@@ -24,12 +27,31 @@ export function GeneratedSubscriptionsView({ onMessage }: { onMessage: (value: s
   const profileNames = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile.name])), [profiles]);
   const filtered = useMemo(() => items.filter((item) => `${item.name} ${profileNames.get(item.profileId) || ""} ${item.targetFormat}`.toLowerCase().includes(query.trim().toLowerCase())), [items, profileNames, query]);
 
+  async function copyExisting(item: GeneratedSubscription) {
+    setBusyId(item.id);
+    try { const { token } = await api.getSubscriptionToken(item.id); setTokens((current) => ({ ...current, [item.id]: token })); await copyText(`${window.location.origin}/sub/${token}`); onMessage("原订阅地址已复制，客户端地址保持不变"); }
+    catch (error) { onMessage((error as Error).message); }
+    finally { setBusyId(""); }
+  }
+
+  async function syncOptions(profile: GenerationProfile, autoUpdate: boolean, includeNewNodes: boolean) {
+    try { const updated = await api.setProfileSync(profile.id, { autoUpdate, includeNewNodes }); setProfiles((current) => current.map((item) => item.id === profile.id ? updated : item)); }
+    catch (error) { onMessage((error as Error).message); }
+  }
+
+  async function syncNow(profile: GenerationProfile) {
+    setBusyId(profile.id);
+    try { await api.syncProfile(profile.id); await load(); onMessage("已检查节点变化并更新原订阅"); }
+    catch (error) { onMessage((error as Error).message); await load().catch(() => undefined); }
+    finally { setBusyId(""); }
+  }
+
   async function rotateAndCopy(item: GeneratedSubscription) {
     setBusyId(item.id);
     try {
       const result = await api.rotateGeneratedSubscriptionToken(item.id);
       setTokens((current) => ({ ...current, [item.id]: result.token }));
-      await navigator.clipboard?.writeText(`${window.location.origin}/sub/${result.token}`);
+      await copyText(`${window.location.origin}/sub/${result.token}`);
       onMessage("新订阅地址已复制，之前的地址已失效");
     } catch (error) {
       onMessage(error instanceof Error ? error.message : "订阅地址重置失败");
@@ -84,24 +106,28 @@ export function GeneratedSubscriptionsView({ onMessage }: { onMessage: (value: s
     <div className="published-overview"><span><strong>{items.length}</strong><small>发布记录</small></span><span><strong>{items.filter((item) => status(item).className === "success").length}</strong><small>有效链接</small></span><span><strong>{new Set(items.map((item) => item.profileId)).size}</strong><small>生成方案</small></span></div>
 
     {filtered.length ? <div className="subscription-list rich-list">{filtered.map((item) => {
+      const profile = profiles.find((value) => value.id === item.profileId);
       const token = tokens[item.id];
       const url = token ? `${window.location.origin}/sub/${token}` : "";
       const itemStatus = status(item);
       return <article className={`subscription-row ${itemStatus.className}`} key={item.id}>
         <span className="subscription-icon"><Rss size={20} /></span>
-        <div className="subscription-main"><div className="subscription-title"><h2>{item.name}</h2><span className={`type-badge ${itemStatus.className}`}>{itemStatus.label}</span></div><span><FileCode2 size={13} />{profileNames.get(item.profileId) || "生成方案已删除"} · {item.targetFormat === "sing-box" ? "sing-box JSON" : "Mihomo YAML"}</span>{token ? <code>{url}</code> : <small className="token-hint">出于安全考虑，公开地址不在数据库中明文保存</small>}</div>
+        <div className="subscription-main"><div className="subscription-title"><h2>{item.name}</h2><span className={`type-badge ${itemStatus.className}`}>{itemStatus.label}</span></div><span><FileCode2 size={13} />{profileNames.get(item.profileId) || "生成方案已删除"} · {item.targetFormat === "sing-box" ? "sing-box JSON" : "Mihomo YAML"}</span>{token ? <code>{url}</code> : <small className="token-hint">点击复制原地址；旧版仅保存哈希的链接需继续使用原记录，或主动重置</small>}</div>
+        {profile && <div className="publication-sync" data-guide-id={guideTargets.publicationSync}><label><input type="checkbox" checked={!!profile.autoUpdate} onChange={(event) => void syncOptions(profile, event.target.checked, !!profile.includeNewNodes)} />跟随来源自动更新</label>{profile.autoUpdate && <label><input type="checkbox" checked={!!profile.includeNewNodes} onChange={(event) => void syncOptions(profile, true, event.target.checked)} />包含来源新增节点</label>}<small>{profile.lastSyncError ? `同步未完成，保留上一版：${profile.lastSyncError}` : profile.lastSyncAt ? `最近检查 ${new Date(profile.lastSyncAt).toLocaleString("zh-CN")}` : "手动发布的内容不会自动改变"}</small><button className="text-button" disabled={busyId === profile.id || item.revoked} onClick={() => void syncNow(profile)}>立即同步节点变化</button></div>}
         <div className="subscription-version"><small>内容版本</small><strong>v{item.version}</strong></div>
         <div className="subscription-stats"><strong>{item.nodeCount}</strong><span>节点</span></div>
         <div className="subscription-meta"><span><CalendarClock size={14} />{item.expiresAt ? `${new Date(item.expiresAt).toLocaleString("zh-CN")} 过期` : "永久有效"}</span><span>更新于 {new Date(item.updatedAt).toLocaleString("zh-CN")}</span></div>
         <div className="row-actions subscription-actions">
-          {!item.revoked && <button className="secondary-button compact-button" disabled={busyId === item.id} onClick={() => void rotateAndCopy(item)} title="为安全起见，此操作会让旧地址失效"><Copy size={15} />{token ? "再次重置" : "重置并复制地址"}</button>}
+          {!item.revoked && <button className="secondary-button compact-button" disabled={busyId === item.id} onClick={() => void copyExisting(item)}><Copy size={15} />复制原地址</button>}
+          {!item.revoked && <button className="text-button" onClick={() => setResetting(item)}>重置地址</button>}
           {token && !item.revoked && <a className="secondary-button compact-button" href={url} target="_blank" rel="noreferrer"><ExternalLink size={15} />打开</a>}
           {!item.revoked && <button className="icon-button compact danger" onClick={() => setRevoking(item)} aria-label={`撤销 ${item.name}`}><ShieldOff size={16} /></button>}
           <button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button>
         </div>
       </article>;
-    })}</div> : <div className="empty-state"><div><Link2 size={24} /></div><h2>{query ? "没有匹配的订阅" : "还没有发布订阅"}</h2><p>{query ? "换个关键词再试试。" : "在“生成方案”中完成校验并发布第一个公开地址。"}</p>{!query && <span className="empty-security-note"><ShieldCheck size={15} />公开 Token 仅在创建或重置时显示</span>}</div>}
+    })}</div> : <div className="empty-state"><div><Link2 size={24} /></div><h2>{query ? "没有匹配的订阅" : "还没有发布订阅"}</h2><p>{query ? "换个关键词再试试。" : "在“生成方案”中完成校验并发布第一个公开地址。"}</p>{!query && <span className="empty-security-note"><ShieldCheck size={15} />公开地址加密保存在服务器，可随时复制</span>}</div>}
 
+    <ConfirmDialog open={!!resetting} title="重置订阅地址" message="此操作会立即废止旧地址，所有客户端都需要重新填写链接。仅复制原地址无需重置。" confirmText="重置并复制" onClose={() => setResetting(null)} onConfirm={async () => { if (resetting) await rotateAndCopy(resetting); setResetting(null); }} />
     <ConfirmDialog open={!!revoking} title="撤销公开订阅" message={`撤销“${revoking?.name}”后，当前公开地址会立即失效，且不能重新启用。生成方案仍会保留。`} confirmText="确认撤销" onClose={() => setRevoking(null)} onConfirm={revoke} />
     <ConfirmDialog open={!!deleting} title="删除发布记录" message={`确定永久删除“${deleting?.name}”吗？公开地址会立即失效，此操作不可恢复。`} confirmText="确认删除" onClose={() => setDeleting(null)} onConfirm={remove} />
   </>;

@@ -1,6 +1,6 @@
 services:
   ou-yaml:
-    image: ou-yaml:local
+    image: "${OU_YAML_IMAGE:-ou-yaml:local}"
     build:
       context: .
       args:

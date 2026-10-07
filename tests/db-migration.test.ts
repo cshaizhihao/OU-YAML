@@ -68,5 +68,5 @@ test("旧 managed_nodes 表会补充排序字段并按用户稳定初始化", ()
   );
   assert.equal((db.prepare("SELECT COUNT(*) AS count FROM schema_meta WHERE key = 'managed-node-sort-v1'").get() as { count: number }).count, 1);
   assert.ok((db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'project_nodes'").get() as { name?: string } | undefined)?.name);
-  assert.equal((db.prepare("SELECT value FROM schema_meta WHERE key = 'schema-version'").get() as { value: string }).value, "4");
+  assert.equal((db.prepare("SELECT value FROM schema_meta WHERE key = 'schema-version'").get() as { value: string }).value, "5");
 });

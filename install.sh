@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
+printf 'OU-YAML 安装程序正在启动…\n'
 
 REPO_URL="${OU_YAML_REPO_URL:-https://github.com/cshaizhihao/OU-YAML.git}"
 INSTALL_DIR="${OU_YAML_INSTALL_DIR:-/opt/ou-yaml}"
@@ -146,6 +147,7 @@ detect_reverse_proxy_conflict() {
 }
 
 ensure_dependencies() {
+  case "$(uname -m)" in x86_64|aarch64|arm64) ;; *) fail "目前仅支持 Linux x86_64 和 arm64。";; esac
   if ! command -v curl >/dev/null 2>&1; then fail "未检测到 curl，请先安装 curl。"; fi
   if ! command -v git >/dev/null 2>&1; then
     step "正在安装 git..."
@@ -165,12 +167,21 @@ ensure_dependencies() {
 prepare_repository() {
   if [ -d "${INSTALL_DIR}/.git" ]; then
     step "发现已有安装，正在安全更新代码..."
-    git -C "${INSTALL_DIR}" pull --ff-only
+    if ! git -C "${INSTALL_DIR}" diff --quiet || ! git -C "${INSTALL_DIR}" diff --cached --quiet; then fail "安装目录存在本地修改，请先保留修改后再安装。"; fi
   else
     mkdir -p "$(dirname "${INSTALL_DIR}")"
     step "正在下载 OU-YAML..."
     git clone --depth 1 "${REPO_URL}" "${INSTALL_DIR}"
   fi
+  cd "${INSTALL_DIR}"
+  export OU_YAML_FRESH_INSTALL=1
+  if [ ! -f deploy/release.sh ]; then
+    git fetch origin main
+    git merge --ff-only FETCH_HEAD
+  fi
+  source "${INSTALL_DIR}/deploy/release.sh"
+  select_update_target "${OU_YAML_UPDATE_CHANNEL:-stable}" || fail "无法确认安装版本，请检查 GitHub 连通性或稍后重试。"
+  git checkout --detach "${UPDATE_TARGET}"
 }
 
 write_env() {
@@ -227,7 +238,7 @@ install_ip_mode() {
   install -d -m 0750 -o root -g 1001 /var/log/ou-yaml
   cd "${INSTALL_DIR}"
   step "正在构建并启动 OU-YAML..."
-  docker compose -f docker-compose.yml -f docker-compose.ip.yml up -d --build
+  deploy_service -f docker-compose.yml -f docker-compose.ip.yml
   say "${c_green}✓ 安装完成${c_reset}"
   say "访问地址：${c_green}http://服务器IP:${port}${c_reset}"
 }
@@ -271,18 +282,26 @@ install_domain_mode() {
   install -d -m 0750 -o root -g 1001 /var/log/ou-yaml
   cd "${INSTALL_DIR}"
   step "正在构建 OU-YAML 和 Caddy HTTPS 网关..."
-  docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+  deploy_service -f docker-compose.yml -f docker-compose.caddy.yml
   say "${c_green}✓ 安装完成${c_reset}"
   say "访问地址：${c_green}https://${domain}${c_reset}"
 }
 
 run_install() {
+  [[ "${INSTALL_DIR}" =~ ^/[A-Za-z0-9._/-]+$ ]] || fail "安装目录需为不含空格或特殊字符的绝对路径。"
+  if [ -f "${INSTALL_DIR}/.env" ] && [ -d "${INSTALL_DIR}/.git" ]; then
+    if [ -f "${INSTALL_DIR}/deploy/ou-yaml-web-update-agent.service" ]; then install_web_update_agent; fi
+    say "检测到已有安装。请在网页“系统设置 → 网页更新”升级，原访问方式和数据会保留。"
+    say "命令行备用：sudo ${INSTALL_DIR}/update.sh"
+    return
+  fi
   art
   say "安装方式："
   say "  1. IP + 端口访问"
   say "  2. 域名访问（Caddy HTTPS）"
   local mode
   mode="$(ask '请选择 1 或 2' '1')"
+  case "$mode" in 1|2) ;; *) fail "安装方式选择无效。";; esac
   ensure_dependencies
   prepare_repository
   export OU_YAML_BUILD_COMMIT

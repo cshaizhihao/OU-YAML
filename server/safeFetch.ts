@@ -41,10 +41,17 @@ async function resolvePublic(hostname: string): Promise<PublicAddress[]> {
   const lookupHostname = hostname.replace(/^\[|\]$/g, "");
   const lowerHostname = lookupHostname.toLowerCase();
   if (["localhost", "localhost.localdomain"].includes(lowerHostname) || lowerHostname.endsWith(".local")) throw new Error("订阅地址不能指向本机或局域网");
-  const records = net.isIP(lookupHostname) ? [{ address: lookupHostname, family: net.isIP(lookupHostname) }] : await dns.lookup(lookupHostname, { all: true, verbatim: true });
+  const records = net.isIP(lookupHostname) ? [{ address: lookupHostname, family: net.isIP(lookupHostname) }] : await lookupWithDeadline(lookupHostname);
   if (!records.length || records.some((record) => !isPublicAddress(record.address))) throw new Error("订阅地址解析到了非公网 IP");
   const unique = records.filter((record, index) => records.findIndex((item) => item.address === record.address && item.family === record.family) === index);
   return unique.sort((left, right) => Number(right.family === 4) - Number(left.family === 4)).slice(0, 8);
+}
+
+async function lookupWithDeadline(hostname: string) {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([dns.lookup(hostname, { all: true, verbatim: true }), new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("DNS 解析超时")), 5000); })]);
+  } finally { clearTimeout(timer!); }
 }
 
 export function decodeSubscriptionBody(payload: Buffer, contentEncoding: string, maxBytes: number) {
@@ -62,7 +69,7 @@ export function decodeSubscriptionBody(payload: Buffer, contentEncoding: string,
   return body.toString("utf8");
 }
 
-type RequestOptions = Partial<Pick<SubscriptionRequestProfile, "userAgent" | "accept" | "cacheControl">> & { skipCertVerify?: boolean };
+type RequestOptions = Partial<Pick<SubscriptionRequestProfile, "userAgent" | "accept" | "cacheControl">> & { skipCertVerify?: boolean; signal?: AbortSignal };
 type RequestResult = { statusCode: number; body?: string; redirect?: URL; contentType?: string; address: string };
 
 function hostHeader(url: URL) {
@@ -86,6 +93,7 @@ async function requestAtAddress(url: URL, address: PublicAddress, maxBytes: numb
       port: url.port || (url.protocol === "https:" ? 443 : 80),
       path: `${url.pathname || "/"}${url.search}`,
       method: "GET",
+      signal: options.signal,
       servername: net.isIP(lookupHostname) ? undefined : lookupHostname,
       rejectUnauthorized: options.skipCertVerify !== true,
       headers: {
@@ -173,7 +181,7 @@ function readBody(result: RequestResult) {
 }
 
 function displayUrl(url: URL) {
-  return `${url.hostname}${url.pathname || "/"}`;
+  return `${url.hostname}/[订阅路径已隐藏]`;
 }
 
 function statusError(url: URL, statusCode: number, profiles: readonly SubscriptionRequestProfile[]) {
@@ -186,10 +194,12 @@ function statusError(url: URL, statusCode: number, profiles: readonly Subscripti
   return new Error(`订阅服务器返回 HTTP ${statusCode}（${displayUrl(url)}）。已尝试 ${tried} 请求方式；${hint}`);
 }
 
-export type SafeFetchOptions = { userAgent?: string; skipCertVerify?: boolean };
+export type FetchDiagnostic = { stage: string; profile?: string; status?: number; address?: string; message: string };
+export type SafeFetchOptions = { userAgent?: string; skipCertVerify?: boolean; onDiagnostic?: (event: FetchDiagnostic) => void };
 export type SafeFetchResult = { text: string; requestProfile: string };
 
 export async function safeFetchSubscription(input: string, maxBytes = 2_000_000, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
+  const signal = AbortSignal.timeout(45_000);
   let url: URL;
   try { url = new URL(input); } catch { throw new Error("订阅地址格式无效"); }
   const customProfile = options.userAgent?.trim()
@@ -204,7 +214,10 @@ export async function safeFetchSubscription(input: string, maxBytes = 2_000_000,
     let lastStatus = 0;
     let lastBodyError: BodyError | undefined;
     for (const profile of profiles) {
-      const result = await requestOnce(url, maxBytes, { ...profile, skipCertVerify: options.skipCertVerify });
+      signal.throwIfAborted();
+      options.onDiagnostic?.({ stage: "request", profile: profile.name, message: "正在解析公网地址并请求订阅" });
+      const result = await requestOnce(url, maxBytes, { ...profile, skipCertVerify: options.skipCertVerify, signal });
+      options.onDiagnostic?.({ stage: "response", profile: profile.name, status: result.statusCode, address: result.address, message: result.redirect ? "发生重定向，将重新检查目标地址" : `收到 HTTP ${result.statusCode}` });
       if (result.redirect) {
         redirected = result.redirect;
         break;
@@ -212,11 +225,12 @@ export async function safeFetchSubscription(input: string, maxBytes = 2_000_000,
       if (result.statusCode >= 200 && result.statusCode < 300) {
         try {
           const body = readBody(result);
-          if (body !== undefined) return { text: body, requestProfile: profile.name };
+          if (body !== undefined) { options.onDiagnostic?.({ stage: "content", message: "已收到非 HTML 内容，继续检查节点格式" }); return { text: body, requestProfile: profile.name }; }
         } catch (error) {
           const typed = error as BodyError;
           if (typed.reason !== "html") throw error;
           lastBodyError = typed;
+          options.onDiagnostic?.({ stage: "content", message: "返回 HTML 页面，可能是登录、验证或错误页" });
         }
         continue;
       }

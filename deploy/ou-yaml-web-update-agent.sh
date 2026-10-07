@@ -7,10 +7,11 @@ DATA_DIR="${OU_YAML_DATA_DIR:-${INSTALL_DIR}/data}"
 REQUEST_FILE="${DATA_DIR}/web-update-request.json"
 STATUS_FILE="${DATA_DIR}/web-update-status.json"
 LOG_FILE="${OU_YAML_UPDATE_LOG:-/var/log/ou-yaml/web-update.log}"
-LOCK_FILE="/run/ou-yaml-web-update.lock"
+LOCK_FILE="${OU_YAML_UPDATE_LOCK:-/run/ou-yaml-web-update.lock}"
 PREVIOUS_COMMIT=""
 UPDATE_STARTED=0
 ROLLBACK_RUNNING=0
+PREVIOUS_IMAGE=""
 
 [ ! -L "${INSTALL_DIR}" ] || { echo "安装目录不能是符号链接" >&2; exit 1; }
 [ ! -L "${DATA_DIR}" ] || { echo "数据目录不能是符号链接" >&2; exit 1; }
@@ -49,10 +50,11 @@ deploy_checkout() {
   cd "${INSTALL_DIR}"
   export OU_YAML_BUILD_COMMIT
   OU_YAML_BUILD_COMMIT="$(git rev-parse HEAD)"
+  source "${INSTALL_DIR}/deploy/release.sh"
   if grep -q '^DOMAIN=.' .env; then
-    docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+    deploy_service -f docker-compose.yml -f docker-compose.caddy.yml
   else
-    docker compose -f docker-compose.yml -f docker-compose.ip.yml up -d --build
+    deploy_service -f docker-compose.yml -f docker-compose.ip.yml
   fi
 }
 
@@ -67,7 +69,15 @@ rollback_update() {
     write_status running "新版未通过检查，正在自动回滚" 92 || true
     printf '[%s] rolling back to %s\n' "$(date -Is)" "${PREVIOUS_COMMIT}" >>"${LOG_FILE}"
     git -C "${INSTALL_DIR}" reset --hard "${PREVIOUS_COMMIT}" >>"${LOG_FILE}" 2>&1
-    deploy_checkout >>"${LOG_FILE}" 2>&1
+    if [ -n "${PREVIOUS_IMAGE}" ]; then
+      docker tag "${PREVIOUS_IMAGE}" ou-yaml:local >>"${LOG_FILE}" 2>&1
+      export OU_YAML_IMAGE=ou-yaml:local
+      compose_files=(-f docker-compose.yml -f docker-compose.ip.yml)
+      if grep -q '^DOMAIN=.' .env; then compose_files=(-f docker-compose.yml -f docker-compose.caddy.yml); fi
+      docker compose "${compose_files[@]}" up -d --no-build >>"${LOG_FILE}" 2>&1
+    else
+      deploy_checkout >>"${LOG_FILE}" 2>&1
+    fi
     if wait_for_health 45; then
       write_status failed "更新失败，已自动恢复更新前版本" 100 || true
       printf '[%s] rollback completed successfully\n' "$(date -Is)" >>"${LOG_FILE}"
@@ -105,13 +115,19 @@ trap rollback_update ERR
   fi
 
   PREVIOUS_COMMIT="$(git rev-parse HEAD)"
+  PREVIOUS_IMAGE="$(docker inspect -f '{{.Image}}' ou-yaml 2>/dev/null || true)"
   printf '[%s] current commit: %s, free disk: %s KB\n' "$(date -Is)" "${PREVIOUS_COMMIT}" "${available_kb}" >>"${LOG_FILE}"
   write_status running "正在备份完整数据" 15
   "${INSTALL_DIR}/backup.sh" >>"${LOG_FILE}" 2>&1
 
   write_status running "正在拉取最新版本" 35
-  git fetch --prune origin main >>"${LOG_FILE}" 2>&1
-  git merge --ff-only origin/main >>"${LOG_FILE}" 2>&1
+  source "${INSTALL_DIR}/deploy/release.sh"
+  channel="$(sed -n 's/.*"channel"[[:space:]]*:[[:space:]]*"\(stable\|preview\)".*/\1/p' "${REQUEST_FILE}")"
+  select_update_target "${channel:-stable}" >>"${LOG_FILE}" 2>&1
+  requested_commit="$(sed -n 's/.*"targetCommit"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' "${REQUEST_FILE}")"
+  if [ -n "${requested_commit}" ] && [ "${requested_commit}" != "${UPDATE_TARGET}" ]; then echo "目标版本已变化，请在网页重新检查更新" >>"${LOG_FILE}"; false; fi
+  UPDATE_STARTED=1
+  git checkout --detach "${UPDATE_TARGET}" >>"${LOG_FILE}" 2>&1
   next_commit="$(git rev-parse HEAD)"
   printf '[%s] target commit: %s\n' "$(date -Is)" "${next_commit}" >>"${LOG_FILE}"
   if [ "${next_commit}" = "${PREVIOUS_COMMIT}" ]; then
@@ -129,7 +145,6 @@ trap rollback_update ERR
 
   write_status completed "更新完成，新版服务运行正常" 100
   printf '[%s] update completed: %s\n' "$(date -Is)" "${next_commit}" >>"${LOG_FILE}"
-  docker image prune -f --filter "until=168h" >>"${LOG_FILE}" 2>&1 || true
   rm -f -- "${REQUEST_FILE}"
   trap - ERR
 }

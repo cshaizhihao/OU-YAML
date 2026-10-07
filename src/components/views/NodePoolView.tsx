@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import { closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -34,7 +35,7 @@ type NodeDraft = {
 };
 
 type BatchDraft = { addTags: string; removeTags: string; prefix: string; find: string; replace: string };
-type NodeDiagnostic = Partial<TcpPingResult> & { country?: string; countryCode?: string; flag?: string };
+type NodeDiagnostic = Partial<TcpPingResult> & { country?: string; countryCode?: string; flag?: string; exitIp?: string };
 
 const blank: NodeDraft = { name: "新节点", type: "ss", server: "", port: 443, enabled: true, extra: {}, tags: [] };
 const emptyBatch = (): BatchDraft => ({ addTags: "", removeTags: "", prefix: "", find: "", replace: "" });
@@ -105,11 +106,14 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
   const [linkPreview, setLinkPreview] = useState<{ nodes: ProxyNode[]; warnings: string[] } | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
+  const [probeMode, setProbeMode] = useState<"tcp" | "proxy">("tcp");
+  const [flagBasis, setFlagBasis] = useState<"entry" | "exit">("entry");
+  const [page, setPage] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [probeBusy, setProbeBusy] = useState<Set<string>>(new Set());
   const [flagBusy, setFlagBusy] = useState<Set<string>>(new Set());
   const [diagnostics, setDiagnostics] = useState<Record<string, NodeDiagnostic>>({});
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, scrollBehavior: "auto" }));
 
   const load = async (keepSelection = false) => {
     const [nextSources, nextNodes] = await Promise.all([api.listNodeSources(), api.listManagedNodes()]);
@@ -120,10 +124,14 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
 
   useEffect(() => { void load().catch((error) => onMessage(error instanceof Error ? error.message : "节点库加载失败")); }, []);
 
-  const filtered = useMemo(() => nodes.filter((node) => {
+  const matchingNodes = useMemo(() => nodes.filter((node) => {
     const search = `${node.name} ${node.server} ${node.type} ${node.tags.join(" ")} ${node.note || ""}`.toLowerCase();
     return (!sourceId || node.sourceId === sourceId) && search.includes(query.trim().toLowerCase());
   }), [nodes, query, sourceId]);
+  useEffect(() => setPage(0), [query, sourceId]);
+  const pageCount = Math.max(1, Math.ceil(matchingNodes.length / 100));
+  const currentPage = Math.min(page, pageCount - 1);
+  const filtered = useMemo(() => matchingNodes.slice(currentPage * 100, (currentPage + 1) * 100), [matchingNodes, currentPage]);
   const visibleIds = useMemo(() => filtered.map((node) => node.id), [filtered]);
   const sourceNames = useMemo(() => new Map(sources.map((source) => [source.id, source.name])), [sources]);
   const projectNodeIds = useMemo(() => new Set(config.proxies.map((node) => node.id)), [config.proxies]);
@@ -242,12 +250,14 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
   async function probeNode(node: ManagedNode, announce = true) {
     setBusy(setProbeBusy, node.id, true);
     try {
-      const result = await api.tcpPingManagedNode(node.id);
-      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], ...result } }));
-      if (announce) onMessage(result.reachable ? `${node.name} TCP 连接成功，延迟 ${result.latencyMs}ms` : `${node.name} 无法连接：${result.error || "TCP 连接失败"}`);
+      const result = probeMode === "proxy" ? await api.proxyTestManagedNode(node.id) : await api.tcpPingManagedNode(node.id);
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], error: undefined, exitIp: undefined, ...result } }));
+      if (announce) onMessage(result.reachable ? `${node.name} ${probeMode === "proxy" ? "代理实测" : "TCP 连接"}成功，延迟 ${result.latencyMs}ms` : `${node.name} 无法连接：${result.error || "TCP 连接失败"}`);
       return result;
     } catch (error) {
-      if (announce) onMessage(error instanceof Error ? error.message : "TCP 检测失败");
+      const message = error instanceof Error ? error.message : "检测失败";
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], exitIp: undefined, reachable: false, latencyMs: null, error: message } }));
+      if (announce) onMessage(message);
       return null;
     } finally {
       setBusy(setProbeBusy, node.id, false);
@@ -258,17 +268,17 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
     const targets = selectedNodes.slice(0, 100);
     if (!targets.length) return;
     let reachable = 0;
-    await runLimited(targets, 4, async (node) => {
+    await runLimited(targets, probeMode === "proxy" ? 2 : 4, async (node) => {
       const result = await probeNode(node, false);
       if (result?.reachable) reachable += 1;
     });
-    onMessage(`TCP 检测完成：${reachable}/${targets.length} 个节点可连接${selectedNodes.length > 100 ? "，单次最多检测 100 个" : ""}`);
+    onMessage(`节点检测完成：${reachable}/${targets.length} 个节点可连接${selectedNodes.length > 100 ? "，单次最多检测 100 个" : ""}`);
   }
 
   async function applyCountryFlag(node: ManagedNode, announce = true) {
     setBusy(setFlagBusy, node.id, true);
     try {
-      const result = await api.applyManagedNodeCountryFlag(node.id);
+      const result = await api.applyManagedNodeCountryFlag(node.id, flagBasis);
       setNodes((current) => current.map((item) => item.id === node.id ? result.node : item));
       setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], resolvedAddress: result.location.ip, country: result.location.country, countryCode: result.location.countryCode, flag: result.location.flag } }));
       if (announce) {
@@ -288,8 +298,8 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
     const targets = selectedNodes.slice(0, 30);
     if (!targets.length) return;
     let completed = 0;
-    await runLimited(targets, 3, async (node) => { if (await applyCountryFlag(node, false)) completed += 1; });
-    if (completed) await onProjectReload();
+    await runLimited(targets, 2, async (node) => { if (await applyCountryFlag(node, false)) completed += 1; });
+    if (completed) await onProjectReload().catch((error) => onMessage(error.message));
     onMessage(`国旗识别完成：成功 ${completed}/${targets.length} 个${selectedNodes.length > 30 ? "，单次最多处理 30 个" : ""}`);
   }
 
@@ -392,13 +402,14 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
       {orderBusy && <><i /><span className="status-ok"><RefreshCw className="spin" size={14} />保存排序中</span></>}
     </div>
 
+    <div className="node-detection-controls" data-guide-id={guideTargets.nodeDiagnostics}><label>连通性检查<select value={probeMode} onChange={(event) => setProbeMode(event.target.value as "tcp" | "proxy")} disabled={probeBusy.size > 0}><option value="tcp">TCP 端口检测</option><option value="proxy">代理实测与出口 IP</option></select></label><label>国旗依据<select value={flagBasis} onChange={(event) => setFlagBasis(event.target.value as "entry" | "exit")} disabled={flagBusy.size > 0}><option value="entry">服务器入口 IP</option><option value="exit">真实代理出口 IP</option></select></label><p>TCP 只验证端口；代理实测验证鉴权与 HTTPS 转发。出口国旗需要运行代理实测，失败时保留原名称。</p></div>
     {selected.size > 0 && <div className="node-selection-actions">
       <span className="selection-count">已选择 <strong>{selected.size}</strong> 个</span>
       <button className="primary-button compact-button" onClick={addSelectedToProject} disabled={orderBusy}><Plus size={15} />加入当前项目</button>
       <button className="secondary-button compact-button" onClick={removeSelectedFromProject} disabled={orderBusy}><Unlink size={15} />移出当前项目</button>
       <button className="secondary-button compact-button" onClick={() => void updateBatch({ ids: [...selected], enabled: true }, `已启用 ${selected.size} 个节点`)}><CheckCircle2 size={15} />启用</button>
       <button className="secondary-button compact-button" onClick={() => void updateBatch({ ids: [...selected], enabled: false }, `已停用 ${selected.size} 个节点`)}><Ban size={15} />停用</button>
-      <button className="secondary-button compact-button" disabled={probeBusy.size > 0} onClick={() => void probeSelectedNodes()}>{probeBusy.size ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}TCP 检测</button>
+      <button className="secondary-button compact-button" disabled={probeBusy.size > 0} onClick={() => void probeSelectedNodes()}>{probeBusy.size ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}{probeMode === "proxy" ? "代理实测" : "TCP 检测"}</button>
       <button className="secondary-button compact-button" disabled={flagBusy.size > 0} onClick={() => void applySelectedCountryFlags()}>{flagBusy.size ? <LoaderCircle className="spin" size={15} /> : <Flag size={15} />}添加国旗</button>
       <button className="secondary-button compact-button" onClick={() => setBatchDraft(emptyBatch())}><WandSparkles size={15} />整理</button>
       <button className="secondary-button compact-button danger-outline" onClick={() => void deleteNodes(selectedNodes)} disabled={orderBusy}><Trash2 size={15} />删除</button>
@@ -411,9 +422,10 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage }: {
           {filtered.map((node) => <SortableNodeRow key={node.id} node={node} sourceName={node.sourceId ? sourceNames.get(node.sourceId) : undefined} selected={selected.has(node.id)} inProject={projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))} diagnostic={diagnostics[node.id]} probeBusy={probeBusy.has(node.id)} flagBusy={flagBusy.has(node.id)} onSelect={(checked) => toggleSelected(node.id, checked)} onToggle={() => void toggleEnabled(node)} onProbe={() => void probeNode(node)} onFlag={() => void applyCountryFlag(node)} onEdit={() => setEditing(nodeDraft(node))} onCopy={() => setEditing({ ...nodeDraft(node), id: undefined, name: `${node.name} 副本` })} onDelete={() => setDeleting(node)} />)}
         </div>
       </SortableContext>
-      <DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(.16,1,.3,1)" }}>{activeId ? <div className="node-drag-overlay"><GripVertical size={16} /><strong>{nodes.find((node) => node.id === activeId)?.name || "节点"}</strong></div> : null}</DragOverlay>
+      {createPortal(<DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(.16,1,.3,1)" }}>{activeId ? <div className="node-drag-overlay"><GripVertical size={16} /><strong>{nodes.find((node) => node.id === activeId)?.name || "节点"}</strong></div> : null}</DragOverlay>, document.body)}
     </DndContext> : <div className="empty-state" data-guide-id={guideTargets.nodeList}><div><Database size={24} /></div><h2>{query ? "没有匹配的节点" : "节点库还是空的"}</h2><p>{query ? "换个关键词或来源筛选试试。" : "从订阅、节点链接或手动添加第一个节点。"}</p>{!query && <div className="empty-actions"><button className="secondary-button" onClick={() => setLinkOpen(true)}><Link2 size={16} />导入链接</button><button className="primary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button></div>}</div>}
 
+    {pageCount > 1 && <div className="pagination-controls"><button className="secondary-button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {pageCount} · {matchingNodes.length} 个节点</span><button className="secondary-button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</button></div>}
     <Drawer open={!!editing} onClose={() => setEditing(null)} title={editing?.id ? "编辑节点" : "添加节点"} footer={<><button className="secondary-button" onClick={() => setEditing(null)}>取消</button><button className="primary-button" disabled={!editing || !editing.name.trim() || !editing.server.trim() || !Number.isInteger(editing.port) || editing.port < 1 || editing.port > 65535} onClick={() => void save()}>保存节点</button></>}>
       <div className="form-grid">
         <label className="span-2">节点名称<input value={editing?.name || ""} onChange={(event) => updateEditing("name", event.target.value)} /></label>
@@ -475,15 +487,16 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
   onCopy: () => void;
   onDelete: () => void;
 }) {
+  const [actionsOpen, setActionsOpen] = useState(false);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: `node:${node.id}`, data: { kind: "managed-node", nodeId: node.id } });
   return <div ref={setNodeRef} className={`node-row${isDragging ? " dragging" : ""}${node.enabled ? "" : " is-disabled"}`} style={{ transform: CSS.Transform.toString(transform), transition }} role="row">
     <span className="node-row-check"><button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动节点 ${node.name}`}><GripVertical size={16} /></button><input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} aria-label={`选择 ${node.name}`} /></span>
-    <span className="node-row-name"><span className="entity-icon"><Server size={16} /></span><span className="node-name-stack"><strong title={node.name}>{node.name}</strong>{inProject && <small><CheckCircle2 size={12} />当前项目</small>}{diagnostic && <small className={`node-diagnostic${diagnostic.reachable === true ? " reachable" : diagnostic.reachable === false ? " unreachable" : " location"}`} title={diagnostic.error || diagnostic.resolvedAddress || undefined}>{diagnostic.reachable === true && <><Activity size={12} />{diagnostic.latencyMs}ms</>}{diagnostic.reachable === false && <><CircleX size={12} />{diagnostic.error || "不可连接"}</>}{diagnostic.country && <><MapPin size={11} />{diagnostic.flag} {diagnostic.country}</>}</small>}{node.note && <small title={node.note}>{node.note}</small>}</span></span>
+    <span className="node-row-name"><span className="entity-icon"><Server size={16} /></span><span className="node-name-stack"><strong title={node.name}>{node.name}</strong>{inProject && <small><CheckCircle2 size={12} />当前项目</small>}{diagnostic && <small className={`node-diagnostic${diagnostic.reachable === true ? " reachable" : diagnostic.reachable === false ? " unreachable" : " location"}`} title={diagnostic.error || diagnostic.resolvedAddress || undefined}>{diagnostic.reachable === true && <><Activity size={12} />{diagnostic.latencyMs}ms</>}{diagnostic.reachable === false && <><CircleX size={12} />{diagnostic.error || "不可连接"}</>}{diagnostic.exitIp && <><MapPin size={11} />出口 {diagnostic.exitIp}</>}{diagnostic.country && <><MapPin size={11} />{diagnostic.flag} {diagnostic.country}</>}</small>}{node.note && <small title={node.note}>{node.note}</small>}</span></span>
     <span className="node-row-type"><span className="type-badge">{node.type.toUpperCase()}</span></span>
     <span className="node-row-server mono" title={`${node.server}:${node.port}`}>{node.server}:{node.port}</span>
     <span className="node-row-source" title={sourceName || "手动添加"}>{sourceName || "手动添加"}</span>
     <span className="node-row-tags" title={node.tags.join("、")}>{node.tags.length ? node.tags.map((tag) => <b key={tag}>{tag}</b>) : "-"}</span>
     <span className="node-row-status"><button className={node.enabled ? "status-toggle active" : "status-toggle"} onClick={onToggle}>{node.enabled ? <CheckCircle2 size={14} /> : <Ban size={14} />}{node.enabled ? "已启用" : "已停用"}</button></span>
-    <span className="node-row-actions"><button className="icon-button compact diagnostic-action" disabled={probeBusy} onClick={onProbe} title="检测 TCP 端口真实连通性" aria-label={`TCP 检测 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}</button><button className="icon-button compact diagnostic-action" disabled={flagBusy} onClick={onFlag} title="根据服务器公网 IP 添加国家或地区国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={16} /> : <Flag size={16} />}</button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button className="icon-button compact copy-action" onClick={onCopy} aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></span>
+    <span className="node-row-actions"><button className="icon-button compact diagnostic-action" disabled={probeBusy} onClick={onProbe} title="按上方所选模式检测节点" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}</button><button className="icon-button compact diagnostic-action" disabled={flagBusy} onClick={onFlag} title="根据上方所选入口或出口 IP 添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={16} /> : <Flag size={16} />}</button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}>•••</button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`}><Pencil size={16} /></button><button className="icon-button compact copy-action" onClick={onCopy} aria-label={`复制 ${node.name}`}><Copy size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`}><Trash2 size={16} /></button></span></span>
   </div>;
 }

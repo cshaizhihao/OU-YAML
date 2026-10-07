@@ -138,6 +138,27 @@ function exportRule(rule: RuleItem) {
 }
 
 export function exportMihomoYaml(config: MihomoConfig): string {
+  const proxies = config.proxies.map(exportProxy);
+  const usedNames = new Set([...config.proxies.map((node) => node.name), ...config.proxyGroups.map((group) => group.name)]);
+  const groups = config.proxyGroups.map((group) => {
+    if (group.type !== "relay") return group;
+    if (!group.proxies.length) throw new Error(`链式代理“${group.name}”需要至少一个节点`);
+    if (group.extra.use || group.extra["include-all"] || group.extra["include-all-proxies"] || group.extra["include-all-providers"]) throw new Error(`链式代理“${group.name}”不能使用动态成员，请选择具体节点`);
+    let previous = "";
+    group.proxies.forEach((member, index) => {
+      const node = config.proxies.find((candidate) => candidate.name === member);
+      if (!node || node.extra["dialer-proxy"]) throw new Error(`链式代理“${group.name}”仅支持未绑定 dialer-proxy 的具体节点，请勿放入策略组或内置策略`);
+      const base = `${group.name.slice(0, 50)} · 第 ${index + 1} 跳 · ${node.name.slice(0, 80)}`;
+      let name = base;
+      let suffix = 2;
+      while (usedNames.has(name)) name = `${base} ${suffix++}`;
+      usedNames.add(name);
+      if (proxies.length >= 10000) throw new Error("链式代理展开后的节点数量超过限制");
+      proxies.push(exportProxy({ ...node, name, extra: { ...node.extra, ...(previous ? { "dialer-proxy": previous } : {}) } }));
+      previous = name;
+    });
+    return { ...group, type: "select", proxies: [previous] };
+  });
   const output = {
     ...config.extra,
     "mixed-port": config.mixedPort,
@@ -146,8 +167,8 @@ export function exportMihomoYaml(config: MihomoConfig): string {
     "log-level": config.logLevel,
     ipv6: config.ipv6,
     "external-controller": config.externalController,
-    proxies: config.proxies.map(exportProxy),
-    "proxy-groups": config.proxyGroups.map((group) => cleanUndefined({
+    proxies,
+    "proxy-groups": groups.map((group) => cleanUndefined({
       ...group.extra,
       name: group.name,
       type: group.type,

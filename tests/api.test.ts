@@ -90,6 +90,19 @@ after(async () => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("快捷发布与恢复地址需要登录，并隔离不存在的资源", async () => {
+  const anonymous = await fetch(`${baseUrl}/api/projects/unknown/quick-publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(anonymous.status, 401);
+  assert.equal((await fetch(`${baseUrl}/api/generated-subscriptions/unknown/token`)).status, 401);
+  const missing = await api("/api/generated-subscriptions/unknown/token");
+  assert.equal(missing.status, 404);
+  assert.equal(missing.headers.get("cache-control"), "no-store");
+  const source = await api("/api/node-sources/unknown/diagnose", { method: "POST" });
+  assert.equal(source.status, 404);
+  const proxy = await api("/api/managed-nodes/unknown/proxy-test", { method: "POST" });
+  assert.equal(proxy.status, 404);
+});
+
 test("浏览器跨站修改请求会被 Origin 防护拒绝", async () => {
   const response = await api("/api/projects", {
     method: "POST",

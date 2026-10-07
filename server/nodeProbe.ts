@@ -34,14 +34,20 @@ export function filterPublicNodeAddresses(records: readonly ResolvedAddress[]) {
     .slice(0, 8);
 }
 
-async function defaultLookup(hostname: string) {
+export async function resolveNodeAddresses(hostname: string) {
   const normalized = normalizeHostname(hostname);
   if (!normalized || normalized.length > 253) throw new Error("节点服务器地址无效");
   if (["localhost", "localhost.localdomain"].includes(normalized.toLowerCase()) || normalized.toLowerCase().endsWith(".local")) throw new Error("为保护服务器安全，不能检测本机或局域网地址");
   const family = net.isIP(normalized);
-  const records = family ? [{ address: normalized, family }] : await dns.lookup(normalized, { all: true, verbatim: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const records = family ? [{ address: normalized, family }] : await Promise.race([
+    dns.lookup(normalized, { all: true, verbatim: true }),
+    new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("节点域名解析超时")), 5000); }),
+  ]).finally(() => clearTimeout(timer));
   return filterPublicNodeAddresses(records);
 }
+
+const defaultLookup = resolveNodeAddresses;
 
 function defaultConnect(address: ResolvedAddress, port: number, timeoutMs: number) {
   return new Promise<number>((resolve, reject) => {
@@ -112,7 +118,7 @@ async function fetchCountry(address: string, fetcher: Fetcher) {
   let lastError: unknown;
   for (const service of services) {
     try {
-      const response = await fetcher(service.url, { headers: { Accept: "application/json", "User-Agent": "OU-YAML/1.5" }, signal: AbortSignal.timeout(7000) });
+      const response = await fetcher(service.url, { headers: { Accept: "application/json", "User-Agent": "OU-YAML/1.7" }, signal: AbortSignal.timeout(7000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.text();
       if (body.length > 20_000) throw new Error("归属地服务响应过大");
@@ -134,6 +140,9 @@ export async function lookupNodeCountry(server: string, options: { lookup?: Look
   const result = await fetchCountry(ip, options.fetcher || fetch);
   const countryCode = result.countryCode.toUpperCase();
   const value = { ip, countryCode, country: result.country || countryCode, flag: countryCodeToFlag(countryCode) };
-  if (!options.lookup && !options.fetcher) countryCache.set(ip, { value, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+  if (!options.lookup && !options.fetcher) {
+    if (countryCache.size >= 2000) countryCache.delete(countryCache.keys().next().value!);
+    countryCache.set(ip, { value, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+  }
   return value;
 }

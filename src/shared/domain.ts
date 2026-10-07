@@ -51,6 +51,11 @@ export interface GenerationProfile {
   nodeIds: string[];
   sourceIds: string[];
   templateId?: string;
+  projectId?: string;
+  autoUpdate?: boolean;
+  includeNewNodes?: boolean;
+  lastSyncAt?: string;
+  lastSyncError?: string;
   status: ResourceStatus;
   createdAt: string;
   updatedAt: string;

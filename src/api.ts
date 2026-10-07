@@ -5,6 +5,7 @@ import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, Project
 export type UpdateInfo = { currentVersion: string; latestVersion: string | null; currentCommit: string | null; latestCommit: string | null; updateKind: "version" | "build" | null; hasUpdate: boolean; releaseUrl: string | null; releaseNotes: string; publishedAt: string | null; agentAvailable: boolean };
 export type UpdateStatus = { status: "idle" | "requested" | "running" | "completed" | "failed"; message: string; progress: number; updatedAt: string | null };
 export type TcpPingResult = { reachable: boolean; latencyMs: number | null; resolvedAddress: string | null; error?: string };
+export type ProxyProbeResult = TcpPingResult & { exitIp: string; countryCode?: string; checkedAt: string };
 export type NodeCountryResult = { node: ManagedNode; location: { ip: string; countryCode: string; country: string; flag: string } };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -32,12 +33,13 @@ export const api = {
   createUser: (username: string, password: string, isAdmin: boolean) => request<UserAccount>("/api/admin/users", { method: "POST", body: JSON.stringify({ username, password, isAdmin }) }),
   updateUser: (id: string, data: { isAdmin: boolean; disabled: boolean; password?: string }) => request<UserAccount>(`/api/admin/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteUser: (id: string) => request<void>(`/api/admin/users/${id}`, { method: "DELETE" }),
-  checkUpdate: () => request<UpdateInfo>("/api/admin/update/check"),
+  checkUpdate: (channel: "stable" | "preview" = "stable") => request<UpdateInfo>(`/api/admin/update/check?channel=${channel}`),
   getUpdateStatus: () => request<UpdateStatus>("/api/admin/update/status"),
   getUpdateLog: () => request<{ log: string }>("/api/admin/update/log"),
-  startUpdate: () => request<{ accepted: boolean }>("/api/admin/update/start", { method: "POST" }),
+  startUpdate: (channel: "stable" | "preview" = "stable") => request<{ accepted: boolean }>("/api/admin/update/start", { method: "POST", body: JSON.stringify({ channel }) }),
   listProjects: () => request<ProjectSummary[]>("/api/projects"),
   listNodeSources: () => request<NodeSource[]>("/api/node-sources"),
+  diagnoseSource: (id: string) => request<{ ok: boolean; nodeCount: number; advice: string; events: { stage: string; profile?: string; status?: number; address?: string; message: string }[] }>(`/api/node-sources/${id}/diagnose`, { method: "POST" }),
   createNodeSource: (data: Pick<NodeSource, "name" | "kind" | "format" | "enabled" | "intervalMinutes" | "skipCertVerify"> & { url?: string; userAgent?: string }) => request<NodeSource>("/api/node-sources", { method: "POST", body: JSON.stringify(data) }),
   updateNodeSource: (id: string, data: Pick<NodeSource, "name" | "kind" | "format" | "enabled" | "intervalMinutes" | "skipCertVerify"> & { url?: string; userAgent?: string }) => request<NodeSource>(`/api/node-sources/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   refreshNodeSource: (id: string) => request<{ source: NodeSource; nodes: ManagedNode[]; warnings: string[] }>(`/api/node-sources/${id}/refresh`, { method: "POST" }),
@@ -48,7 +50,8 @@ export const api = {
   reorderManagedNodes: (ids: string[]) => request<ManagedNode[]>("/api/managed-nodes/order", { method: "PUT", body: JSON.stringify({ ids }) }),
   batchUpdateManagedNodes: (data: { ids: string[]; enabled?: boolean; addTags?: string[]; removeTags?: string[]; prefix?: string; find?: string; replace?: string }) => request<ManagedNode[]>("/api/managed-nodes/batch", { method: "PUT", body: JSON.stringify(data) }),
   tcpPingManagedNode: (id: string) => request<TcpPingResult>(`/api/managed-nodes/${id}/tcp-ping`, { method: "POST" }),
-  applyManagedNodeCountryFlag: (id: string) => request<NodeCountryResult>(`/api/managed-nodes/${id}/country-flag`, { method: "POST" }),
+  proxyTestManagedNode: (id: string) => request<ProxyProbeResult>(`/api/managed-nodes/${id}/proxy-test`, { method: "POST" }),
+  applyManagedNodeCountryFlag: (id: string, basis: "entry" | "exit" = "entry") => request<NodeCountryResult>(`/api/managed-nodes/${id}/country-flag`, { method: "POST", body: JSON.stringify({ basis }) }),
   deleteNodeSource: (id: string) => request<{ deleted: boolean }>(`/api/node-sources/${id}`, { method: "DELETE" }),
   deleteManagedNode: (id: string) => request<{ deleted: boolean }>(`/api/managed-nodes/${id}`, { method: "DELETE" }),
   listProxyGroups: () => request<any[]>("/api/proxy-groups"),
@@ -60,6 +63,10 @@ export const api = {
   updateRuleTemplate: (id: string, data: { name: string; description?: string; targetFormat: TargetFormat; content: unknown[] }) => request<any>(`/api/rule-templates/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteRuleTemplate: (id: string) => request<{ deleted: boolean }>(`/api/rule-templates/${id}`, { method: "DELETE" }),
   listGenerationProfiles: () => request<GenerationProfile[]>("/api/generation-profiles"),
+  quickPublish: (id: string, data: { nodeIds: string[]; preset: "balanced" | "simple" | "current"; autoUpdate: boolean; includeNewNodes: boolean; updatedAt: string }) => request<GeneratedSubscription & { kernelChecked: boolean }>(`/api/projects/${id}/quick-publish`, { method: "POST", body: JSON.stringify(data) }),
+  setProfileSync: (id: string, data: { autoUpdate: boolean; includeNewNodes: boolean }) => request<GenerationProfile>(`/api/generation-profiles/${id}/sync`, { method: "PUT", body: JSON.stringify(data) }),
+  syncProfile: (id: string) => request<{ synced: boolean }>(`/api/generation-profiles/${id}/sync`, { method: "POST" }),
+  getSubscriptionToken: (id: string) => request<{ token: string }>(`/api/generated-subscriptions/${id}/token`),
   createGenerationProfile: (data: Pick<GenerationProfile, "name" | "targetFormat" | "config"> & { nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) => request<GenerationProfile>("/api/generation-profiles", { method: "POST", body: JSON.stringify(data) }),
   updateGenerationProfile: (id: string, data: Pick<GenerationProfile, "name" | "targetFormat" | "config"> & { nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) => request<GenerationProfile>(`/api/generation-profiles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteGenerationProfile: (id: string) => request<{ deleted: boolean }>(`/api/generation-profiles/${id}`, { method: "DELETE" }),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpenCheck, ChevronLeft, ChevronRight, CircleHelp, Clock3, Compass, GraduationCap, ListChecks, Play, RotateCcw, Sparkles, X } from "lucide-react";
 import { Drawer } from "./Dialog";
 import { findGuide, GUIDE_VERSION, guideRegistry, guideTargets, type GuideDefinition, type GuideView } from "../guides/registry";
@@ -12,6 +12,7 @@ export type GuideController = {
   resume: ActiveGuide | null;
   welcomeOpen: boolean;
   centerOpen: boolean;
+  hasUpdates: boolean;
   start: (guideId: string, stepIndex?: number) => void;
   next: () => void;
   previous: () => void;
@@ -47,12 +48,12 @@ export function useGuideController(username: string): GuideController {
   const [completed, setCompleted] = useState<string[]>(initial?.completed || []);
   const [resume, setResume] = useState<ActiveGuide | null>(initial?.version === GUIDE_VERSION ? initial.resume || null : null);
   const [active, setActive] = useState<ActiveGuide | null>(null);
-  const [welcomeOpen, setWelcomeOpen] = useState(!initial || initial.version !== GUIDE_VERSION);
+  const [welcomeOpen, setWelcomeOpen] = useState(!initial);
   const [centerOpen, setCenterOpen] = useState(false);
 
   useEffect(() => {
     const stored: StoredGuideState = { version: storedVersion, completed, resume: active || resume || undefined };
-    localStorage.setItem(stateKey(username), JSON.stringify(stored));
+    try { localStorage.setItem(stateKey(username), JSON.stringify(stored)); } catch { }
   }, [active, completed, resume, storedVersion, username]);
 
   const start = useCallback((guideId: string, stepIndex = 0) => {
@@ -108,13 +109,14 @@ export function useGuideController(username: string): GuideController {
     resume,
     welcomeOpen,
     centerOpen,
+    hasUpdates: Boolean(initial && storedVersion !== GUIDE_VERSION),
     start,
     next,
     previous,
     pause,
     finish,
     skipWelcome,
-    openCenter: () => setCenterOpen(true),
+    openCenter: () => { setStoredVersion(GUIDE_VERSION); setCenterOpen(true); },
     closeCenter: () => setCenterOpen(false),
   };
 }
@@ -122,9 +124,20 @@ export function useGuideController(username: string): GuideController {
 type TargetRect = { top: number; left: number; width: number; height: number };
 
 function GuidedPopover({ controller, currentView, navigate }: { controller: GuideController; currentView: GuideView; navigate: (view: GuideView) => void }) {
+  const popoverRef = useRef<HTMLElement>(null);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const activeGuide = controller.active ? findGuide(controller.active.guideId) : undefined;
   const step = activeGuide && controller.active ? activeGuide.steps[controller.active.stepIndex] : undefined;
+
+  useEffect(() => {
+    const popover = popoverRef.current;
+    if (!popover || !step) return;
+    const measure = () => document.documentElement.style.setProperty("--guide-dock-height", `${popover.getBoundingClientRect().height + 24}px`);
+    const observer = new ResizeObserver(measure);
+    observer.observe(popover);
+    measure();
+    return () => { observer.disconnect(); document.documentElement.style.removeProperty("--guide-dock-height"); };
+  }, [step]);
 
   useEffect(() => {
     if (!step || step.view === currentView) return;
@@ -139,7 +152,10 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
     let cancelled = false;
     let attempts = 0;
     let target: HTMLElement | null = null;
+    let timer: number | undefined;
+    if (step.quickStep !== undefined) window.dispatchEvent(new CustomEvent("ou-yaml:quick-step", { detail: step.quickStep }));
     const readRect = () => {
+      if (cancelled) return;
       if (!target || !document.documentElement.contains(target)) return setTargetRect(null);
       const rect = target.getBoundingClientRect();
       setTargetRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
@@ -149,12 +165,12 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
       target = document.querySelector<HTMLElement>(`[data-guide-id="${step.target}"]`);
       if (!target && attempts < 25) {
         attempts += 1;
-        window.setTimeout(find, 100);
+        timer = window.setTimeout(find, 100);
         return;
       }
       if (!target) return setTargetRect(null);
-      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-      window.setTimeout(readRect, 280);
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      timer = window.setTimeout(readRect, 280);
       readRect();
     };
     find();
@@ -162,14 +178,23 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
     window.addEventListener("scroll", readRect, true);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
       window.removeEventListener("resize", readRect);
       window.removeEventListener("scroll", readRect, true);
     };
   }, [currentView, step]);
 
   useEffect(() => {
+    if (!step?.advanceOn) return;
+    const handleProgress = (event: Event) => { if ((event as CustomEvent).detail === step.advanceOn) controller.next(); };
+    window.addEventListener("ou-yaml:guide-progress", handleProgress);
+    return () => window.removeEventListener("ou-yaml:guide-progress", handleProgress);
+  }, [controller, step]);
+
+  useEffect(() => {
     if (!step) return;
     const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement)?.closest("input, textarea, select, [contenteditable='true']")) return;
       if (event.key === "Escape") controller.pause();
       if (event.key === "ArrowRight") controller.next();
       if (event.key === "ArrowLeft") controller.previous();
@@ -192,7 +217,7 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
 
   return <div className="guided-tour-layer" aria-live="polite">
     {targetRect && <div className="guided-tour-highlight" style={{ top: targetRect.top - margin, left: targetRect.left - margin, width: targetRect.width + margin * 2, height: targetRect.height + margin * 2 }} />}
-    <section className="guided-tour-popover" style={popoverStyle} role="dialog" aria-label={`${activeGuide.title}：${step.title}`}>
+    <section ref={popoverRef} className="guided-tour-popover" style={popoverStyle} role="dialog" aria-label={`${activeGuide.title}：${step.title}`}>
       <header>
         <span><Compass size={15} />{activeGuide.title}</span>
         <button className="icon-button compact" onClick={controller.pause} aria-label="暂停教程"><X size={17} /></button>
@@ -203,7 +228,7 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
         <h2>{step.title}</h2>
         <p>{step.description}</p>
         {step.tip && <div className="guided-tour-tip"><Sparkles size={15} />{step.tip}</div>}
-        {!targetRect && <div className="guided-tour-wait">正在打开对应页面并定位操作区域……</div>}
+        {!targetRect && <div className="guided-tour-wait">请先完成前一步操作。也可以暂停教程，稍后继续。</div>}
       </div>
       <footer>
         <button className="secondary-button compact-button" disabled={controller.active.stepIndex === 0} onClick={controller.previous}><ChevronLeft size={15} />上一步</button>
@@ -219,8 +244,8 @@ function WelcomeGuide({ controller, username }: { controller: GuideController; u
     <section className="guide-welcome" role="dialog" aria-modal="true" aria-labelledby="guide-welcome-title">
       <div className="guide-welcome-art"><span><GraduationCap size={29} /></span><i /><i /><i /></div>
       <span className="eyebrow">OU-YAML · 新手模式</span>
-      <h1 id="guide-welcome-title">欢迎回来，{username}</h1>
-      <p>不需要会写 YAML。跟随引导依次完成导入、选择、代理设置、中文分流和发布订阅。</p>
+      <h1 id="guide-welcome-title">欢迎使用，{username}</h1>
+      <p>不需要会写 YAML。跟随三步引导完成导入、推荐配置和发布，操作成功后会自动进入下一步。</p>
       <div className="guide-welcome-features">
         <span><ListChecks size={18} /><strong>自动跳转</strong><small>每一步都会打开正确页面</small></span>
         <span><BookOpenCheck size={18} /><strong>中文解释</strong><small>英文规则保留为标准输出</small></span>
@@ -228,7 +253,7 @@ function WelcomeGuide({ controller, username }: { controller: GuideController; u
       </div>
       <div className="guide-welcome-actions">
         <button className="text-button" onClick={controller.skipWelcome}>暂时跳过</button>
-        <button className="primary-button" onClick={() => controller.start("quickstart")}><Play size={17} />开始 5 分钟教程</button>
+        <button className="primary-button" onClick={() => controller.start("quickstart")}><Play size={17} />开始三步教程</button>
       </div>
     </section>
   </div>;
@@ -245,13 +270,13 @@ function GuideCard({ guide, completed, resume, onStart }: { guide: GuideDefiniti
 
 export function GuideExperience({ controller, username, currentView, navigate }: { controller: GuideController; username: string; currentView: GuideView; navigate: (view: GuideView) => void }) {
   return <>
-    <button className="floating-help-button" data-guide-id={guideTargets.helpButton} onClick={controller.openCenter} aria-label="打开新手教程"><CircleHelp size={20} /><span>新手教程</span></button>
+    <button className="floating-help-button" data-guide-id={guideTargets.helpButton} onClick={controller.openCenter} aria-label="打开新手教程"><CircleHelp size={20} /><span>{controller.hasUpdates ? "教程有更新" : "新手教程"}</span></button>
     <WelcomeGuide controller={controller} username={username} />
     <GuidedPopover controller={controller} currentView={currentView} navigate={navigate} />
     <Drawer title="新手教程与帮助" open={controller.centerOpen} onClose={controller.closeCenter}>
       <div className="guide-library-intro"><span><Compass size={22} /></span><div><strong>从当前进度继续，或学习单项功能</strong><p>教程会自动跳转并高亮对应操作，不会修改你的配置。</p></div></div>
       <div className="guide-library-list">{guideRegistry.map((guide) => <GuideCard key={guide.id} guide={guide} completed={controller.completed.includes(guide.id)} resume={controller.resume || undefined} onStart={(step) => controller.start(guide.id, step)} />)}</div>
-      <div className="guide-maintenance-note"><Sparkles size={16} /><span><strong>教程版本 {GUIDE_VERSION}</strong><small>后续功能更新时，新步骤会随版本提示同步出现。</small></span></div>
+      <div className="guide-maintenance-note"><Sparkles size={16} /><span><strong>教程版本 {GUIDE_VERSION}</strong><small>这里只在操作流程变化时提示新教程，日常修复不会重复弹出欢迎页。</small></span></div>
     </Drawer>
   </>;
 }

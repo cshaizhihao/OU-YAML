@@ -137,13 +137,33 @@ function exportGroup(group: ProxyGroup) {
   };
 }
 
+export function singBoxCompatibility(config: MihomoConfig): string[] {
+  const errors: string[] = [];
+  for (const group of config.proxyGroups) {
+    if (!["select", "url-test"].includes(group.type)) errors.push(`代理组“${group.name}”的 ${group.type} 无法等价转换为 sing-box，请使用 Mihomo 或调整分组`);
+    if (group.proxies.includes("REJECT")) errors.push(`代理组“${group.name}”引用了 REJECT，请改用拒绝规则`);
+  }
+  for (const rule of config.rules.filter((item) => item.enabled)) {
+    if (!["DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "IP-CIDR6", "PROCESS-NAME", "RULE-SET", "MATCH"].includes(rule.type)) errors.push(`规则 ${rule.type} 无法导出到当前 sing-box，请使用 Mihomo 或改用规则集`);
+    if (rule.type === "MATCH" && rule.target === "REJECT") errors.push("sing-box 最终出口不能使用 REJECT");
+    if (rule.options.length) errors.push(`规则 ${rule.type} 的附加参数无法无损转换，请使用 Mihomo`);
+  }
+  for (const node of config.proxies) {
+    if (!["ss", "vmess", "vless", "trojan", "socks5", "http", "hysteria2", "tuic"].includes(node.type)) errors.push(`节点“${node.name}”的协议 ${node.type} 暂不支持跨格式导出`);
+    if (Object.keys(node.extra).length && !node.formatExtra?.singBox) errors.push(`节点“${node.name}”包含 Mihomo 专属参数，请保留 Mihomo 格式`);
+  }
+  return [...new Set(errors)];
+}
+
 function exportRule(rule: RuleItem) {
   const mappings: Record<string, string> = { DOMAIN: "domain", "DOMAIN-SUFFIX": "domain_suffix", "DOMAIN-KEYWORD": "domain_keyword", "IP-CIDR": "ip_cidr", "IP-CIDR6": "ip_cidr", GEOIP: "geoip", GEOSITE: "geosite", "PROCESS-NAME": "process_name", "RULE-SET": "rule_set" };
   const key = mappings[rule.type];
-  return key ? { [key]: [rule.value], outbound: rule.target } : null;
+  return key ? { [key]: [rule.value], ...(rule.target === "REJECT" ? { action: "reject" } : { outbound: rule.target }) } : null;
 }
 
 export function exportSingBoxJson(config: MihomoConfig): string {
+  const errors = singBoxCompatibility(config);
+  if (errors.length) throw new Error(errors.join("；"));
   const metadata = asObject(config.metadata?.singBox);
   const topLevel = asObject(metadata.topLevel);
   const originalInbounds = Array.isArray(metadata.inbounds) ? metadata.inbounds.map(asObject) : [];
@@ -172,7 +192,7 @@ export function exportSingBoxJson(config: MihomoConfig): string {
     ...topLevel,
     log: { ...asObject(metadata.logExtra), level: config.logLevel },
     inbounds,
-    outbounds: [...config.proxies.map(exportNode), ...config.proxyGroups.map(exportGroup), ...unsupportedOutbounds, { type: "direct", tag: "DIRECT" }, { type: "block", tag: "REJECT" }],
+    outbounds: [...config.proxies.map(exportNode), ...config.proxyGroups.map(exportGroup), ...unsupportedOutbounds, { type: "direct", tag: "DIRECT" }],
     route: { ...asObject(metadata.routeExtra), rules: orderedRules, ...(final ? { final } : {}) },
   };
   return JSON.stringify(output, null, 2) + "\n";

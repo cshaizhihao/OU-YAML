@@ -73,3 +73,20 @@ test("限制 YAML alias 展开", () => {
   const aliases = Array.from({ length: 60 }, () => "*a").join(", ");
   assert.throws(() => parseMihomoYaml(`base: &a [1]\nitems: [${aliases}]`));
 });
+
+test("链式组转换为独立 dialer-proxy 节点，不修改原节点", () => {
+  const config = parseMihomoYaml(fixture);
+  const first = config.proxies[0];
+  const second = { ...first, id: "second", name: "Exit", server: "8.8.8.8" };
+  config.proxies.push(second);
+  config.proxyGroups.push({ id: "chain", name: "Chain", type: "relay", proxies: [first.name, second.name], extra: {} });
+  const output = YAML.parse(exportMihomoYaml(config));
+  assert.equal(output.proxies[0]["dialer-proxy"], undefined);
+  assert.equal(output.proxies[1]["dialer-proxy"], undefined);
+  assert.equal(output.proxies[3]["dialer-proxy"], output.proxies[2].name);
+  assert.equal(output["proxy-groups"].at(-1).type, "select");
+  assert.deepEqual(output["proxy-groups"].at(-1).proxies, [output.proxies[3].name]);
+  assert.equal(config.proxyGroups.at(-1)!.type, "relay");
+  config.proxyGroups.at(-1)!.proxies = ["DIRECT"];
+  assert.throws(() => exportMihomoYaml(config), /具体节点/);
+});

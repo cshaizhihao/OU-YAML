@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 ENV npm_config_jobs=1 MAKEFLAGS=-j1
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
@@ -40,8 +40,10 @@ RUN set -eux; \
     curl -fL --retry 3 -o /licenses/sing-box-LICENSE "https://raw.githubusercontent.com/SagerNet/sing-box/v${SING_BOX_VERSION}/LICENSE"; \
     chmod 0755 /out/mihomo /out/sing-box
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 ARG BUILD_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$BUILD_COMMIT
+LABEL org.opencontainers.image.source="https://github.com/cshaizhihao/OU-YAML"
 WORKDIR /app
 ENV NODE_ENV=production PORT=8787 DATA_DIR=/app/data APP_COMMIT=$BUILD_COMMIT
 RUN groupadd --system --gid 1001 ouyaml && useradd --system --uid 1001 --gid ouyaml --home-dir /app ouyaml

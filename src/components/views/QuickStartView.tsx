@@ -18,13 +18,18 @@ export function QuickStartView({ project, onNavigate, onDownload, onStartGuide }
   const [kernelResult, setKernelResult] = useState<KernelValidationResult | null>(null);
   const [message, setMessage] = useState("");
   const [catalogStats, setCatalogStats] = useState({ sources: 0, nodes: 0 });
+  const [published, setPublished] = useState(false);
 
   useEffect(() => {
     api.kernelInfo().then(setKernels).catch(() => setKernels([]));
+    Promise.all([api.listGenerationProfiles(), api.listGeneratedSubscriptions()]).then(([profiles, subscriptions]) => {
+      const profileIds = new Set(profiles.filter((profile) => profile.projectId === project.id).map((profile) => profile.id));
+      setPublished(subscriptions.some((item) => profileIds.has(item.profileId) && !item.revoked && (!item.expiresAt || new Date(item.expiresAt).getTime() > Date.now())));
+    }).catch(() => setPublished(false));
     Promise.all([api.listNodeSources(), api.listManagedNodes()])
       .then(([sources, nodes]) => setCatalogStats({ sources: sources.length, nodes: nodes.length }))
       .catch(() => setCatalogStats({ sources: 0, nodes: 0 }));
-  }, []);
+  }, [project.id, project.updatedAt]);
   const issues = useMemo(() => validateConfig(project.config), [project.config]);
   const errorCount = issues.filter((issue) => issue.level === "error").length;
   const nodeNames = useMemo(() => new Set(project.config.proxies.map((node) => node.name)), [project.config.proxies]);
@@ -34,7 +39,7 @@ export function QuickStartView({ project, onNavigate, onDownload, onStartGuide }
   const hasRules = project.config.rules.some((rule) => rule.enabled && rule.type === "MATCH");
   const ready = hasNodes && hasGroups && hasRules && errorCount === 0;
   const kernel = kernels.find((item) => item.engine === project.targetFormat);
-  const progress = [hasSource, hasNodes, hasGroups, hasRules, ready].filter(Boolean).length;
+  const progress = [hasSource, hasNodes, hasGroups, hasRules, published].filter(Boolean).length;
 
   async function checkKernel() {
     setKernelBusy(true);
@@ -50,7 +55,7 @@ export function QuickStartView({ project, onNavigate, onDownload, onStartGuide }
     { number: 2, title: "选择项目节点", description: hasNodes ? `当前项目已选择 ${project.config.proxies.length} 个节点` : "从节点库挑选真正要生成订阅的节点", complete: hasNodes, icon: Database, action: () => onNavigate("nodes" as const), actionLabel: "选择节点" },
     { number: 3, title: "设置代理方式", description: hasGroups ? `${project.config.proxyGroups.length} 个代理组已引用节点` : "把节点放入选择组，也可以设置自动测速", complete: hasGroups, icon: Group, action: () => onNavigate("groups" as const), actionLabel: "设置代理" },
     { number: 4, title: "设置中文分流", description: hasRules ? `${project.config.rules.length} 条规则，已经包含最终兜底` : "用中文规则决定哪些网站直连或走代理", complete: hasRules, icon: ScrollText, action: () => onNavigate("rules" as const), actionLabel: "设置分流" },
-    { number: 5, title: "生成订阅", description: ready ? "配置检查通过，可以发布稳定订阅链接" : errorCount ? `还有 ${errorCount} 个错误需要处理` : "完成前面步骤后即可发布", complete: ready, icon: Rocket, action: () => onNavigate(ready ? "generator" : nextTarget), actionLabel: ready ? "生成订阅" : "继续完善" },
+    { number: 5, title: "生成订阅", description: published ? "快捷订阅已发布，可在首页找回链接" : ready ? "配置检查通过，可以发布稳定订阅链接" : errorCount ? `还有 ${errorCount} 个错误需要处理` : "完成前面步骤后即可发布", complete: published, icon: Rocket, action: () => onNavigate(ready ? "generator" : nextTarget), actionLabel: ready ? "生成订阅" : "继续完善" },
   ];
 
   return <div className="dashboard-view">

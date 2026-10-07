@@ -9,9 +9,9 @@ interface BackupSubscription { id: string; name: string; url: string; format: st
 interface BackupVersion { label: string; targetFormat: TargetFormat; config: MihomoConfig; createdAt: string }
 interface BackupProject { id?: string; name: string; targetFormat: TargetFormat; config: MihomoConfig; subscriptions: BackupSubscription[]; versions: BackupVersion[] }
 interface BackupNodeSource { id: string; name: string; kind: string; url?: string; format: string; enabled: boolean; intervalMinutes?: number; userAgent?: string; skipCertVerify?: boolean }
-interface BackupManagedNode { id: string; sourceId?: string; config: ProxyNode; enabled: boolean; sortOrder: number; tags: string[]; note?: string }
+interface BackupManagedNode { id: string; sourceId?: string; config: ProxyNode; enabled: boolean; sortOrder: number; tags: string[]; note?: string; originalName?: string; nameOverride?: boolean }
 interface BackupTemplate { id: string; name: string; description: string; targetFormat: TargetFormat; content: unknown[] }
-interface BackupProfile { id: string; name: string; targetFormat: TargetFormat; config: MihomoConfig; nodeIds: string[]; sourceIds: string[]; templateId?: string; status: string }
+interface BackupProfile { id: string; name: string; targetFormat: TargetFormat; config: MihomoConfig; nodeIds: string[]; sourceIds: string[]; templateId?: string; status: string; projectId?: string; autoUpdate?: boolean; includeNewNodes?: boolean }
 interface BackupPublication { profileId: string; name: string; targetFormat: TargetFormat; content: string; version: number; nodeCount: number; expiresAt?: string; revoked: boolean }
 interface UserBackupV1 { format: "ou-yaml-backup"; version: 1; exportedAt: string; username: string; projects: BackupProject[] }
 interface UserBackupV2 { format: "ou-yaml-backup"; version: 2; exportedAt: string; username: string; projects: BackupProject[]; nodeSources: BackupNodeSource[]; managedNodes: BackupManagedNode[]; ruleTemplates: BackupTemplate[]; generationProfiles: BackupProfile[]; publications: BackupPublication[] }
@@ -59,9 +59,9 @@ export function exportUserBackup(userId: string, username: string) {
       };
     }),
     nodeSources: nodeSources.map((row) => ({ id: String(row.id), name: String(row.name), kind: String(row.kind), url: row.url ? String(row.url) : undefined, format: String(row.format), enabled: readFlag(row.enabled), intervalMinutes: Number(row.interval_minutes || 0), userAgent: row.user_agent ? String(row.user_agent) : undefined, skipCertVerify: readFlag(row.skip_cert_verify) })),
-    managedNodes: managedNodes.map((row) => ({ id: String(row.id), sourceId: row.source_id ? String(row.source_id) : undefined, config: cleanProxyConfig(row.config_json), enabled: readFlag(row.enabled), sortOrder: Number(row.sort_order || 0), tags: readJson<string[]>(row.tags_json, []), note: row.note ? String(row.note) : undefined })),
+    managedNodes: managedNodes.map((row) => ({ originalName: row.original_name ? String(row.original_name) : undefined, nameOverride: readFlag(row.name_override), id: String(row.id), sourceId: row.source_id ? String(row.source_id) : undefined, config: cleanProxyConfig(row.config_json), enabled: readFlag(row.enabled), sortOrder: Number(row.sort_order || 0), tags: readJson<string[]>(row.tags_json, []), note: row.note ? String(row.note) : undefined })),
     ruleTemplates: templates.map((row) => ({ id: String(row.id), name: String(row.name), description: String(row.description || ""), targetFormat: row.target_format === "sing-box" ? "sing-box" : "mihomo", content: readJson<unknown[]>(row.content_json, []) })),
-    generationProfiles: profiles.map((row) => ({ id: String(row.id), name: String(row.name), targetFormat: row.target_format === "sing-box" ? "sing-box" : "mihomo", config: readJson<MihomoConfig>(row.config_json, {} as MihomoConfig), nodeIds: readJson<string[]>(row.node_ids_json, []), sourceIds: readJson<string[]>(row.source_ids_json, []), templateId: row.template_id ? String(row.template_id) : undefined, status: String(row.status) })),
+    generationProfiles: profiles.map((row) => ({ projectId: row.project_id ? String(row.project_id) : undefined, autoUpdate: readFlag(row.auto_update), includeNewNodes: readFlag(row.include_new_nodes), id: String(row.id), name: String(row.name), targetFormat: row.target_format === "sing-box" ? "sing-box" : "mihomo", config: readJson<MihomoConfig>(row.config_json, {} as MihomoConfig), nodeIds: readJson<string[]>(row.node_ids_json, []), sourceIds: readJson<string[]>(row.source_ids_json, []), templateId: row.template_id ? String(row.template_id) : undefined, status: String(row.status) })),
     publications: publications.map((row) => ({ profileId: String(row.profile_id), name: String(row.name), targetFormat: row.target_format === "sing-box" ? "sing-box" : "mihomo", content: String(row.content), version: Number(row.version), nodeCount: Number(row.node_count), expiresAt: row.expires_at ? String(row.expires_at) : undefined, revoked: readFlag(row.revoked) })),
   };
   return `${JSON.stringify(backup, null, 2)}\n`;
@@ -121,12 +121,14 @@ function validateBackup(value: unknown): UserBackupV1 | UserBackupV2 {
   }
   for (const node of backup.managedNodes) {
     if (!node || typeof node.id !== "string" || !node.id || (node.sourceId !== undefined && typeof node.sourceId !== "string") || typeof node.enabled !== "boolean" || !Number.isInteger(node.sortOrder) || node.sortOrder < 0 || node.sortOrder > 1_000_000 || (node.note !== undefined && (typeof node.note !== "string" || node.note.length > 500))) throw new Error("备份中包含无效节点");
+    if ((node.originalName !== undefined && (typeof node.originalName !== "string" || node.originalName.length > 200)) || (node.nameOverride !== undefined && typeof node.nameOverride !== "boolean")) throw new Error("备份中包含无效节点别名");
     validateNode(node.config);
     if (!Array.isArray(node.tags) || node.tags.length > 30 || node.tags.some((tag) => typeof tag !== "string" || tag.length > 40)) throw new Error("备份中包含无效节点标签");
   }
   for (const template of backup.ruleTemplates) if (!template || typeof template.id !== "string" || !template.id || typeof template.name !== "string" || !template.name.trim() || template.name.length > 120 || typeof template.description !== "string" || template.description.length > 500 || !["mihomo", "sing-box"].includes(template.targetFormat) || !Array.isArray(template.content) || template.content.length > 5000) throw new Error("备份中包含无效规则模板");
   for (const profile of backup.generationProfiles) {
     if (!profile || typeof profile.id !== "string" || !profile.id || typeof profile.name !== "string" || !profile.name.trim() || profile.name.length > 120 || !["mihomo", "sing-box"].includes(profile.targetFormat) || !Array.isArray(profile.nodeIds) || profile.nodeIds.length > 5000 || profile.nodeIds.some((id) => typeof id !== "string") || !Array.isArray(profile.sourceIds) || profile.sourceIds.length > 500 || profile.sourceIds.some((id) => typeof id !== "string") || (profile.templateId !== undefined && typeof profile.templateId !== "string") || !["active", "disabled", "error"].includes(profile.status)) throw new Error("备份中包含无效生成方案");
+    if ((profile.projectId !== undefined && typeof profile.projectId !== "string") || (profile.autoUpdate !== undefined && typeof profile.autoUpdate !== "boolean") || (profile.includeNewNodes !== undefined && typeof profile.includeNewNodes !== "boolean")) throw new Error("备份中包含无效同步配置");
     validateConfigValue(profile.config);
   }
   for (const publication of backup.publications) if (!publication || typeof publication.profileId !== "string" || typeof publication.name !== "string" || !publication.name.trim() || publication.name.length > 120 || !["mihomo", "sing-box"].includes(publication.targetFormat) || typeof publication.content !== "string" || publication.content.length > 10_000_000 || !Number.isInteger(publication.version) || publication.version < 1 || !Number.isInteger(publication.nodeCount) || publication.nodeCount < 0 || (publication.expiresAt !== undefined && !Number.isFinite(new Date(publication.expiresAt).getTime())) || typeof publication.revoked !== "boolean") throw new Error("备份中包含无效发布内容");
@@ -183,10 +185,13 @@ export function restoreUserBackup(userId: string, source: string, mode: "merge" 
       db.prepare(`INSERT INTO managed_nodes (id,user_id,source_id,name,type,server,port,config_json,raw_config_json,enabled,sort_order,tags_json,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
         .run(id, userId, item.sourceId ? sourceIds.get(item.sourceId) || null : null, config.name, config.type, config.server, config.port, JSON.stringify(config), JSON.stringify(config.extra || {}), item.enabled ? 1 : 0, item.sortOrder, JSON.stringify(item.tags), item.note || null, stamp, stamp);
     }
+    for (const item of backupV2?.managedNodes || []) db.prepare("UPDATE managed_nodes SET original_name = ?, name_override = ? WHERE id = ?").run(typeof item.originalName === "string" ? item.originalName.slice(0, 200) : item.config.name, item.nameOverride === true ? 1 : 0, nodeIds.get(item.id));
     for (const id of sourceIds.values()) db.prepare("UPDATE node_sources SET node_count = (SELECT COUNT(*) FROM managed_nodes WHERE source_id = ?) WHERE id = ?").run(id, id);
 
+    const projectIds = new Map<string, string>();
     for (const project of backup.projects) {
       const projectId = randomUUID();
+      if (project.id) projectIds.set(project.id, projectId);
       const subscriptionIds = new Map(project.subscriptions.map((item) => [item.id, randomUUID()]));
       const config = remapManagedNodes(remapSources(project.config, subscriptionIds), nodeIds);
       db.prepare("INSERT INTO projects (id,user_id,name,config_json,created_at,updated_at,target_format) VALUES (?,?,?,?,?,?,?)")
@@ -219,6 +224,7 @@ export function restoreUserBackup(userId: string, source: string, mode: "merge" 
         .run(id, userId, profile.name.slice(0, 120), profile.targetFormat, JSON.stringify(profileConfig), JSON.stringify(profile.nodeIds.map((nodeId) => nodeIds.get(nodeId)).filter(Boolean)), JSON.stringify(profile.sourceIds.map((sourceId) => sourceIds.get(sourceId)).filter(Boolean)), profile.templateId ? templateIds.get(profile.templateId) || null : null, profile.status === "disabled" ? "disabled" : "active", stamp, stamp);
     }
 
+    for (const profile of backupV2?.generationProfiles || []) db.prepare("UPDATE generation_profiles SET project_id = ?, auto_update = ?, include_new_nodes = ? WHERE id = ?").run(profile.projectId ? projectIds.get(profile.projectId) || null : null, profile.autoUpdate === true ? 1 : 0, profile.includeNewNodes === true ? 1 : 0, profileIds.get(profile.id));
     for (const publication of backupV2?.publications || []) {
       const profileId = profileIds.get(publication.profileId);
       if (!profileId) continue;

@@ -16,10 +16,14 @@ import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from 
 import { safeFetchSubscription, safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
-import { batchUpdateManagedNodes, createManagedNode, createNodeSource, createProfile, deleteManagedNode, deleteProfile, deletePublishedSubscription, getManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, rotatePublishedSubscription, listRuleTemplates, createRuleTemplate, updateRuleTemplate, deleteRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, markNodeSourceError, recordAudit, recordJob, updateJob, updateManagedNode, updateNodeSource, replaceManagedNodesForSource, reorderManagedNodes, hydrateProject, syncProjectNodes, updateProfile, updatePublishedSubscription } from "./domainService";
+import { batchUpdateManagedNodes, createManagedNode, createNodeSource, createProfile, deleteManagedNode, deleteProfile, deletePublishedSubscription, getManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, getProfile, readPublicSubscription, revokePublishedSubscription, rotatePublishedSubscription, listRuleTemplates, createRuleTemplate, updateRuleTemplate, deleteRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, markNodeSourceError, recordAudit, recordJob, updateJob, updateManagedNode, updateNodeSource, replaceManagedNodesForSource, reorderManagedNodes, hydrateProject, syncProjectNodes, updateProfile, updatePublishedSubscription } from "./domainService";
 import { checkForUpdate, readUpdateLog, readUpdateStatus, requestWebUpdate } from "./update";
 import { csrfOriginGuard } from "./csrf";
 import { addCountryFlag, lookupNodeCountry, tcpPingNode } from "./nodeProbe";
+import { previewExport } from "../src/shared/exportConfig";
+import { configureProfileSync, validatedContent, quickPublish, readSubscriptionToken, syncAutoProfiles, syncProfile } from "./publicationService";
+import { probeProxy } from "./proxyProbe";
+import { diagnoseSource } from "./sourceDiagnostics";
 
 declare global {
   namespace Express { interface Request { user?: { id: string; username: string; isAdmin: boolean } } }
@@ -331,9 +335,9 @@ app.delete("/api/admin/users/:id", requireAuth, requireAdmin, (req, res) => {
   res.status(204).end();
 });
 
-app.get("/api/admin/update/check", requireAuth, requireAdmin, async (_req, res) => {
+app.get("/api/admin/update/check", requireAuth, requireAdmin, async (req, res) => {
   try {
-    res.json(await checkForUpdate());
+    res.json(await checkForUpdate(req.query.channel === "preview" ? "preview" : "stable"));
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? `检查更新失败：${error.message}` : "检查更新失败" });
   }
@@ -349,7 +353,7 @@ app.get("/api/admin/update/log", requireAuth, requireAdmin, async (_req, res) =>
 
 app.post("/api/admin/update/start", requireAuth, requireAdmin, async (req, res) => {
   try {
-    res.status(202).json(await requestWebUpdate(req.user!.username));
+    res.status(202).json(await requestWebUpdate(req.user!.username, req.body?.channel === "preview" ? "preview" : "stable"));
   } catch (error) {
     res.status(409).json({ error: error instanceof Error ? error.message : "更新启动失败" });
   }
@@ -558,6 +562,7 @@ app.put("/api/managed-nodes/batch", requireAuth, (req, res) => {
 app.post("/api/managed-nodes/:id/tcp-ping", requireAuth, nodeProbeLimiter, async (req, res) => {
   const node = getManagedNode(req.user!.id, String(req.params.id));
   if (!node) return res.status(404).json({ error: "节点不存在" });
+  if (["hysteria2", "tuic", "wireguard"].includes(node.type)) return res.status(422).json({ error: "此节点使用 UDP 协议，请使用代理实测或客户端测试，TCP 结果不能代表其可用性" });
   try {
     const result = await tcpPingNode(node.server, node.port);
     recordAudit(req.user!.id, "tcp-ping", "managed-node", node.id, { reachable: result.reachable, latencyMs: result.latencyMs });
@@ -566,13 +571,24 @@ app.post("/api/managed-nodes/:id/tcp-ping", requireAuth, nodeProbeLimiter, async
     res.status(422).json({ error: error instanceof Error ? error.message : "TCP 检测失败" });
   }
 });
+app.post("/api/managed-nodes/:id/proxy-test", requireAuth, nodeProbeLimiter, async (req, res) => {
+  const node = getManagedNode(req.user!.id, String(req.params.id));
+  if (!node) return res.status(404).json({ error: "节点不存在" });
+  try { res.json(await probeProxy(node)); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
 app.post("/api/managed-nodes/:id/country-flag", requireAuth, nodeProbeLimiter, async (req, res) => {
   const node = getManagedNode(req.user!.id, String(req.params.id));
   if (!node) return res.status(404).json({ error: "节点不存在" });
   try {
-    const location = await lookupNodeCountry(node.server);
-    const nextName = addCountryFlag(node.name, location.flag);
-    const updated = updateManagedNode(req.user!.id, node.id, { ...node, name: nextName });
+    if (req.body?.basis && !["entry", "exit"].includes(req.body.basis)) return res.status(400).json({ error: "请选择入口或出口 IP" });
+    const address = req.body?.basis === "exit" ? (await probeProxy(node)).exitIp : node.server;
+    const location = await lookupNodeCountry(address);
+    const current = getManagedNode(req.user!.id, node.id);
+    if (!current) return res.status(404).json({ error: "节点不存在" });
+    if (current.updatedAt !== node.updatedAt) return res.status(409).json({ error: "检测期间节点发生变化，请重试" });
+    const nextName = addCountryFlag(current.name, location.flag);
+    const updated = updateManagedNode(req.user!.id, node.id, { ...current, name: nextName });
     if (!updated) return res.status(404).json({ error: "节点不存在" });
     recordAudit(req.user!.id, "country-flag", "managed-node", node.id, { ip: location.ip, countryCode: location.countryCode });
     res.json({ node: updated, location });
@@ -590,6 +606,28 @@ app.put("/api/managed-nodes/:id", requireAuth, (req, res) => {
 app.delete("/api/managed-nodes/:id", requireAuth, (req, res) => { const deleted = deleteManagedNode(req.user!.id, String(req.params.id)); recordAudit(req.user!.id, "delete", "managed-node", String(req.params.id)); res.json({ deleted }); });
 app.delete("/api/node-sources/:id", requireAuth, (req, res) => { const deleted = deleteNodeSource(req.user!.id, String(req.params.id)); recordAudit(req.user!.id, "delete", "node-source", String(req.params.id)); res.json({ deleted }); });
 app.get("/api/generation-profiles", requireAuth, (req, res) => res.json(listProfiles(req.user!.id)));
+app.post("/api/node-sources/:id/diagnose", requireAuth, nodeProbeLimiter, async (req, res) => {
+  const source = listNodeSources(req.user!.id).find((item) => item.id === String(req.params.id));
+  if (!source) return res.status(404).json({ error: "来源不存在" });
+  try { res.json(await diagnoseSource(source)); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
+app.post("/api/projects/:id/quick-publish", requireAuth, async (req, res) => {
+  const parsed = z.object({ nodeIds: z.array(z.string()).min(1).max(5000), preset: z.enum(["balanced", "simple", "current"]), autoUpdate: z.boolean(), includeNewNodes: z.boolean(), updatedAt: z.string().datetime() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "快捷发布参数无效" });
+  try { res.json(await quickPublish(req.user!.id, String(req.params.id), parsed.data)); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
+app.put("/api/generation-profiles/:id/sync", requireAuth, (req, res) => {
+  const parsed = z.object({ autoUpdate: z.boolean(), includeNewNodes: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "同步参数无效" });
+  try { res.json(configureProfileSync(req.user!.id, String(req.params.id), parsed.data.autoUpdate, parsed.data.includeNewNodes)); }
+  catch (error) { res.status(404).json({ error: (error as Error).message }); }
+});
+app.post("/api/generation-profiles/:id/sync", requireAuth, async (req, res) => {
+  try { await syncProfile(req.user!.id, String(req.params.id)); res.json({ synced: true }); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
 app.post("/api/generation-profiles", requireAuth, (req, res) => {
   const parsed = generationProfileSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "生成配置参数无效" });
@@ -634,27 +672,42 @@ app.put("/api/rule-templates/:id", requireAuth, (req, res) => {
 app.delete("/api/rule-templates/:id", requireAuth, (req, res) => res.json({ deleted: deleteRuleTemplate(req.user!.id, String(req.params.id)) }));
 app.get("/api/jobs", requireAuth, (req, res) => res.json(listJobs(req.user!.id)));
 app.get("/api/generated-subscriptions", requireAuth, (req, res) => res.json(listPublishedSubscriptions(req.user!.id)));
+app.get("/api/generated-subscriptions/:id/token", requireAuth, (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json({ token: readSubscriptionToken(req.user!.id, String(req.params.id)) }); }
+  catch (error) { res.status(404).json({ error: (error as Error).message }); }
+});
 app.post("/api/generated-subscriptions/:id/revoke", requireAuth, (req, res) => res.json({ revoked: revokePublishedSubscription(req.user!.id, String(req.params.id)) }));
 app.post("/api/generated-subscriptions/:id/token", requireAuth, (req, res) => {
   const result = rotatePublishedSubscription(req.user!.id, String(req.params.id));
   if (!result) return res.status(404).json({ error: "发布订阅不存在" });
   res.json(result);
 });
-app.put("/api/generated-subscriptions/:id", requireAuth, (req, res) => {
+app.put("/api/generated-subscriptions/:id", requireAuth, async (req, res) => {
   const parsed = z.object({ name: z.string().trim().min(1).max(120), content: z.string().min(1).max(10_000_000), nodeCount: z.number().int().min(0), expiresAt: z.string().datetime().optional() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "发布订阅参数无效" });
   try {
-    const updated = updatePublishedSubscription(req.user!.id, String(req.params.id), parsed.data);
+    const existing = listPublishedSubscriptions(req.user!.id).find((item) => item.id === String(req.params.id));
+    const profile = existing && getProfile(req.user!.id, existing.profileId);
+    if (!existing || !profile) return res.status(404).json({ error: "发布订阅不存在" });
+    const { content } = await validatedContent(profile.config, profile.targetFormat);
+    if (getProfile(req.user!.id, profile.id)?.updatedAt !== profile.updatedAt || listPublishedSubscriptions(req.user!.id).find((item) => item.id === existing.id)?.version !== existing.version) return res.status(409).json({ error: "校验期间方案或订阅已更新，请重试" });
+    const updated = updatePublishedSubscription(req.user!.id, String(req.params.id), { ...parsed.data, content, nodeCount: profile.config.proxies.length });
     if (!updated) return res.status(404).json({ error: "发布订阅不存在" });
     res.json(updated);
   } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "发布订阅更新失败" }); }
 });
 app.delete("/api/generated-subscriptions/:id", requireAuth, (req, res) => res.json({ deleted: deletePublishedSubscription(req.user!.id, String(req.params.id)) }));
-app.post("/api/generated-subscriptions", requireAuth, (req, res) => {
+app.post("/api/generated-subscriptions", requireAuth, async (req, res) => {
   const parsed = z.object({ profileId: z.string(), name: z.string().trim().min(1).max(120), targetFormat: z.enum(["mihomo", "sing-box"]), content: z.string().min(1).max(10_000_000), nodeCount: z.number().int().min(0), expiresAt: z.string().datetime().optional() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "生成订阅参数无效" });
   const jobId = recordJob(req.user!.id, "generate-subscription", { profileId: parsed.data.profileId });
-  try { const result = publishSubscription(req.user!.id, parsed.data.profileId, parsed.data.name, parsed.data.targetFormat, parsed.data.content, parsed.data.nodeCount, parsed.data.expiresAt); updateJob(jobId, "completed"); recordAudit(req.user!.id, "publish", "generated-subscription", result.id, { targetFormat: result.targetFormat }); res.status(201).json(result); } catch (error) { const message = error instanceof Error ? error.message : "生成失败"; updateJob(jobId, "failed", message); res.status(400).json({ error: message }); }
+  try {
+    const profile = getProfile(req.user!.id, parsed.data.profileId);
+    if (!profile || profile.targetFormat !== parsed.data.targetFormat) throw new Error("生成方案不存在或格式不一致");
+    const { content } = await validatedContent(profile.config, profile.targetFormat);
+    if (getProfile(req.user!.id, profile.id)?.updatedAt !== profile.updatedAt) throw new Error("校验期间方案已更新，请重试");
+    const result = publishSubscription(req.user!.id, profile.id, parsed.data.name, profile.targetFormat, content, profile.config.proxies.length, parsed.data.expiresAt); updateJob(jobId, "completed"); recordAudit(req.user!.id, "publish", "generated-subscription", result.id, { targetFormat: result.targetFormat }); res.status(201).json(result); } catch (error) { const message = error instanceof Error ? error.message : "生成失败"; updateJob(jobId, "failed", message); res.status(400).json({ error: message }); }
 });
 app.get("/sub/:token", publicSubscriptionLimiter, (req, res) => {
   const item = readPublicSubscription(String(req.params.token));
@@ -685,15 +738,17 @@ app.post("/api/tools/kernel-validate", requireAuth, async (req, res) => {
   try { config = parseConfig(req.body?.config); } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "配置数据无效" }); }
   if (validateConfig(config).some((issue) => issue.level === "error")) return res.status(422).json({ error: "配置存在错误" });
   const format: TargetFormat = req.body.format === "sing-box" ? "sing-box" : "mihomo";
-  res.json(await validateWithKernel(config, format));
+  const preview = previewExport(config, format);
+  if (preview.issues.some((issue) => issue.level === "error")) return res.status(422).json({ error: "目标格式不兼容", issues: preview.issues });
+  try { res.json(await validateWithKernel(config, format)); }
+  catch { res.status(422).json({ error: "内核校验未完成，请检查配置与内核状态" }); }
 });
 app.post("/api/tools/export", requireAuth, (req, res) => {
   let config: MihomoConfig;
   try { config = parseConfig(req.body?.config); } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "配置数据无效" }); }
-  const issues = validateConfig(config);
+  const { content, issues } = previewExport(config, req.body.format === "sing-box" ? "sing-box" : "mihomo");
   if (issues.some((issue) => issue.level === "error")) return res.status(422).json({ error: "请先修复配置错误", issues });
-  if (req.body.format === "sing-box") return res.type("application/json").send(exportSingBoxJson(config));
-  res.type("application/yaml").send(exportMihomoYaml(config));
+  res.type(req.body.format === "sing-box" ? "application/json" : "application/yaml").send(content);
 });
 
 let subscriptionSweepRunning = false;
@@ -722,10 +777,10 @@ async function sweepNodeSources() {
     }
   } finally { sourceSweepRunning = false; }
 }
-const subscriptionTimer = setInterval(() => { void sweepSubscriptions(); void sweepNodeSources(); }, 60_000);
+const subscriptionTimer = setInterval(() => { void sweepSubscriptions(); void sweepNodeSources().then(syncAutoProfiles); }, 60_000);
 subscriptionTimer.unref();
 void sweepSubscriptions();
-void sweepNodeSources();
+void sweepNodeSources().then(syncAutoProfiles);
 
 if (isProduction) {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));

@@ -65,6 +65,15 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
   const [deleting, setDeleting] = useState<NodeSource | null>(null);
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [diagnosing, setDiagnosing] = useState("");
+  const [diagnostics, setDiagnostics] = useState<Record<string, string>>({});
+
+  async function diagnose(item: NodeSource) {
+    setDiagnosing(item.id);
+    try { const result = await api.diagnoseSource(item.id); setDiagnostics((current) => ({ ...current, [item.id]: [...result.events.map((event) => `${event.profile || event.stage}：${event.message}${event.address ? ` · ${event.address}` : ""}`), result.advice].join("\n") })); }
+    catch (error) { onMessage((error as Error).message); }
+    finally { setDiagnosing(""); }
+  }
   const [preview, setPreview] = useState<{ count: number; warnings: string[] } | null>(null);
 
   async function load() {
@@ -173,7 +182,9 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
           <span><strong>{item.lastRequestProfile || "-"}</strong><small>请求模式</small></span>
         </div>
         {item.lastError ? <div className="source-card-error"><ShieldAlert size={15} /><span title={item.lastError}>{item.lastError}</span></div> : <div className="source-card-success"><CheckCircle2 size={15} />{item.lastUpdatedAt ? `最近同步 ${new Date(item.lastUpdatedAt).toLocaleString("zh-CN")}` : "等待首次同步"}</div>}
+        {diagnostics[item.id] && <details open className="source-diagnostics"><summary>诊断结果（订阅路径与 Token 已隐藏）</summary>{diagnostics[item.id]}</details>}
         <footer>
+          {item.url && <button className="secondary-button compact-button" disabled={!!diagnosing} onClick={() => void diagnose(item)}>{diagnosing === item.id ? "诊断中…" : "诊断连接"}</button>}
           <button className="secondary-button compact-button" disabled={!item.url || !item.enabled || refreshing === item.id} onClick={() => void refresh(item)}>{refreshing === item.id ? <RefreshCw className="spin" size={15} /> : <RefreshCw size={15} />}同步</button>
           <button className="icon-button compact" onClick={() => { setDraft(sourceDraft(item)); setPreview(null); }} aria-label={`编辑 ${item.name}`}><Pencil size={16} /></button>
           <button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button>

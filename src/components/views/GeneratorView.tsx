@@ -7,6 +7,7 @@ import { exportSingBoxJson } from "../../shared/singbox";
 import { applyRuleTemplate, ruleTemplates } from "../../shared/ruleTemplates";
 import { createId } from "../../shared/id";
 import { ruleTargetLabel } from "../../shared/ruleCatalog";
+import { previewExport } from "../../shared/exportConfig";
 import type { GeneratedSubscription, GenerationProfile, ManagedNode, NodeSource } from "../../shared/domain";
 import type { MihomoConfig, Project, ProxyNode, RuleItem, TargetFormat } from "../../shared/types";
 import { ConfirmDialog } from "../Dialog";
@@ -97,7 +98,7 @@ function buildConfig(base: MihomoConfig, catalog: CatalogNode[], selectedIds: Se
 }
 
 export function GeneratorView({ project, onMessage }: { project: Project; onMessage: (message: string) => void }) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(project.config.proxies.length ? 4 : 0);
   const [profiles, setProfiles] = useState<GenerationProfile[]>([]);
   const [publications, setPublications] = useState<GeneratedSubscription[]>([]);
   const [managedNodes, setManagedNodes] = useState<ManagedNode[]>([]);
@@ -168,8 +169,7 @@ export function GeneratorView({ project, onMessage }: { project: Project; onMess
     return (!sourceFilter || item.sourceId === sourceFilter) && (!tagFilter || item.tags.includes(tagFilter)) && text.includes(query.trim().toLowerCase());
   }), [catalog, query, sourceFilter, tagFilter]);
   const generatedConfig = useMemo(() => buildConfig(structureConfig, catalog, selectedIds, templateChoice, templateTarget, templates), [structureConfig, catalog, selectedIds, templateChoice, templateTarget, templates]);
-  const content = useMemo(() => targetFormat === "sing-box" ? exportSingBoxJson(generatedConfig) : exportMihomoYaml(generatedConfig), [generatedConfig, targetFormat]);
-  const issues = useMemo(() => validateConfig(generatedConfig), [generatedConfig]);
+  const { content, issues } = useMemo(() => previewExport(generatedConfig, targetFormat), [generatedConfig, targetFormat]);
   const errors = issues.filter((issue) => issue.level === "error");
   const profilePublications = publications.filter((item) => item.profileId === profileId && item.targetFormat === targetFormat && !item.revoked);
   const selectedTemplateId = templateChoice.startsWith("resource:") ? templateChoice.slice(9) : undefined;
