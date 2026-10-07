@@ -294,7 +294,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     <main className="main-shell">
       <header className="topbar">
         <button className="icon-button mobile-only" onClick={() => setMobileNav(true)} aria-label="打开导航"><Menu size={20} /></button>
-        {view !== "subscription" && <><div className="project-select-wrap" data-guide-id={guideTargets.projectSelector}><select aria-label="当前配置" value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
+        {view !== "subscription" && <><div className="project-select-wrap" data-guide-id={guideTargets.projectSelector}><select aria-label="当前配置" title={project.name} value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
         <button className="icon-button new-project-action" onClick={() => void createProject()} title="新建配置" aria-label="新建配置"><FolderPlus size={18} /></button>
         <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />草稿保存中</> : status === "dirty" ? <><Save size={15} />等待保存</> : status === "error" ? <><XCircle size={15} />草稿保存失败</> : <><CheckCircle2 size={15} />草稿已保存</>}</div>
         <div className="top-actions">
