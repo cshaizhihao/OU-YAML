@@ -294,6 +294,7 @@ label { color: var(--ink-soft); }
 .group-focus-shell.open { background: rgba(8, 5, 16, .72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 .group-focus-toolbar { border-color: rgba(221, 194, 255, .26); background: linear-gradient(100deg, rgba(65, 42, 102, .96), rgba(91, 48, 99, .92)); box-shadow: var(--shadow-dialog); }
 .group-focus-shell.open .group-board { border-color: rgba(220, 192, 255, .28); background: rgba(19, 13, 32, .92); box-shadow: var(--shadow-dialog); }
+.main-shell:has(.group-focus-shell.open) { z-index: 100; }
 
 @media (max-width: 1100px) and (min-width: 841px) {
   .content-area { padding-inline: 22px; }
@@ -741,4 +742,14 @@ label { color: var(--ink-soft); }
 
 @media (max-width: 840px) {
   .node-row-actions { flex-wrap: wrap; }
+  .content-area { padding-bottom: max(104px, calc(env(safe-area-inset-bottom) + 96px)); }
+  .node-extra-actions.open {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+  }
+  .node-extra-actions.open > .icon-button {
+    display: inline-grid;
+  }
 }
