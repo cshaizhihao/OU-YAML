@@ -191,7 +191,7 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
           <button className="secondary-button compact-button danger-outline source-delete-action" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={15} />删除</button>
         </footer>
       </article>)}</div> : <div className="empty-state featured-empty" data-guide-id={guideTargets.sourceList}>
-      <div><UploadCloud size={25} /></div><h2>建立第一个节点来源</h2><p>可粘贴订阅 URL、批量分享链接，或者上传 Mihomo 与 sing-box 配置。</p><button className="primary-button" onClick={() => setDraft(emptySource())}><Plus size={17} />添加来源</button>
+      <div className="empty-state-icon"><UploadCloud size={25} /></div><h2>建立第一个节点来源</h2><p>可粘贴订阅 URL、批量分享链接，或者上传 Mihomo 与 sing-box 配置。</p><button className="primary-button" onClick={() => setDraft(emptySource())}><Plus size={17} />添加来源</button>
     </div>}
 
     <Drawer open={!!draft} onClose={() => setDraft(null)} title={draft?.id ? `编辑来源：${draft.name}` : "添加节点来源"} footer={<><button className="secondary-button" onClick={() => setDraft(null)}>取消</button><button className="primary-button" disabled={saving || !draft?.name.trim() || (draft.kind === "remote-url" && !draft.url.trim()) || (["file", "share-links"].includes(draft?.kind || "") && !draft?.id && !draft?.content.trim())} onClick={() => void save()}>{saving ? <RefreshCw className="spin" size={16} /> : <CheckCircle2 size={16} />}保存来源</button></>}>

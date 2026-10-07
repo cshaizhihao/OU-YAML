@@ -128,7 +128,7 @@ export function GeneratedSubscriptionsView({ onMessage, onEdit }: { onMessage: (
         </div>
         <SubscriptionActions item={item} onEdit={onEdit} onRenamed={(renamed) => setItems((current) => current.map((value) => value.id === renamed.id ? renamed : value))} />
       </article>;
-    })}</div> : <div className="empty-state"><div><Link2 size={24} /></div><h2>{query ? "没有匹配的订阅" : "还没有发布订阅"}</h2><p>{query ? "换个关键词再试试。" : "在“生成方案”中完成校验并发布第一个公开地址。"}</p>{!query && <span className="empty-security-note"><ShieldCheck size={15} />公开地址加密保存在服务器，可随时复制</span>}</div>}
+    })}</div> : <div className="empty-state"><div className="empty-state-icon"><Link2 size={24} /></div><h2>{query ? "没有匹配的订阅" : "还没有发布订阅"}</h2><p>{query ? "换个关键词再试试。" : "在“生成方案”中完成校验并发布第一个公开地址。"}</p>{!query && <span className="empty-security-note"><ShieldCheck size={15} />公开地址加密保存在服务器，可随时复制</span>}</div>}
 
     <ConfirmDialog open={!!resetting} title="重置订阅地址" message="此操作会立即废止旧地址，所有客户端都需要重新填写链接。仅复制原地址无需重置。" confirmText="重置并复制" onClose={() => setResetting(null)} onConfirm={async () => { if (resetting) await rotateAndCopy(resetting); setResetting(null); }} />
     <ConfirmDialog open={!!revoking} title="撤销公开订阅" message={`撤销“${revoking?.name}”后，当前公开地址会立即失效，且不能重新启用。生成方案仍会保留。`} confirmText="确认撤销" onClose={() => setRevoking(null)} onConfirm={revoke} />

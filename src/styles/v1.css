@@ -170,7 +170,7 @@ label { color: var(--ink-soft); }
 .icon-button:hover { color: #fff; background: rgba(181, 145, 246, .14); }
 .icon-button.danger:hover { color: var(--danger); background: var(--danger-soft); }
 .type-badge { color: var(--ink-soft); border: 1px solid var(--line); background: rgba(190, 158, 255, .12); }
-.entity-icon, .group-icon, .subscription-icon, .source-card-icon, .empty-state > div { color: var(--accent); background: var(--accent-soft); }
+.entity-icon, .group-icon, .subscription-icon, .source-card-icon, .empty-state-icon { color: var(--accent); background: var(--accent-soft); }
 .status-badge, .status-dot { color: var(--success); }
 .status-badge.active { color: var(--success); background: var(--success-soft); }
 .status-badge.disabled { color: var(--ink-faint); background: rgba(255, 255, 255, .08); }
@@ -1325,6 +1325,21 @@ button:disabled {
 
 .empty-state {
   min-height: 260px;
+  padding: 28px 18px;
+}
+
+.empty-state > .empty-actions {
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin-top: 2px;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .subscription-empty {
@@ -1433,6 +1448,7 @@ button:disabled {
   .empty-state,
   .subscription-empty {
     min-height: 220px;
+    padding: 28px 16px;
   }
 }
 
@@ -1653,7 +1669,9 @@ textarea::placeholder {
 }
 
 .source-edit-action,
-.source-delete-action {
+.source-delete-action,
+.template-edit-action,
+.template-delete-action {
   min-width: 66px;
 }
 
@@ -1667,6 +1685,35 @@ textarea::placeholder {
   color: #ffdbe0;
   border-color: rgba(255, 171, 184, .68);
   background: rgba(255, 122, 143, .2);
+}
+
+.template-delete-action {
+  color: #ffb5bf;
+  border-color: rgba(255, 143, 157, .38);
+  background: rgba(255, 122, 143, .1);
+}
+
+.template-delete-action:hover:not(:disabled) {
+  color: #ffdbe0;
+  border-color: rgba(255, 171, 184, .68);
+  background: rgba(255, 122, 143, .2);
+}
+
+.template-card-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+}
+
+.template-card-meta > span {
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+.template-card-meta > .row-actions {
+  min-width: 0;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
 }
 
 .node-copy-button {
@@ -1719,6 +1766,36 @@ textarea::placeholder {
   min-width: 112px;
 }
 
+.user-row {
+  grid-template-columns: 38px minmax(150px, 1fr) 84px 64px 110px 84px;
+}
+
+.user-row-actions {
+  min-width: 0;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.user-row-actions .compact-button {
+  min-width: 34px;
+  min-height: 34px;
+  padding-inline: 8px;
+}
+
+.user-action-label {
+  display: none;
+}
+
+@media (max-width: 1100px) and (min-width: 841px) {
+  .user-row {
+    grid-template-columns: 38px minmax(120px, 1fr) 78px 58px 84px;
+  }
+
+  .user-created {
+    display: none;
+  }
+}
+
 .toast {
   color: #fffaff;
 }
@@ -1765,6 +1842,28 @@ textarea::placeholder {
     padding-inline: 12px !important;
     font-size: 13px !important;
   }
+
+  .user-row {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+  }
+
+  .user-row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+    justify-content: initial;
+  }
+
+  .user-row-actions .compact-button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  .user-action-label {
+    display: inline;
+  }
 }
 
 @media (max-width: 520px) {
@@ -1790,7 +1889,17 @@ textarea::placeholder {
   }
 
   .source-edit-action,
-  .source-delete-action {
+  .source-delete-action,
+  .template-edit-action,
+  .template-delete-action {
     flex: 1 1 0 !important;
+  }
+
+  .template-card-meta {
+    gap: 8px;
+  }
+
+  .template-card-meta .compact-button {
+    padding-inline: 8px;
   }
 }

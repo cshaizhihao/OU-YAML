@@ -201,7 +201,7 @@ input:disabled { background: #f1ebe4; color: var(--ink-faint); }
 .secure-dot { display: inline-flex; margin-left: 6px; color: var(--accent); vertical-align: middle; }
 .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 1px; }
 .empty-state { min-height: 350px; border: 1px dashed var(--line-strong); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 13px; background: color-mix(in srgb, var(--surface) 60%, transparent); }
-.empty-state > div { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-hover); display: grid; place-items: center; }
+.empty-state-icon { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-hover); display: grid; place-items: center; flex: 0 0 auto; }
 .empty-state h2 { font-size: 16px; margin: 0 0 3px; }
 
 .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(12, 18, 16, .52); display: flex; justify-content: flex-end; }
