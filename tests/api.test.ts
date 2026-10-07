@@ -158,3 +158,25 @@ test("文件节点来源可以上传并解析分享链接", async () => {
   assert.equal(result.nodes[0].name, "上传节点");
   assert.equal(result.nodes[0].type, "vless");
 });
+
+test("节点 API 支持批量启停、标签和改名", async () => {
+  const ids: string[] = [];
+  for (const name of ["HK-旧节点", "JP-旧节点"]) {
+    const response = await api("/api/managed-nodes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, type: "vless", server: `${name.slice(0, 2).toLowerCase()}.example.com`, port: 443, uuid: `uuid-${name}`, extra: {} }),
+    });
+    assert.equal(response.status, 201);
+    ids.push((await response.json() as { id: string }).id);
+  }
+  const response = await api("/api/managed-nodes/batch", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, enabled: false, addTags: ["测试"], prefix: "优选-", find: "旧节点", replace: "线路" }),
+  });
+  assert.equal(response.status, 200);
+  const nodes = await response.json() as { id: string; name: string; enabled: boolean; tags: string[] }[];
+  const selected = nodes.filter((node) => ids.includes(node.id));
+  assert.equal(selected.every((node) => !node.enabled && node.tags.includes("测试") && node.name.startsWith("优选-") && node.name.endsWith("线路")), true);
+});

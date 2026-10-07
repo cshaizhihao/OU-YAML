@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
-import { decodeSubscriptionBody, isPublicAddress, safeFetchText } from "../server/safeFetch";
+import { decodeSubscriptionBody, isPublicAddress, safeFetchText, subscriptionRequestProfiles } from "../server/safeFetch";
+
+test("订阅抓取优先使用机场常见的 clash-meta User-Agent", () => {
+  assert.equal(subscriptionRequestProfiles[0].userAgent, "clash-meta/2.4.0");
+  assert.ok(subscriptionRequestProfiles.some((profile) => /ClashMetaForAndroid/i.test(profile.userAgent)));
+});
 
 test("只允许公网单播地址", () => {
   assert.equal(isPublicAddress("8.8.8.8"), true);

@@ -190,7 +190,11 @@ write_env() {
     mv -f -- "${temporary_env}" "${INSTALL_DIR}/.env"
     return
   fi
-  admin_user="$(ask '管理员账号' 'admin')"
+  while :; do
+    admin_user="$(ask '管理员账号' 'admin')"
+    [[ "$admin_user" =~ ^[A-Za-z0-9._-]{3,64}$ ]] && break
+    warn "管理员账号需为 3-64 位，仅可包含字母、数字、点、下划线和短横线。"
+  done
   while :; do
     read_input -s -p "管理员密码（至少 10 位）: " password; echo
     [ "${#password}" -ge 10 ] && break

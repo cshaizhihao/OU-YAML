@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 process.env.DATA_DIR = mkdtempSync(path.join(os.tmpdir(), "ou-yaml-domain-test-"));
 const { db } = await import("../server/db");
 const domain = await import("../server/domainService");
-const { restoreUserBackup } = await import("../server/backup");
+const { exportUserBackup, restoreUserBackup } = await import("../server/backup");
 
 const userId = randomUUID();
 const projectId = randomUUID();
@@ -31,14 +31,15 @@ const config: MihomoConfig = {
 db.prepare("INSERT INTO users (id, username, password_hash, is_admin, is_disabled, created_at) VALUES (?, ?, ?, 0, 0, ?)").run(userId, `test-${userId.slice(0, 8)}`, "hash", stamp);
 db.prepare("INSERT INTO projects (id, user_id, name, config_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(projectId, userId, "旧项目", JSON.stringify(config), stamp, stamp);
 
-test("迁移旧项目节点到独立节点池并保持用户隔离", () => {
+test("迁移旧项目节点到统一节点库并建立项目绑定", () => {
   assert.equal(domain.migrateLegacyProjects(userId), 1);
   assert.equal(domain.migrateLegacyProjects(userId), 0);
   const sources = domain.listNodeSources(userId);
   const nodes = domain.listManagedNodes(userId);
-  assert.equal(sources.length, 1);
+  assert.equal(sources.length, 0);
   assert.equal(nodes.length, 1);
   assert.equal(nodes[0].name, "香港线路");
+  assert.equal((db.prepare("SELECT COUNT(*) AS count FROM project_nodes WHERE project_id = ?").get(projectId) as { count: number }).count, 1);
   assert.equal(domain.listManagedNodes(randomUUID()).length, 0);
 });
 
@@ -91,6 +92,7 @@ test("远程来源替换节点时保留已匹配节点的顺序和元数据", ()
   const first = domain.createManagedNode(userId, { name: "来源一", type: "vless", server: "one.example.com", port: 443, uuid: "one", sourceId: source.id, tags: ["保留"], note: "手动备注", extra: {} });
   const second = domain.createManagedNode(userId, { name: "来源二", type: "vless", server: "two.example.com", port: 443, uuid: "two", sourceId: source.id, extra: {} });
   domain.reorderManagedNodes(userId, [second.id, first.id]);
+  domain.syncProjectNodes(userId, projectId, [{ ...second, name: "项目中的来源二" }]);
   const result = domain.replaceManagedNodesForSource(userId, source.id, [
     { id: randomUUID(), name: "更新二", type: "vless", server: "two.example.com", port: 443, uuid: "two", extra: {} },
     { id: randomUUID(), name: "新节点", type: "vless", server: "three.example.com", port: 443, uuid: "three", extra: {} },
@@ -99,6 +101,8 @@ test("远程来源替换节点时保留已匹配节点的顺序和元数据", ()
   assert.equal(result.nodes[0].id, second.id);
   assert.equal(result.nodes[0].tags.length, 0);
   assert.equal(result.source.nodeCount, 2);
+  assert.equal(domain.readProjectNodes(userId, projectId)[0].id, second.id);
+  assert.equal(domain.readProjectNodes(userId, projectId)[0].name, "项目中的来源二");
 });
 
 test("生成配置拒绝跨用户节点、来源和模板引用", () => {
@@ -133,4 +137,104 @@ test("恢复备份会清理悬空订阅来源引用", () => {
   const row = db.prepare("SELECT config_json FROM projects WHERE user_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1").get(userId, "悬空来源备份") as { config_json: string };
   const restored = JSON.parse(row.config_json) as MihomoConfig;
   assert.equal(restored.proxies[0].source, undefined);
+});
+
+test("备份 v2 覆盖节点库、来源、模板和发布资源", () => {
+  const backup = JSON.parse(exportUserBackup(userId, "backup-test")) as Record<string, unknown>;
+  assert.equal(backup.version, 2);
+  assert.ok(Array.isArray(backup.nodeSources));
+  assert.ok(Array.isArray(backup.managedNodes));
+  assert.ok(Array.isArray(backup.ruleTemplates));
+  assert.ok(Array.isArray(backup.generationProfiles));
+  assert.ok(Array.isArray(backup.publications));
+  const managedNodes = backup.managedNodes as { config: Record<string, unknown> }[];
+  assert.equal(managedNodes.some((item) => ["tags", "note", "enabled", "sourceId"].some((key) => key in item.config)), false);
+});
+
+test("项目节点绑定保留别名并让未覆写字段跟随节点库更新", () => {
+  const node = domain.createManagedNode(userId, { name: "节点库名称", type: "vless", server: "before.example.com", port: 443, uuid: "binding-node", tls: true, sni: "base.example.com", extra: {} });
+  domain.syncProjectNodes(userId, projectId, [{ ...node, name: "项目专属别名", sni: "override.example.com" }]);
+  const beforeUpdate = String((db.prepare("SELECT updated_at FROM projects WHERE id = ?").get(projectId) as { updated_at: string }).updated_at);
+  domain.updateManagedNode(userId, node.id, { ...node, server: "after.example.com", sni: "new-base.example.com" });
+  const bound = domain.readProjectNodes(userId, projectId).find((item) => item.id === node.id);
+  assert.equal(bound?.name, "项目专属别名");
+  assert.equal(bound?.server, "after.example.com");
+  assert.equal(bound?.sni, "override.example.com");
+  assert.ok(String((db.prepare("SELECT updated_at FROM projects WHERE id = ?").get(projectId) as { updated_at: string }).updated_at) > beforeUpdate);
+});
+
+test("删除项目最后一个节点会同步清理引用且不会被旧配置重新迁回", () => {
+  const isolatedProjectId = randomUUID();
+  const node = domain.createManagedNode(userId, { name: "待删除节点", type: "vless", server: "delete.example.com", port: 443, uuid: "delete-node", extra: {} });
+  const isolatedConfig: MihomoConfig = {
+    ...config,
+    proxies: [{ id: node.id, name: "项目节点别名", type: "vless", server: "delete.example.com", port: 443, uuid: "delete-node", extra: {} }],
+    proxyGroups: [{ id: randomUUID(), name: "删除测试组", type: "select", proxies: ["项目节点别名"], extra: {} }],
+    rules: [{ id: randomUUID(), type: "MATCH", value: "", target: "项目节点别名", options: [], enabled: true }],
+  };
+  const createdAt = new Date().toISOString();
+  db.prepare("INSERT INTO projects (id,user_id,name,config_json,created_at,updated_at) VALUES (?,?,?,?,?,?)")
+    .run(isolatedProjectId, userId, "删除引用测试", JSON.stringify(isolatedConfig), createdAt, createdAt);
+  domain.syncProjectNodes(userId, isolatedProjectId, isolatedConfig.proxies);
+
+  assert.equal(domain.deleteManagedNode(userId, node.id), true);
+  const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(isolatedProjectId) as Record<string, unknown>;
+  const hydrated = domain.hydrateProject(row);
+  assert.equal(hydrated.config.proxies.length, 0);
+  assert.deepEqual(hydrated.config.proxyGroups[0].proxies, []);
+  assert.equal(hydrated.config.rules[0].target, "DIRECT");
+  assert.equal(domain.listManagedNodes(userId).some((item) => item.id === node.id), false);
+  assert.equal((db.prepare("SELECT COUNT(*) AS count FROM project_nodes WHERE project_id = ?").get(isolatedProjectId) as { count: number }).count, 0);
+});
+
+test("节点批量操作支持启停、标签与名称替换", () => {
+  const first = domain.createManagedNode(userId, { name: "HK-旧名称", type: "ss", server: "batch-one.example.com", port: 443, extra: {}, tags: ["旧标签"] });
+  const second = domain.createManagedNode(userId, { name: "JP-旧名称", type: "ss", server: "batch-two.example.com", port: 443, extra: {} });
+  const updated = domain.batchUpdateManagedNodes(userId, [first.id, second.id], { enabled: false, addTags: ["流媒体"], removeTags: ["旧标签"], prefix: "优选-", find: "旧名称", replace: "节点" });
+  const selected = updated.filter((item) => [first.id, second.id].includes(item.id));
+  assert.equal(selected.every((item) => item.enabled === false), true);
+  assert.equal(selected.every((item) => item.tags.includes("流媒体")), true);
+  assert.equal(selected.some((item) => item.tags.includes("旧标签")), false);
+  assert.deepEqual(selected.map((item) => item.name).sort(), ["优选-HK-节点", "优选-JP-节点"].sort());
+});
+
+test("Generation Profile 可更新且公开订阅保持原 Token 增量升级", () => {
+  const node = domain.listManagedNodes(userId)[0];
+  const profileConfig = { ...config, proxies: [{ ...config.proxies[0], id: node.id }] };
+  const profile = domain.createProfile(userId, { name: "稳定方案", targetFormat: "mihomo", config: profileConfig, nodeIds: [node.id] });
+  const updatedProfile = domain.updateProfile(userId, profile!.id, { name: "稳定方案 v2", targetFormat: "mihomo", config: profileConfig, nodeIds: [node.id] });
+  assert.equal(updatedProfile?.name, "稳定方案 v2");
+  const published = domain.publishSubscription(userId, profile!.id, "稳定订阅", "mihomo", "version: 1\n", 1);
+  const updated = domain.updatePublishedSubscription(userId, published.id, { name: "稳定订阅", content: "version: 2\n", nodeCount: 1 });
+  assert.equal(updated?.version, published.version + 1);
+  assert.equal(domain.readPublicSubscription(published.token)?.content, "version: 2\n");
+  assert.throws(() => domain.updatePublishedSubscription(userId, published.id, { name: "数量越界", content: "x", nodeCount: 2 }), /节点数量无效/);
+  domain.updateProfile(userId, profile!.id, { name: "稳定方案 v2", targetFormat: "sing-box", config: profileConfig, nodeIds: [node.id] });
+  assert.throws(() => domain.updatePublishedSubscription(userId, published.id, { name: "格式变化", content: "{}", nodeCount: 1 }), /输出格式已改变/);
+  domain.updateProfile(userId, profile!.id, { name: "稳定方案 v2", targetFormat: "mihomo", config: profileConfig, nodeIds: [node.id] });
+});
+
+test("Profile 更新拒绝引用其他用户节点", () => {
+  const profile = domain.listProfiles(userId)[0];
+  const foreignUser = db.prepare("SELECT id FROM users WHERE id != ? ORDER BY created_at DESC LIMIT 1").get(userId) as { id: string };
+  const foreignNode = domain.listManagedNodes(foreignUser.id)[0];
+  assert.ok(foreignNode);
+  assert.throws(() => domain.updateProfile(userId, profile.id, { name: profile.name, targetFormat: profile.targetFormat, config: { ...profile.config, proxies: [{ ...profile.config.proxies[0], id: foreignNode.id }] }, nodeIds: [foreignNode.id] }), /无权使用的节点/);
+});
+
+test("完整备份恢复后资源引用使用新 ID 且发布链接默认撤销", () => {
+  const targetUserId = randomUUID();
+  db.prepare("INSERT INTO users (id, username, password_hash, is_admin, is_disabled, created_at) VALUES (?, ?, ?, 0, 0, ?)")
+    .run(targetUserId, `restore-${targetUserId.slice(0, 8)}`, "hash", new Date().toISOString());
+  const sourceBackup = exportUserBackup(userId, "backup-source");
+  assert.deepEqual(restoreUserBackup(targetUserId, sourceBackup, "replace"), { projects: JSON.parse(sourceBackup).projects.length });
+  const restoredNodes = domain.listManagedNodes(targetUserId);
+  const restoredProfiles = domain.listProfiles(targetUserId);
+  const restoredPublications = domain.listPublishedSubscriptions(targetUserId);
+  const restoredNodeIds = new Set(restoredNodes.map((node) => node.id));
+  assert.ok(restoredNodes.length > 0);
+  assert.ok(restoredProfiles.length > 0);
+  assert.equal(restoredProfiles.flatMap((profile) => profile.nodeIds).every((id) => restoredNodeIds.has(id)), true);
+  assert.equal(restoredProfiles.flatMap((profile) => profile.config.proxies).filter((node) => restoredNodeIds.has(node.id)).length > 0, true);
+  assert.equal(restoredPublications.every((item) => item.revoked), true);
 });

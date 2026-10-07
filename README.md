@@ -1,271 +1,289 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/cshaizhihao/OU-YAML/main/public/brand/ou-yaml-logo.png" alt="OU-YAML Logo" width="180" />
+  <img src="https://raw.githubusercontent.com/cshaizhihao/OU-YAML/main/public/brand/ou-yaml-logo.png" alt="OU-YAML Logo" width="176" />
   <h1>OU-YAML</h1>
-  <p><strong>温柔、清晰、可视化的代理节点与订阅生成工作台</strong></p>
+  <p><strong>把零散节点，整理成清晰、可靠、可持续更新的配置订阅</strong></p>
+  <p>温暖而精致的可视化节点、策略组、规则与订阅发布工作台</p>
   <p>
-    <a href="https://github.com/cshaizhihao/OU-YAML">GitHub</a> ·
-    <a href="https://github.com/cshaizhihao/OU-YAML/releases">Releases</a> ·
-    作者：<code>nodeseek@cshaizhihao</code>
+    <a href="https://github.com/cshaizhihao/OU-YAML">项目主页</a> ·
+    <a href="https://github.com/cshaizhihao/OU-YAML/releases">版本发布</a> ·
+    <a href="./CHANGELOG.md">更新记录</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.3.1-2E4E3F?style=flat-square" alt="version" />
-    <img src="https://img.shields.io/badge/Mihomo-Clash%20Meta-C85A3E?style=flat-square" alt="Mihomo" />
-    <img src="https://img.shields.io/badge/sing--box-supported-73629B?style=flat-square" alt="sing-box" />
+    <img src="https://img.shields.io/badge/version-1.4.0-A33D57?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/Node.js-20%2B-247B78?style=flat-square" alt="Node.js" />
+    <img src="https://img.shields.io/badge/Mihomo-supported-D5962A?style=flat-square" alt="Mihomo" />
+    <img src="https://img.shields.io/badge/sing--box-supported-76547D?style=flat-square" alt="sing-box" />
+    <img src="https://img.shields.io/badge/Docker-ready-3E7B58?style=flat-square" alt="Docker" />
   </p>
+  <p>作者：<code>nodeseek@cshaizhihao</code></p>
 </div>
 
-## ✨ 项目介绍
+## 🌿 项目介绍
 
-OU-YAML 是一个面向普通用户的代理节点、远程订阅、策略组、规则和配置订阅生成平台。
+OU-YAML 是一个自托管的代理配置工作台。它把订阅 URL、配置文件和节点分享链接汇总到统一节点库，再通过可视化策略组、规则模板和生成方案，发布为可直接使用的 Mihomo YAML 或 sing-box JSON 订阅。
 
-它将复杂的 YAML / JSON 配置转换为清晰的可视化操作：导入节点，整理节点池，拖拽代理分组，选择规则和模板，最后生成可以直接使用的 Mihomo / Clash Meta 或 sing-box 配置订阅。
+项目围绕一条明确的工作流设计：
 
-OU-YAML 采用温暖的奶油色、鼠尾草绿和珊瑚色视觉体系，尽量让专业配置工具保持清晰、舒适和易于长期使用。🌿
+```text
+订阅来源 → 节点库 → 代理分组 → 分流规则 → 预览校验 → 保存方案 → 发布链接
+```
+
+无需反复手写 YAML，也无需为每次节点变化重新更换客户端订阅地址。
 
 ## 🚀 一键安装
 
-推荐在全新的 Debian / Ubuntu VPS 上使用 root 权限安装：
+推荐使用一台全新的 Debian / Ubuntu 服务器，以具有 `sudo` 权限的 SSH 终端执行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cshaizhihao/OU-YAML/main/install.sh | sudo bash
 ```
 
-安装脚本会依次完成：
+安装程序会依次：
 
-1. 显示并确认 OU-YAML 使用协议。
-2. 展示带有作者信息的 OU-YAML 主菜单。
-3. 选择 IP + 端口或域名访问方式。
-4. 域名模式下选择 Cloudflare 灰色云朵或橙色云朵模式。
-5. 检测 Nginx、Apache、Caddy、Traefik、HAProxy 以及 80/443 端口冲突。
-6. 安装 Docker、拉取项目、生成管理员配置并启动服务。
+1. 展示 OU-YAML 使用协议，输入大写 `YES` 后继续。
+2. 显示 OU-YAML 主菜单与作者信息。
+3. 选择「IP + 端口」或「域名 + HTTPS」安装。
+4. 检测 Docker、Docker Compose、系统架构与端口占用。
+5. 检测 Nginx、Apache、Caddy、Traefik、HAProxy 等反向代理冲突。
+6. 创建管理员账号、持久化数据目录并启动应用。
+7. 注册网页一键更新代理，可选启用每日自动更新。
 
-> 域名安装前，请先在 Cloudflare 或其他 DNS 服务商完成域名解析。使用 Cloudflare 橙色云朵时，请将 SSL/TLS 模式设置为“完全（严格）”。域名模式需要服务器开放 TCP 80 和 443 端口。
+> 安装脚本需要交互式终端。如果命令没有显示界面，请确认当前 SSH 会话可访问 `/dev/tty`，或先执行 `curl -fLo install.sh ...` 后运行 `sudo bash install.sh`。
 
-### 安装方式
+### 🌐 IP + 端口
 
-#### IP + 端口
-
-适用于没有域名、内网测试或首次体验：
+适用于首次体验、内网或没有域名的服务器：
 
 ```text
 http://服务器IP:8787
 ```
 
-#### 域名 + HTTPS
+安装时可以自定义端口，脚本会提前检查端口是否已被占用。
 
-安装脚本会使用 Caddy 自动申请和续期 HTTPS 证书。
+### 🔒 域名 + HTTPS
 
-- 灰色云朵：Cloudflare DNS only，客户端直接访问服务器，Caddy 负责 HTTPS。
-- 橙色云朵：Cloudflare Proxied，Cloudflare 负责边缘代理，源站 Caddy 仍负责 HTTPS。
+域名模式使用 Caddy 自动申请并续期 HTTPS 证书。安装前请确认：
 
-安装前请确认：
+- 域名 `A` / `AAAA` 记录已经指向当前服务器。
+- 防火墙与安全组已开放 TCP `80`、`443`。
+- 服务器上的其他反向代理没有占用 `80`、`443`。
+- Cloudflare 小黄云开启时，SSL/TLS 模式使用「完全（严格）」。
 
-- 域名 A / AAAA 记录已经解析到服务器。
-- 服务器安全组和防火墙开放 TCP 80、443。
-- 没有其他反向代理占用 80、443。
+安装程序会分别提示：
 
-### 更新与备份
+- ☁️ **灰色云朵（DNS only）**：客户端直连源站，Caddy 提供 HTTPS。
+- 🟠 **橙色云朵（Proxied）**：Cloudflare 提供边缘代理，源站仍由 Caddy 提供 HTTPS。
 
-管理员登录后，可以在「基础设置 → 网页更新」中检查 GitHub 最新版本，并一键完成备份、拉取、重建和重启。安装脚本会自动注册轻量级 systemd 更新代理；网页容器本身不接触 Docker Socket，更新任务由主机代理执行。
+## ✨ 功能概览
 
-网页更新日志位于 `/var/log/ou-yaml/web-update.log`。
+### 🏠 清晰的项目首页
 
-如果需要手动更新，也可以运行：
+- 展示节点、策略组、规则与检查状态。
+- 根据当前配置自动提示下一步操作。
+- 一键进入来源、节点、分组、规则或发布环节。
+- 展示 Mihomo / sing-box 内核可用状态。
 
-```bash
-sudo /opt/ou-yaml/update.sh
-sudo /opt/ou-yaml/backup.sh
+### 🔗 订阅来源
+
+- 导入远程订阅 URL、Mihomo YAML、sing-box JSON 和文本文件。
+- 直接粘贴 `vless://`、`vmess://`、`trojan://`、`ss://` 等分享链接。
+- 支持多行分享链接与 Base64 订阅内容。
+- 自动识别格式，并在保存前预览节点数量和解析警告。
+- 支持手动同步与 30 分钟至每天的定时同步。
+- 支持自定义 User-Agent 与可信来源的 TLS 证书校验跳过。
+- 自动尝试 `clash-meta`、Mihomo、Clash、sing-box、v2rayN、浏览器等兼容请求头。
+- 远程刷新保留节点 ID、项目关系、排序、标签和备注。
+
+### 📦 统一节点库
+
+- 支持 SS、SSR、VMess、VLESS、Trojan、Hysteria2、TUIC、Snell、WireGuard、SOCKS5、HTTP。
+- 添加、编辑、复制、启用、停用和删除节点。
+- 按来源、名称、服务器、协议、标签和备注筛选。
+- 节点长名称自动换行，不再挤压协议和操作区域。
+- 拖拽排序并持久化，刷新、重启和重新登录后顺序保持不变。
+- 批量启停、添加或移除标签、添加前缀、查找替换名称。
+- 明确显示节点是否已经加入当前项目。
+- 节点库与项目通过稳定引用关联，同时支持项目专属别名和字段覆写。
+
+### 🎨 代理分组
+
+- 支持 `select`、`url-test`、`fallback`、`load-balance`、`relay`。
+- 节点拖入分组、组内排序、跨组移动与分组整体排序。
+- 策略组可以拖入另一个策略组，构建链式代理。
+- 提供显式「加入策略组」面板，不依赖精准拖拽也能完成组嵌套。
+- 自动阻止策略组自引用和循环引用。
+- 手机和平板提供上下移动按钮，作为触摸拖拽的可靠替代。
+
+### 📚 分流规则与模板
+
+- 支持常见 Domain、IP、Geo、进程、Rule Set 和 MATCH 规则。
+- 可视化编辑匹配值、目标策略、附加参数和备注。
+- 规则搜索、复制、排序、批量启用、停用与删除。
+- 内置局域网直连、广告拦截、国内直连、开发服务和基础分流模板。
+- 支持创建、复制、编辑和删除个人规则模板。
+- 自动提示是否缺少 `MATCH` 兜底规则。
+
+### 🎯 生成订阅
+
+- 按来源、标签或关键词筛选生成节点。
+- 选择当前规则、内置模板或个人模板。
+- 自动整理未选择节点和分组成员关系。
+- 实时预览最终 YAML / JSON 与结构校验结果。
+- 保存可复用 Generation Profile，支持编辑、复制和删除。
+- 为公开订阅设置可选过期时间。
+- 创建新订阅，或更新已有订阅内容并保持公开地址不变。
+- 每次原地址更新自动递增内容版本。
+
+### 📡 发布链接
+
+- 展示生成方案、目标格式、版本、节点数量、过期时间和更新时间。
+- 撤销或永久删除公开订阅。
+- 数据库只保存 Token 哈希，不保存可直接使用的明文公开地址。
+- 重置并复制地址时，旧地址立即失效。
+- 公开订阅接口带访问限流、过期和撤销检查。
+
+### 🕘 历史、备份与恢复
+
+- 自动保存项目并保留最近历史快照。
+- 手动创建版本，恢复前自动再做一次保护快照。
+- 用户备份覆盖项目、历史、旧订阅、来源、节点库、标签、模板、生成方案和发布记录。
+- 支持合并恢复与替换恢复。
+- 恢复后的发布记录默认撤销，避免无法恢复的明文 Token 造成误判。
+
+### 🔄 网页一键更新
+
+管理员可以在「系统管理 → 系统设置 → 网页更新」完成更新，无需再次登录服务器执行命令：
+
+1. 检查 GitHub `main` 分支版本与构建提交。
+2. 检查磁盘空间、Docker Compose、Git 工作区和安装环境。
+3. 自动备份完整数据。
+4. 拉取代码并重建容器。
+5. 等待 Docker 健康检查。
+6. 新版失败时自动回滚到更新前提交并重建旧版。
+
+网页可实时查看进度与主机更新日志。日志文件位于：
+
+```text
+/var/log/ou-yaml/web-update.log
 ```
 
-数据默认保存在：
+## 🎭 界面设计
+
+OU-YAML v1.4 使用暖象牙白、深李子色、石榴红、孔雀青、琥珀金与柔紫构成视觉系统：
+
+- 不是冷淡风，也不是赛博风。
+- 卡片层次清晰，重要状态使用丰富但克制的色彩。
+- 页面进入、抽屉、拖拽、悬停和进度反馈使用统一丝滑缓动。
+- 支持 `prefers-reduced-motion`，系统减少动态效果时自动关闭非必要动画。
+- 桌面、平板与手机独立布局；针对 `390px` 屏幕避免横向滚动和操作拥挤。
+
+Logo 位于 `public/brand/ou-yaml-logo.png`。
+
+## 🧭 推荐使用顺序
+
+1. 在「订阅来源」添加远程 URL、配置文件或分享链接。
+2. 在「节点库」筛选节点，整理标签并加入当前项目。
+3. 在「配置工作台 → 代理分组」组织选择组、测速组和链式代理。
+4. 在「配置工作台 → 分流规则」应用模板或自定义规则。
+5. 在「预览校验」检查结构，并可调用真实内核验证。
+6. 在「发布中心 → 生成方案」保存方案并创建公开订阅。
+7. 后续节点变化时选择原发布记录，更新内容但保持客户端地址不变。
+
+## 🛡️ 安全设计
+
+- 多用户资源隔离与管理员权限控制。
+- 密码使用 bcrypt 哈希保存。
+- Session Cookie 使用 `HttpOnly`、`SameSite=Strict`，HTTPS 模式启用 `Secure`。
+- 修改请求执行 Origin / Fetch Metadata 校验。
+- 登录、公开订阅与敏感接口使用速率限制。
+- 远程订阅抓取执行 DNS 与 IP 校验，阻止本机、局域网和云元数据地址。
+- 重定向目标重新执行 SSRF 检查。
+- 容器移除 Linux capabilities，并启用 `no-new-privileges`。
+- 网页容器不挂载 Docker Socket；更新由受限的主机 systemd 代理完成。
+
+## 💾 数据与维护
+
+默认安装目录：
+
+```text
+/opt/ou-yaml
+```
+
+默认数据目录：
 
 ```text
 /opt/ou-yaml/data
 ```
 
-## 🧭 主要功能
+手动备份与更新：
 
-### 🔗 订阅链接
-
-- 展示已发布的配置订阅。
-- 复制公开订阅地址。
-- 查看目标客户端、版本、节点数量和发布时间。
-- 支持订阅撤销和过期检查。
-- 公开 Token 仅在首次发布或手动轮换时显示；数据库 ID 不能作为订阅地址。
-- 支持公开访问限流。
-
-### 📥 订阅来源管理
-
-- 导入远程订阅 URL。
-- 上传 Mihomo YAML 或 sing-box JSON。
-- 导入 Base64 节点订阅。
-- 导入多行分享链接。
-- 自动识别订阅格式。
-- 支持手动刷新和定时刷新。
-- 记录导入警告和失败状态。
-- 远程来源刷新会保留已有节点的 ID、手动排序、标签和备注，新节点自动追加。
-- 针对常见的 `403`、`404`、压缩响应和订阅网页返回提供兼容处理与可读诊断。
-
-### 🧩 节点管理
-
-- 节点池统一管理。
-- 支持 SS、SSR、VMess、VLESS、Trojan、Hysteria2、TUIC、Snell、SOCKS5、HTTP、WireGuard 等协议。
-- 添加、编辑、复制、删除节点。
-- 按来源、协议、名称和标签筛选。
-- 批量删除和启用状态管理。
-- 保留规范化配置和原始配置。
-
-### 🧺 节点池工作流
-
-- 粘贴 `VLESS`、`VMess`、`Trojan`、`SS`、`SSR`、`Hysteria2`、`TUIC`、`SOCKS5` 和 `HTTP` 分享链接。
-- 支持一行一个、多行链接、Base64 订阅、IPv6、TLS、Reality、SNI、WebSocket 和 gRPC 参数。
-- 导入前预览节点，逐行显示无法识别的内容，并自动跳过重复节点。
-- 拖拽节点自由排序，顺序持久化到数据库；筛选、刷新、重启和重新登录后仍保持一致。
-- 支持批量选择节点，一键加入当前配置或删除节点；桌面、平板和手机端均采用自适应卡片布局。
-
-### 🎯 生成订阅
-
-- 分步生成向导。
-- 选择节点来源和节点集合。
-- 选择输出格式和规则模板。
-- 预览生成后的 YAML / JSON。
-- 调用 Mihomo 或 sing-box 内核进行校验。
-- 保存 Generation Profile。
-- 发布公开订阅链接。
-- 支持 Mihomo YAML / Clash Meta 与 sing-box JSON 两种目标格式。
-
-### 🧱 代理分组
-
-- `select`
-- `url-test`
-- `fallback`
-- `load-balance`
-- `relay`
-- 节点池拖拽。
-- 组内排序和跨组移动。
-- 链式代理和中转组。
-- 组成员使用稳定 ID 管理。
-- 支持代理组资源 API。
-
-### 📚 规则与模板
-
-- 内置规则模板。
-- 自定义规则模板。
-- 规则集资源管理。
-- 规则启用、禁用和排序。
-- 模板复制和复用。
-- Mihomo / sing-box 双格式适配。
-
-### 🕘 历史与安全
-
-- 项目配置快照。
-- 历史版本恢复。
-- 用户级 JSON 备份和恢复。
-- 多用户数据隔离。
-- 管理员账号和权限管理。
-- 登录限速。
-- SSRF 防护。
-- 公开订阅访问限流。
-- 操作任务和审计日志。
-
-## 🎨 品牌界面
-
-OU-YAML 使用以下设计方向：
-
-- 奶油色和象牙白背景。
-- 鼠尾草绿作为主要操作色。
-- 柔和珊瑚色和琥珀色作为状态色。
-- 深色代码预览区域。
-- 低干扰、流畅的过渡动画。
-- 桌面端侧边栏和移动端抽屉导航。
-- 支持深色模式和 `prefers-reduced-motion`。
-
-Logo 资源位于：
-
-```text
-public/brand/ou-yaml-logo.png
+```bash
+sudo /opt/ou-yaml/backup.sh
+sudo /opt/ou-yaml/update.sh
 ```
 
-## 🔄 网页端更新
+查看服务：
 
-管理员可以在「设置 → 网页更新」中检查 GitHub 最新版本。部署了网页更新代理后，点击更新会自动完成数据备份、拉取代码、重建容器、重启服务和健康检查，整个过程无需登录服务器执行命令。
+```bash
+cd /opt/ou-yaml
+docker compose ps
+docker compose logs -f ou-yaml
+```
 
-如果部署环境没有 systemd，仍可使用项目目录中的 `update.sh` 手动更新；更新前建议先执行 `backup.sh`。
+## 🐳 手动 Docker 部署
 
-## 🛠️ 本地开发
+```bash
+git clone https://github.com/cshaizhihao/OU-YAML.git
+cd OU-YAML
+cp .env.example .env
+printf '%s' 'change-this-password' | base64 -w0
+```
 
-环境要求：
+将输出写入 `.env` 的 `ADMIN_PASSWORD_B64`，然后选择一种模式：
 
-- Node.js 20+
-- npm
-- better-sqlite3 编译环境
-- 可选：Mihomo 和 sing-box 内核
+```bash
+# IP + 端口
+docker compose -f docker-compose.yml -f docker-compose.ip.yml up -d --build
+
+# 域名 + Caddy HTTPS
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+```
+
+## 🧑‍💻 本地开发
+
+环境要求：Node.js 20+、npm，以及 better-sqlite3 所需的本地编译环境。
 
 ```bash
 npm install
 ADMIN_USERNAME=admin ADMIN_PASSWORD='change-this-password' npm run dev
 ```
 
-开发地址：
-
-- 前端：`http://localhost:5173`
+- 前端开发服务：`http://localhost:5173`
 - API：`http://localhost:8787`
 
-### 本地验证
+完整验证：
 
 ```bash
 npm run typecheck
 npm test
 npm run build
+npm audit
 ```
 
-## 🐳 Docker 部署
+## ⚙️ 环境变量
 
-```bash
-cp .env.example .env
-printf '%s' 'change-this-password' | base64 -w0
-# 将输出写入 ADMIN_PASSWORD_B64
-docker compose -f docker-compose.yml -f docker-compose.ip.yml up -d --build
-```
-
-IP 模式会在宿主机暴露 `${OU_YAML_PORT:-8787}`。域名 + HTTPS 模式使用：
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
-```
-
-域名模式仅由 Caddy 暴露 80/443，应用端口 `8787` 不会直接暴露到宿主机。
-
-查看运行状态：
-
-```bash
-docker compose ps
-docker compose logs -f ou-yaml
-```
-
-## ⚙️ 配置项
-
-| 配置项 | 说明 |
+| 变量 | 说明 |
 | --- | --- |
-| `OU_YAML_PORT` | IP + 端口模式下的监听端口，默认 `8787` |
+| `OU_YAML_PORT` | IP 模式宿主机端口，默认 `8787` |
 | `ADMIN_USERNAME` | 首次启动创建的管理员账号 |
 | `ADMIN_PASSWORD_B64` | Base64 编码后的管理员密码 |
-| `DOMAIN` | 域名模式下的访问域名 |
-| `APP_ORIGIN` | 允许执行修改操作的网页来源；域名安装时自动设置 |
+| `DOMAIN` | 域名模式访问域名 |
+| `APP_ORIGIN` | 允许执行修改请求的网页来源 |
 | `TRUST_PROXY` | 是否信任反向代理，域名模式为 `1` |
-| `COOKIE_SECURE` | 是否启用 Secure Cookie，HTTPS 模式为 `true` |
-| `DATA_DIR` | SQLite 数据目录，容器内默认为 `/app/data` |
+| `COOKIE_SECURE` | 是否启用 Secure Cookie |
+| `DATA_DIR` | SQLite 数据目录，容器内默认 `/app/data` |
+| `UPDATE_GITHUB_REPO` | 网页更新检查的 GitHub 仓库 |
 
-## 🔐 安全建议
+## 📄 说明
 
-- 首次登录后立即确认管理员密码安全性。
-- 不要在公开渠道分享管理员密码和订阅地址。
-- 公开订阅地址泄露后及时撤销并重新发布。
-- 公网部署优先使用域名 HTTPS。
-- Cloudflare 橙色云朵模式使用“完全（严格）”。
-- 定期执行数据库备份。
-- 不要导入来源不明的配置文件或规则。
-
-## 🔗 项目地址
-
-https://github.com/cshaizhihao/OU-YAML
+OU-YAML 用于管理用户本人有权使用的节点、订阅和规则。请遵守所在地法律法规与上游服务协议，并妥善保管管理员密码和公开订阅地址。

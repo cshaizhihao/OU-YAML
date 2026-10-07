@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, ChevronDown, Gauge, GripVertical, Group, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Gauge, GitBranch, GripVertical, Group, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { createId } from "../../shared/id";
 import { addGroupMembers, canAddGroupMember, hasGroupCycle, moveGroupMember, removeGroupMember, reorderGroupMember, reorderGroups } from "../../shared/grouping";
 import type { GroupType, MihomoConfig, ProxyGroup, ProxyNode } from "../../shared/types";
@@ -91,6 +91,25 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   function removeMember(targetGroupId: string, name: string) {
     updateGroups(removeGroupMember(config.proxyGroups, targetGroupId, name));
   }
+  function moveGroup(groupIdValue: string, direction: -1 | 1) {
+    const index = config.proxyGroups.findIndex((group) => group.id === groupIdValue);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= config.proxyGroups.length) return;
+    const next = [...config.proxyGroups];
+    [next[index], next[target]] = [next[target], next[index]];
+    updateGroups(next);
+  }
+  function moveMemberBy(groupIdValue: string, name: string, direction: -1 | 1) {
+    updateGroups(config.proxyGroups.map((group) => {
+      if (group.id !== groupIdValue) return group;
+      const index = group.proxies.indexOf(name);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= group.proxies.length) return group;
+      const proxies = [...group.proxies];
+      [proxies[index], proxies[target]] = [proxies[target], proxies[index]];
+      return { ...group, proxies };
+    }));
+  }
   function toggleNode(name: string) {
     setSelectedNodes((current) => { const next = new Set(current); next.has(name) ? next.delete(name) : next.add(name); return next; });
   }
@@ -138,6 +157,7 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   return <>
     <div className="view-toolbar group-board-toolbar"><div className="summary-inline"><span><strong>{config.proxies.length}</strong> 个节点</span><i /><span><strong>{config.proxyGroups.length}</strong> 个策略组</span><i /><span><strong>{config.proxyGroups.reduce((sum, item) => sum + item.proxies.length, 0)}</strong> 个引用</span></div><button className="primary-button" onClick={() => setEditing(blankGroup())}><Plus size={17} />添加策略组</button></div>
     <div className="group-board-hint" role="note"><GripVertical size={15} />拖动节点到成员列表；拖动策略组到卡片底部可形成链式代理</div>
+    {!!config.proxyGroups.length && <label className="mobile-group-switcher">当前编辑组<select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>}
     <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveName("")}>
       <div className="group-board">
         <aside className="node-pool" aria-label="当前配置节点">
@@ -149,10 +169,19 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
 
         <SortableContext items={config.proxyGroups.map((group) => groupId(group.id))} strategy={verticalListSortingStrategy}>
           <section className="group-canvas" aria-label="策略组编排区">
-            {config.proxyGroups.map((group) => <GroupColumn key={group.id} group={group} config={config} selected={group.id === selectedGroup?.id} onSelect={() => setSelectedGroupId(group.id)} onEdit={() => setEditing(structuredClone(group))} onDelete={() => setDeleting(group)} onRemove={(name) => removeMember(group.id, name)} onAddBuiltin={(name) => addMembers(group.id, [name])} />)}
+            {config.proxyGroups.map((group, index) => <GroupColumn key={group.id} group={group} config={config} selected={group.id === selectedGroup?.id} canMoveUp={index > 0} canMoveDown={index < config.proxyGroups.length - 1} onSelect={() => setSelectedGroupId(group.id)} onEdit={() => setEditing(structuredClone(group))} onDelete={() => setDeleting(group)} onRemove={(name) => removeMember(group.id, name)} onMove={(direction) => moveGroup(group.id, direction)} onMoveMember={(name, direction) => moveMemberBy(group.id, name, direction)} onAddBuiltin={(name) => addMembers(group.id, [name])} />)}
             {!config.proxyGroups.length && <button className="empty-group-column" onClick={() => setEditing(blankGroup())}><Plus size={22} /><strong>创建第一个策略组</strong></button>}
           </section>
         </SortableContext>
+
+        <aside className="group-inspector" aria-label="策略组属性">
+          {selectedGroup ? <>
+            <header><span className="group-icon"><Group size={18} /></span><div><small>当前策略组</small><strong title={selectedGroup.name}>{selectedGroup.name}</strong></div><button className="icon-button compact" onClick={() => setEditing(structuredClone(selectedGroup))} aria-label="编辑当前策略组"><Pencil size={15} /></button></header>
+            <div className="inspector-stats"><span>类型<strong>{groupTypes.find((item) => item.value === selectedGroup.type)?.label}</strong></span><span>成员<strong>{selectedGroup.proxies.length}</strong></span><span>嵌套组<strong>{selectedGroup.proxies.filter((name) => config.proxyGroups.some((group) => group.name === name)).length}</strong></span></div>
+            <section><div className="inspector-title"><GitBranch size={15} /><strong>加入策略组</strong></div><p>点击即可把另一个组作为当前组成员，不依赖拖拽。</p><div className="nest-group-list">{config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => { const included = selectedGroup.proxies.includes(group.name); const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name); return <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}><span><Group size={14} />{group.name}</span>{included ? <Check size={14} /> : <Plus size={14} />}</button>; })}{config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立链式代理。</small>}</div></section>
+            <section><div className="inspector-title"><GripVertical size={15} /><strong>触摸排序</strong></div><p>手机或平板无法精准拖动时，使用按钮调整组顺序。</p><div className="inspector-actions"><button className="secondary-button compact-button" disabled={config.proxyGroups[0]?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, -1)}><ArrowUp size={14} />上移</button><button className="secondary-button compact-button" disabled={config.proxyGroups.at(-1)?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, 1)}><ArrowDown size={14} />下移</button></div></section>
+          </> : <div className="inspector-empty"><Group size={21} /><span>选择一个策略组查看属性</span></div>}
+        </aside>
       </div>
       <DragOverlay dropAnimation={{ duration: 160, easing: "ease-out" }}>{activeName ? <div className="drag-overlay"><GripVertical size={16} /><strong>{activeName}</strong></div> : null}</DragOverlay>
     </DndContext>
@@ -175,19 +204,19 @@ function PoolNode({ node, selected, targetName, onToggle, onAdd }: { node: Proxy
   return <article ref={setNodeRef} className={isDragging ? "pool-node dragging" : "pool-node"} style={{ transform: CSS.Translate.toString(transform) }}><button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动节点 ${node.name}`}><GripVertical size={17} /></button><label className="pool-check"><input type="checkbox" checked={selected} onChange={onToggle} /><span className="sr-only">选择 {node.name}</span></label><div className="pool-node-main"><strong title={node.name}>{node.name}</strong><span>{node.type.toUpperCase()} · {node.server || "未设置地址"}</span></div><button className="icon-button compact add-to-group" disabled={!targetName} onClick={onAdd} title={targetName ? `加入 ${targetName}` : "请先创建策略组"} aria-label={targetName ? `将 ${node.name} 加入 ${targetName}` : "请先创建策略组"}><Plus size={16} /></button></article>;
 }
 
-function GroupColumn({ group, config, selected, onSelect, onEdit, onDelete, onRemove, onAddBuiltin }: { group: ProxyGroup; config: MihomoConfig; selected: boolean; onSelect: () => void; onEdit: () => void; onDelete: () => void; onRemove: (name: string) => void; onAddBuiltin: (name: string) => void }) {
+function GroupColumn({ group, config, selected, canMoveUp, canMoveDown, onSelect, onEdit, onDelete, onRemove, onMove, onMoveMember, onAddBuiltin }: { group: ProxyGroup; config: MihomoConfig; selected: boolean; canMoveUp: boolean; canMoveDown: boolean; onSelect: () => void; onEdit: () => void; onDelete: () => void; onRemove: (name: string) => void; onMove: (direction: -1 | 1) => void; onMoveMember: (name: string, direction: -1 | 1) => void; onAddBuiltin: (name: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: groupId(group.id), data: { kind: "group", groupId: group.id, name: group.name } satisfies DragPayload });
   const { isOver: isTargetOver, setNodeRef: setTargetNodeRef } = useDroppable({ id: groupTargetId(group.id), data: { kind: "group-target", groupId: group.id } satisfies DragPayload });
   return <article ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`group-column${selected ? " selected" : ""}${isOver ? " over" : ""}${isTargetOver ? " nesting-over" : ""}${isDragging ? " dragging" : ""}`} onClick={onSelect}>
     <header className="group-column-header"><button className="drag-handle group-drag-handle" {...listeners} {...attributes} aria-label={`拖动策略组 ${group.name}`}><GripVertical size={17} /></button><span className="group-icon">{group.type === "url-test" ? <Gauge size={19} /> : <Group size={19} />}</span><div><h2>{group.name}</h2><span>{groupTypes.find((item) => item.value === group.type)?.label || group.type}</span></div><b>{group.proxies.length}</b><button className="icon-button compact" onClick={(event) => { event.stopPropagation(); onEdit(); }} aria-label={`编辑 ${group.name}`}><Pencil size={15} /></button><button className="icon-button compact danger" onClick={(event) => { event.stopPropagation(); onDelete(); }} aria-label={`删除 ${group.name}`}><Trash2 size={15} /></button></header>
-    <SortableContext items={group.proxies.map((name) => memberId(group.id, name))} strategy={verticalListSortingStrategy}><div className="group-member-list">{group.proxies.map((name) => <SortableMember key={name} name={name} groupId={group.id} node={config.proxies.find((item) => item.name === name)} nestedGroup={config.proxyGroups.find((item) => item.name === name)} onRemove={() => onRemove(name)} />)}{!group.proxies.length ? <div ref={setTargetNodeRef} className={`group-drop-empty${isTargetOver ? " active" : ""}`}><Network size={18} /><span><strong>拖动节点或策略组到这里</strong><small>策略组会作为链式代理</small></span></div> : <div ref={setTargetNodeRef} className={`group-nest-drop${isTargetOver ? " active" : ""}`}><Group size={15} /><span>拖入策略组，作为链式代理</span></div>}</div></SortableContext>
-    <footer className="group-quick-add"><span>快速加入</span>{["DIRECT", "REJECT"].map((name) => <button key={name} disabled={group.proxies.includes(name)} onClick={(event) => { event.stopPropagation(); onAddBuiltin(name); }}>{group.proxies.includes(name) ? <Check size={13} /> : <Plus size={13} />}{name}</button>)}</footer>
+    <SortableContext items={group.proxies.map((name) => memberId(group.id, name))} strategy={verticalListSortingStrategy}><div className="group-member-list">{group.proxies.map((name, index) => <SortableMember key={name} name={name} groupId={group.id} node={config.proxies.find((item) => item.name === name)} nestedGroup={config.proxyGroups.find((item) => item.name === name)} canMoveUp={index > 0} canMoveDown={index < group.proxies.length - 1} onMove={(direction) => onMoveMember(name, direction)} onRemove={() => onRemove(name)} />)}{!group.proxies.length ? <div ref={setTargetNodeRef} className={`group-drop-empty${isTargetOver ? " active" : ""}`}><Network size={18} /><span><strong>拖动节点或策略组到这里</strong><small>策略组会作为链式代理</small></span></div> : <div ref={setTargetNodeRef} className={`group-nest-drop${isTargetOver ? " active" : ""}`}><Group size={15} /><span>拖入策略组，作为链式代理</span></div>}</div></SortableContext>
+    <footer className="group-quick-add"><span>快速加入</span>{["DIRECT", "REJECT"].map((name) => <button key={name} disabled={group.proxies.includes(name)} onClick={(event) => { event.stopPropagation(); onAddBuiltin(name); }}>{group.proxies.includes(name) ? <Check size={13} /> : <Plus size={13} />}{name}</button>)}<span className="group-touch-order"><button disabled={!canMoveUp} onClick={(event) => { event.stopPropagation(); onMove(-1); }} aria-label="上移策略组"><ArrowUp size={13} /></button><button disabled={!canMoveDown} onClick={(event) => { event.stopPropagation(); onMove(1); }} aria-label="下移策略组"><ArrowDown size={13} /></button></span></footer>
   </article>;
 }
 
-function SortableMember({ name, groupId: ownerId, node, nestedGroup, onRemove }: { name: string; groupId: string; node?: ProxyNode; nestedGroup?: ProxyGroup; onRemove: () => void }) {
+function SortableMember({ name, groupId: ownerId, node, nestedGroup, canMoveUp, canMoveDown, onMove, onRemove }: { name: string; groupId: string; node?: ProxyNode; nestedGroup?: ProxyGroup; canMoveUp: boolean; canMoveDown: boolean; onMove: (direction: -1 | 1) => void; onRemove: () => void }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: memberId(ownerId, name), data: { kind: "member", name, groupId: ownerId } satisfies DragPayload });
-  return <div ref={setNodeRef} className={isDragging ? "group-member dragging" : "group-member"} style={{ transform: CSS.Transform.toString(transform), transition }}><button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动成员 ${name}`}><GripVertical size={16} /></button><span className={`member-kind ${node ? "node" : nestedGroup ? "group" : "builtin"}`}>{node ? node.type.slice(0, 2).toUpperCase() : nestedGroup ? <Group size={13} /> : name.slice(0, 1)}</span><div><strong title={name}>{name}</strong><span>{node ? node.server : nestedGroup ? "策略组" : "内置策略"}</span></div><button className="icon-button compact" onClick={onRemove} aria-label={`从策略组移除 ${name}`}><X size={15} /></button></div>;
+  return <div ref={setNodeRef} className={isDragging ? "group-member dragging" : "group-member"} style={{ transform: CSS.Transform.toString(transform), transition }}><button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动成员 ${name}`}><GripVertical size={16} /></button><span className={`member-kind ${node ? "node" : nestedGroup ? "group" : "builtin"}`}>{node ? node.type.slice(0, 2).toUpperCase() : nestedGroup ? <Group size={13} /> : name.slice(0, 1)}</span><div><strong title={name}>{name}</strong><span>{node ? node.server : nestedGroup ? "策略组" : "内置策略"}</span></div><span className="member-touch-order"><button disabled={!canMoveUp} onClick={() => onMove(-1)} aria-label={`上移 ${name}`}><ArrowUp size={13} /></button><button disabled={!canMoveDown} onClick={() => onMove(1)} aria-label={`下移 ${name}`}><ArrowDown size={13} /></button></span><button className="icon-button compact" onClick={onRemove} aria-label={`从策略组移除 ${name}`}><X size={15} /></button></div>;
 }
 
 function GroupEditor({ config, group, onClose, onSave }: { config: MihomoConfig; group: ProxyGroup | null; onClose: () => void; onSave: (group: ProxyGroup) => void }) {

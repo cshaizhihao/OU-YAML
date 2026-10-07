@@ -75,6 +75,10 @@ db.exec(`
     url TEXT,
     format TEXT NOT NULL DEFAULT 'auto',
     enabled INTEGER NOT NULL DEFAULT 1,
+    interval_minutes INTEGER NOT NULL DEFAULT 0,
+    user_agent TEXT,
+    skip_cert_verify INTEGER NOT NULL DEFAULT 0,
+    last_request_profile TEXT,
     node_count INTEGER NOT NULL DEFAULT 0,
     last_updated_at TEXT,
     last_error TEXT,
@@ -100,6 +104,19 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_managed_nodes_user ON managed_nodes(user_id, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_managed_nodes_source ON managed_nodes(source_id);
+  CREATE TABLE IF NOT EXISTS project_nodes (
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    node_id TEXT NOT NULL REFERENCES managed_nodes(id) ON DELETE CASCADE,
+    alias TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    overrides_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(project_id, node_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_project_nodes_project ON project_nodes(project_id, sort_order);
+  CREATE INDEX IF NOT EXISTS idx_project_nodes_node ON project_nodes(node_id);
   CREATE TABLE IF NOT EXISTS node_tags (
     node_id TEXT NOT NULL REFERENCES managed_nodes(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,
@@ -200,6 +217,11 @@ db.exec(`
 const managedNodeColumns = db.prepare("PRAGMA table_info(managed_nodes)").all() as { name: string }[];
 if (!managedNodeColumns.some((column) => column.name === "sort_order")) db.exec("ALTER TABLE managed_nodes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
 db.exec("CREATE INDEX IF NOT EXISTS idx_managed_nodes_sort ON managed_nodes(user_id, sort_order, created_at, id)");
+const nodeSourceColumns = db.prepare("PRAGMA table_info(node_sources)").all() as { name: string }[];
+if (!nodeSourceColumns.some((column) => column.name === "interval_minutes")) db.exec("ALTER TABLE node_sources ADD COLUMN interval_minutes INTEGER NOT NULL DEFAULT 0");
+if (!nodeSourceColumns.some((column) => column.name === "user_agent")) db.exec("ALTER TABLE node_sources ADD COLUMN user_agent TEXT");
+if (!nodeSourceColumns.some((column) => column.name === "skip_cert_verify")) db.exec("ALTER TABLE node_sources ADD COLUMN skip_cert_verify INTEGER NOT NULL DEFAULT 0");
+if (!nodeSourceColumns.some((column) => column.name === "last_request_profile")) db.exec("ALTER TABLE node_sources ADD COLUMN last_request_profile TEXT");
 db.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
 const schemaVersion = Number((db.prepare("SELECT value FROM schema_meta WHERE key = 'schema-version'").get() as { value?: string } | undefined)?.value || 0);
 if (schemaVersion < 1) db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema-version', '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
@@ -215,7 +237,7 @@ if (!db.prepare("SELECT 1 FROM schema_meta WHERE key = 'managed-node-sort-v1'").
   })();
 }
 
-db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema-version', '2') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
+db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema-version', '4') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
 
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
 if (!userColumns.some((column) => column.name === "is_admin")) db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");

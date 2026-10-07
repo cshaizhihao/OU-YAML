@@ -15,8 +15,10 @@ export type SubscriptionRequestProfile = {
 };
 
 export const subscriptionRequestProfiles: readonly SubscriptionRequestProfile[] = [
+  { name: "Clash Meta 兼容", userAgent: "clash-meta/2.4.0", accept: "application/yaml, text/yaml, text/plain, application/json, */*" },
   { name: "Clash Meta", userAgent: "clash.meta/1.19.0", accept: "application/yaml, text/yaml, text/plain, application/json, */*" },
   { name: "ClashMeta", userAgent: "ClashMeta/1.18.0", accept: "application/yaml, text/yaml, text/plain, application/json, */*" },
+  { name: "Clash Meta Android", userAgent: "ClashMetaForAndroid/2.11.7.Meta", accept: "application/yaml, text/yaml, text/plain, application/json, */*" },
   { name: "Mihomo", userAgent: "mihomo/1.19.0", accept: "application/yaml, text/yaml, text/plain, application/json, */*" },
   { name: "Clash", userAgent: "ClashforWindows/0.20.39", accept: "application/yaml, text/yaml, text/plain, application/json, */*" },
   { name: "sing-box", userAgent: "sing-box/1.11.0", accept: "application/json, application/yaml, text/plain, */*" },
@@ -60,7 +62,7 @@ export function decodeSubscriptionBody(payload: Buffer, contentEncoding: string,
   return body.toString("utf8");
 }
 
-type RequestOptions = Partial<Pick<SubscriptionRequestProfile, "userAgent" | "accept" | "cacheControl">>;
+type RequestOptions = Partial<Pick<SubscriptionRequestProfile, "userAgent" | "accept" | "cacheControl">> & { skipCertVerify?: boolean };
 type RequestResult = { statusCode: number; body?: string; redirect?: URL; contentType?: string; address: string };
 
 function hostHeader(url: URL) {
@@ -85,6 +87,7 @@ async function requestAtAddress(url: URL, address: PublicAddress, maxBytes: numb
       path: `${url.pathname || "/"}${url.search}`,
       method: "GET",
       servername: net.isIP(lookupHostname) ? undefined : lookupHostname,
+      rejectUnauthorized: options.skipCertVerify !== true,
       headers: {
         Host: hostHeader(url),
         "User-Agent": userAgent,
@@ -183,9 +186,16 @@ function statusError(url: URL, statusCode: number, profiles: readonly Subscripti
   return new Error(`订阅服务器返回 HTTP ${statusCode}（${displayUrl(url)}）。已尝试 ${tried} 请求方式；${hint}`);
 }
 
-export async function safeFetchText(input: string, maxBytes = 2_000_000) {
+export type SafeFetchOptions = { userAgent?: string; skipCertVerify?: boolean };
+export type SafeFetchResult = { text: string; requestProfile: string };
+
+export async function safeFetchSubscription(input: string, maxBytes = 2_000_000, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
   let url: URL;
   try { url = new URL(input); } catch { throw new Error("订阅地址格式无效"); }
+  const customProfile = options.userAgent?.trim()
+    ? [{ name: "自定义 UA", userAgent: options.userAgent.trim().slice(0, 300), accept: "application/yaml, text/yaml, text/plain, application/json, */*" }]
+    : [];
+  const profiles = [...customProfile, ...subscriptionRequestProfiles.filter((profile) => profile.userAgent !== customProfile[0]?.userAgent)];
   const visited = new Set<string>();
   for (let redirects = 0; redirects < 4; redirects += 1) {
     if (visited.has(url.href)) throw new Error("订阅重定向形成循环");
@@ -193,8 +203,8 @@ export async function safeFetchText(input: string, maxBytes = 2_000_000) {
     let redirected: URL | undefined;
     let lastStatus = 0;
     let lastBodyError: BodyError | undefined;
-    for (const profile of subscriptionRequestProfiles) {
-      const result = await requestOnce(url, maxBytes, profile);
+    for (const profile of profiles) {
+      const result = await requestOnce(url, maxBytes, { ...profile, skipCertVerify: options.skipCertVerify });
       if (result.redirect) {
         redirected = result.redirect;
         break;
@@ -202,7 +212,7 @@ export async function safeFetchText(input: string, maxBytes = 2_000_000) {
       if (result.statusCode >= 200 && result.statusCode < 300) {
         try {
           const body = readBody(result);
-          if (body !== undefined) return body;
+          if (body !== undefined) return { text: body, requestProfile: profile.name };
         } catch (error) {
           const typed = error as BodyError;
           if (typed.reason !== "html") throw error;
@@ -218,8 +228,12 @@ export async function safeFetchText(input: string, maxBytes = 2_000_000) {
       continue;
     }
     if (lastBodyError) throw lastBodyError;
-    if (lastStatus) throw statusError(url, lastStatus, subscriptionRequestProfiles);
+    if (lastStatus) throw statusError(url, lastStatus, profiles);
     throw new Error("订阅服务器没有返回有效内容");
   }
   throw new Error("订阅重定向次数过多");
+}
+
+export async function safeFetchText(input: string, maxBytes = 2_000_000, options: SafeFetchOptions = {}) {
+  return (await safeFetchSubscription(input, maxBytes, options)).text;
 }

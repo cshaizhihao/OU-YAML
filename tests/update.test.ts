@@ -35,14 +35,14 @@ test("版本号相同时通过 main 提交发现新构建", async () => {
   process.env.APP_COMMIT = "a".repeat(40);
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes("/releases/latest")) return new Response(JSON.stringify({ tag_name: "v1.3.1", body: "release" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (url.includes("/releases/latest")) return new Response(JSON.stringify({ tag_name: "v1.4.0", body: "release" }), { status: 200, headers: { "Content-Type": "application/json" } });
     if (url.includes("/commits/main")) return new Response(JSON.stringify({ sha: "b".repeat(40), commit: { message: "new build" } }), { status: 200, headers: { "Content-Type": "application/json" } });
-    return new Response(JSON.stringify({ version: "1.3.1" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ version: "1.4.0" }), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
   try {
     const result = await checkForUpdate();
-    assert.equal(result.currentVersion, "1.3.1");
-    assert.equal(result.latestVersion, "1.3.1");
+    assert.equal(result.currentVersion, "1.4.0");
+    assert.equal(result.latestVersion, "1.4.0");
     assert.equal(result.hasUpdate, true);
     assert.equal(result.updateKind, "build");
     assert.equal(result.currentCommit, "a".repeat(40));

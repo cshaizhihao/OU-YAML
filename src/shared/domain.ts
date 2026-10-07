@@ -11,6 +11,10 @@ export interface NodeSource {
   url?: string;
   format: 'auto' | 'links' | 'mihomo' | 'sing-box';
   enabled: boolean;
+  intervalMinutes: number;
+  userAgent?: string;
+  skipCertVerify: boolean;
+  lastRequestProfile?: string;
   nodeCount: number;
   lastUpdatedAt?: string;
   lastError?: string;

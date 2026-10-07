@@ -5,17 +5,18 @@ import { rateLimit } from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { db, ensureAdmin, hashToken, readProject, snapshotProject } from "./db";
+import { db, ensureAdmin, hashToken, snapshotProject } from "./db";
 import { exportMihomoYaml, validateConfig } from "../src/shared/mihomo";
 import { exportSingBoxJson } from "../src/shared/singbox";
 import { createEmptyConfig, type MihomoConfig, type SessionUser, type Subscription, type TargetFormat, type UserAccount } from "../src/shared/types";
 import { readMihomoConfig, mihomoConfigSchema } from "../src/shared/schema";
 import { mergeSubscriptionNodes, parseImportedContent, type ImportFormat } from "./importer";
-import { safeFetchText } from "./safeFetch";
+import { safeFetchSubscription, safeFetchText } from "./safeFetch";
 import { readKernelInfo, validateWithKernel } from "./kernelValidator";
 import { exportUserBackup, restoreUserBackup } from "./backup";
-import { createManagedNode, createNodeSource, createProfile, deleteManagedNode, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, rotatePublishedSubscription, listRuleTemplates, createRuleTemplate, updateRuleTemplate, deleteRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, markNodeSourceError, recordAudit, recordJob, updateJob, updateManagedNode, updateNodeSource, replaceManagedNodesForSource, reorderManagedNodes } from "./domainService";
+import { batchUpdateManagedNodes, createManagedNode, createNodeSource, createProfile, deleteManagedNode, deleteProfile, deletePublishedSubscription, listManagedNodes, listNodeSources, listProfiles, listPublishedSubscriptions, publishSubscription, readPublicSubscription, revokePublishedSubscription, rotatePublishedSubscription, listRuleTemplates, createRuleTemplate, updateRuleTemplate, deleteRuleTemplate, listJobs, listProxyGroups, createProxyGroup, listRuleSets, createRuleSet, deleteNodeSource, markNodeSourceError, recordAudit, recordJob, updateJob, updateManagedNode, updateNodeSource, replaceManagedNodesForSource, reorderManagedNodes, hydrateProject, syncProjectNodes, updateProfile, updatePublishedSubscription } from "./domainService";
 import { checkForUpdate, readUpdateLog, readUpdateStatus, requestWebUpdate } from "./update";
 import { csrfOriginGuard } from "./csrf";
 
@@ -60,6 +61,7 @@ const managedNodeSchema = z.object({
   name: z.string().trim().min(1).max(160), type: z.string().trim().min(1).max(40), server: z.string().trim().min(1).max(255), port: z.number().int().min(1).max(65535),
   udp: z.boolean().optional(), tls: z.boolean().optional(), skipCertVerify: z.boolean().optional(), sni: z.string().max(512).optional(), uuid: z.string().max(512).optional(), password: z.string().max(2048).optional(), cipher: z.string().max(256).optional(), network: z.string().max(64).optional(), wsPath: z.string().max(2048).optional(), wsHost: z.string().max(512).optional(), grpcServiceName: z.string().max(512).optional(),
   sourceId: z.string().optional(), tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(), note: z.string().max(500).optional(), extra: z.record(z.unknown()).default({}), formatExtra: z.record(z.unknown()).optional(),
+  enabled: z.boolean().optional(),
 });
 const nodeSourceSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -70,6 +72,9 @@ const nodeSourceSchema = z.object({
   }, "来源地址必须是 HTTP 或 HTTPS").optional(),
   format: z.enum(["auto", "links", "mihomo", "sing-box"]).optional(),
   enabled: z.boolean().optional(),
+  intervalMinutes: z.number().int().min(0).max(10080).optional(),
+  userAgent: z.string().trim().max(300).optional(),
+  skipCertVerify: z.boolean().optional(),
 }).superRefine((value, context) => {
   if (value.kind === "remote-url" && !value.url) context.addIssue({ code: z.ZodIssueCode.custom, path: ["url"], message: "远程来源需要订阅地址" });
 });
@@ -104,8 +109,9 @@ function readSubscription(row: Record<string, unknown>): Subscription {
 }
 
 type RefreshResult = { subscription: Subscription; config: MihomoConfig; warnings: string[]; updatedAt: string };
+type NodeSourceRefreshResult = ReturnType<typeof replaceManagedNodesForSource> & { warnings: string[] };
 const projectRefreshQueues = new Map<string, Promise<unknown>>();
-const sourceRefreshQueues = new Map<string, Promise<unknown>>();
+const sourceRefreshQueues = new Map<string, Promise<NodeSourceRefreshResult>>();
 const refreshWaiters: (() => void)[] = [];
 let activeRefreshes = 0;
 
@@ -135,6 +141,7 @@ async function refreshSubscriptionNow(subscriptionId: string, userId: string): P
       if (!latest) throw new Error("项目不存在");
       updatedAt = nextTimestamp(latest.updated_at);
       config = mergeSubscriptionNodes(parseConfig(JSON.parse(latest.config_json)), subscriptionId, imported.nodes);
+      config = { ...config, proxies: syncProjectNodes(userId, String(row.project_id), config.proxies) };
       const projectResult = db.prepare("UPDATE projects SET config_json = ?, updated_at = ? WHERE id = ? AND user_id = ? AND updated_at = ?")
         .run(JSON.stringify(config), updatedAt, row.project_id, userId, latest.updated_at);
       if (!projectResult.changes) throw new Error("项目已被其他操作更新，请稍后重试");
@@ -168,19 +175,28 @@ async function refreshSubscription(subscriptionId: string, userId: string): Prom
 
 async function refreshNodeSource(userId: string, sourceId: string) {
   const key = `${userId}:${sourceId}`;
-  const previous = sourceRefreshQueues.get(key) || Promise.resolve();
-  const task = previous.catch(() => undefined).then(async () => {
-    const source = listNodeSources(userId).find((item) => item.id === sourceId);
-    if (!source) throw new Error("节点来源不存在");
-    if (!source.enabled) throw new Error("该来源已停用");
-    if (!source.url) throw new Error("该来源没有可抓取的远程地址");
-    const content = await safeFetchText(source.url);
-    const imported = parseImportedContent(content, source.format as ImportFormat);
-    const result = replaceManagedNodesForSource(userId, source.id, imported.nodes);
-    return { ...result, warnings: imported.warnings };
-  });
-  const settled = task.then((value) => { if (sourceRefreshQueues.get(key) === settled) sourceRefreshQueues.delete(key); return value; }, (error) => { if (sourceRefreshQueues.get(key) === settled) sourceRefreshQueues.delete(key); return undefined; });
-  sourceRefreshQueues.set(key, settled);
+  const active = sourceRefreshQueues.get(key);
+  if (active) return active;
+  const task = (async () => {
+    await acquireRefreshSlot();
+    try {
+      const source = listNodeSources(userId).find((item) => item.id === sourceId);
+      if (!source) throw new Error("节点来源不存在");
+      if (!source.enabled) throw new Error("该来源已停用");
+      if (!source.url) throw new Error("该来源没有可抓取的远程地址");
+      const fetched = await safeFetchSubscription(source.url, 2_000_000, { userAgent: source.userAgent, skipCertVerify: source.skipCertVerify });
+      const imported = parseImportedContent(fetched.text, source.format as ImportFormat);
+      const result = replaceManagedNodesForSource(userId, source.id, imported.nodes, fetched.requestProfile);
+      return { ...result, warnings: imported.warnings };
+    } catch (error) {
+      markNodeSourceError(userId, sourceId, error instanceof Error ? error.message : "来源刷新失败");
+      throw error;
+    } finally {
+      releaseRefreshSlot();
+    }
+  })();
+  sourceRefreshQueues.set(key, task);
+  void task.then(() => { if (sourceRefreshQueues.get(key) === task) sourceRefreshQueues.delete(key); }, () => { if (sourceRefreshQueues.get(key) === task) sourceRefreshQueues.delete(key); });
   return task;
 }
 
@@ -348,13 +364,13 @@ app.post("/api/projects", requireAuth, (req, res) => {
   const now = new Date().toISOString();
   db.prepare("INSERT INTO projects (id, user_id, name, config_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
     .run(id, req.user!.id, name, JSON.stringify(createEmptyConfig()), now, now);
-  res.status(201).json(readProject(db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Record<string, unknown>));
+  res.status(201).json(hydrateProject(db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Record<string, unknown>));
 });
 
 app.get("/api/projects/:id", requireAuth, (req, res) => {
   const row = db.prepare("SELECT * FROM projects WHERE id = ? AND user_id = ?").get(req.params.id, req.user!.id) as Record<string, unknown> | undefined;
   if (!row) return res.status(404).json({ error: "项目不存在" });
-  res.json(readProject(row));
+  res.json(hydrateProject(row));
 });
 
 app.put("/api/projects/:id", requireAuth, (req, res) => {
@@ -369,9 +385,13 @@ app.put("/api/projects/:id", requireAuth, (req, res) => {
   if (!current) return res.status(404).json({ error: "项目不存在" });
   if (typeof req.body.updatedAt === "string" && req.body.updatedAt !== current.updated_at) return res.status(409).json({ error: "项目已被其他操作更新，请刷新后重试", code: "STALE_PROJECT" });
   const now = nextTimestamp(current.updated_at);
-  if (current && current.config_json !== JSON.stringify(config)) snapshotProject(String(req.params.id), req.user!.id, "自动保存", false);
-  const result = db.prepare("UPDATE projects SET name = ?, config_json = ?, target_format = ?, updated_at = ? WHERE id = ? AND user_id = ? AND updated_at = ?")
-    .run(name || "未命名配置", JSON.stringify(config), targetFormat, now, req.params.id, req.user!.id, current.updated_at);
+  let result!: { changes: number };
+  db.transaction(() => {
+    config = { ...config, proxies: syncProjectNodes(req.user!.id, String(req.params.id), config.proxies) };
+    if (current.config_json !== JSON.stringify(config)) snapshotProject(String(req.params.id), req.user!.id, "自动保存", false);
+    result = db.prepare("UPDATE projects SET name = ?, config_json = ?, target_format = ?, updated_at = ? WHERE id = ? AND user_id = ? AND updated_at = ?")
+      .run(name || "未命名配置", JSON.stringify(config), targetFormat, now, req.params.id, req.user!.id, current.updated_at);
+  })();
   if (!result.changes) return res.status(409).json({ error: "项目已被其他操作更新，请刷新后重试", code: "STALE_PROJECT" });
   res.json({ id: req.params.id, name: name || "未命名配置", updatedAt: now });
 });
@@ -433,7 +453,8 @@ app.delete("/api/projects/:projectId/subscriptions/:id", requireAuth, (req, res)
   snapshotProject(String(req.params.projectId), req.user!.id, "删除订阅前", true);
   const now = new Date().toISOString();
   db.transaction(() => {
-    if (JSON.stringify(nextConfig) !== String(project.config_json)) db.prepare("UPDATE projects SET config_json = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(JSON.stringify(nextConfig), now, req.params.projectId, req.user!.id);
+    const normalizedConfig = { ...nextConfig, proxies: syncProjectNodes(req.user!.id, String(req.params.projectId), nextConfig.proxies) };
+    if (JSON.stringify(normalizedConfig) !== String(project.config_json)) db.prepare("UPDATE projects SET config_json = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(JSON.stringify(normalizedConfig), now, req.params.projectId, req.user!.id);
     const result = db.prepare("DELETE FROM subscriptions WHERE id = ? AND project_id = ?").run(req.params.id, req.params.projectId);
     if (!result.changes) throw new Error("订阅不存在");
   })();
@@ -459,9 +480,11 @@ app.post("/api/projects/:projectId/versions/:id/restore", requireAuth, (req, res
   if (!version) return res.status(404).json({ error: "历史版本不存在" });
   snapshotProject(String(req.params.projectId), req.user!.id, "恢复前备份", true);
   const now = new Date().toISOString();
+  const restored = parseConfig(JSON.parse(String(version.config_json)));
+  const normalized = { ...restored, proxies: syncProjectNodes(req.user!.id, String(req.params.projectId), restored.proxies) };
   db.prepare("UPDATE projects SET config_json = ?, target_format = ?, updated_at = ? WHERE id = ?")
-    .run(version.config_json, version.target_format, now, req.params.projectId);
-  res.json(readProject(db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.projectId) as Record<string, unknown>));
+    .run(JSON.stringify(normalized), version.target_format, now, req.params.projectId);
+  res.json(hydrateProject(db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.projectId) as Record<string, unknown>));
 });
 
 app.get("/api/node-sources", requireAuth, (req, res) => res.json(listNodeSources(req.user!.id)));
@@ -516,6 +539,20 @@ app.put("/api/managed-nodes/order", requireAuth, (req, res) => {
   try { res.json(reorderManagedNodes(req.user!.id, parsed.data.ids)); }
   catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "节点排序失败" }); }
 });
+app.put("/api/managed-nodes/batch", requireAuth, (req, res) => {
+  const parsed = z.object({
+    ids: z.array(z.string()).min(1).max(5000),
+    enabled: z.boolean().optional(),
+    addTags: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+    removeTags: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+    prefix: z.string().max(80).optional(),
+    find: z.string().max(80).optional(),
+    replace: z.string().max(80).optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "批量节点参数无效" });
+  try { res.json(batchUpdateManagedNodes(req.user!.id, parsed.data.ids, parsed.data)); }
+  catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "批量节点操作失败" }); }
+});
 app.put("/api/managed-nodes/:id", requireAuth, (req, res) => {
   const parsed = managedNodeSchema.omit({ sourceId: true }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "节点参数无效" });
@@ -532,6 +569,16 @@ app.post("/api/generation-profiles", requireAuth, (req, res) => {
   try { res.status(201).json(createProfile(req.user!.id, { ...parsed.data, config: parsed.data.config as MihomoConfig })); }
   catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "生成配置保存失败" }); }
 });
+app.put("/api/generation-profiles/:id", requireAuth, (req, res) => {
+  const parsed = generationProfileSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "生成配置参数无效" });
+  try {
+    const updated = updateProfile(req.user!.id, String(req.params.id), { ...parsed.data, config: parsed.data.config as MihomoConfig });
+    if (!updated) return res.status(404).json({ error: "生成配置不存在" });
+    res.json(updated);
+  } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "生成配置保存失败" }); }
+});
+app.delete("/api/generation-profiles/:id", requireAuth, (req, res) => res.json({ deleted: deleteProfile(req.user!.id, String(req.params.id)) }));
 app.get("/api/proxy-groups", requireAuth, (req, res) => res.json(listProxyGroups(req.user!.id)));
 app.post("/api/proxy-groups", requireAuth, (req, res) => {
   const parsed = z.object({ name: z.string().trim().min(1).max(120), type: z.string().min(1).max(40), config: z.record(z.unknown()).optional(), members: z.array(z.object({ memberType: z.string(), memberId: z.string() })).max(1000).optional() }).safeParse(req.body);
@@ -566,6 +613,16 @@ app.post("/api/generated-subscriptions/:id/token", requireAuth, (req, res) => {
   if (!result) return res.status(404).json({ error: "发布订阅不存在" });
   res.json(result);
 });
+app.put("/api/generated-subscriptions/:id", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120), content: z.string().min(1).max(10_000_000), nodeCount: z.number().int().min(0), expiresAt: z.string().datetime().optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "发布订阅参数无效" });
+  try {
+    const updated = updatePublishedSubscription(req.user!.id, String(req.params.id), parsed.data);
+    if (!updated) return res.status(404).json({ error: "发布订阅不存在" });
+    res.json(updated);
+  } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "发布订阅更新失败" }); }
+});
+app.delete("/api/generated-subscriptions/:id", requireAuth, (req, res) => res.json({ deleted: deletePublishedSubscription(req.user!.id, String(req.params.id)) }));
 app.post("/api/generated-subscriptions", requireAuth, (req, res) => {
   const parsed = z.object({ profileId: z.string(), name: z.string().trim().min(1).max(120), targetFormat: z.enum(["mihomo", "sing-box"]), content: z.string().min(1).max(10_000_000), nodeCount: z.number().int().min(0), expiresAt: z.string().datetime().optional() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "生成订阅参数无效" });
@@ -625,14 +682,29 @@ async function sweepSubscriptions() {
   }
   } finally { subscriptionSweepRunning = false; }
 }
-const subscriptionTimer = setInterval(() => { void sweepSubscriptions(); }, 60_000);
+let sourceSweepRunning = false;
+async function sweepNodeSources() {
+  if (sourceSweepRunning) return;
+  sourceSweepRunning = true;
+  try {
+    const rows = db.prepare(`SELECT id,user_id,interval_minutes,last_updated_at FROM node_sources
+      WHERE enabled = 1 AND kind = 'remote-url' AND interval_minutes > 0`).all() as { id: string; user_id: string; interval_minutes: number; last_updated_at?: string }[];
+    for (const row of rows) {
+      const due = !row.last_updated_at || Date.now() - new Date(row.last_updated_at).getTime() >= row.interval_minutes * 60_000;
+      if (due) await refreshNodeSource(row.user_id, row.id).catch((error) => console.error(`Node source ${row.id}:`, error.message));
+    }
+  } finally { sourceSweepRunning = false; }
+}
+const subscriptionTimer = setInterval(() => { void sweepSubscriptions(); void sweepNodeSources(); }, 60_000);
 subscriptionTimer.unref();
 void sweepSubscriptions();
+void sweepNodeSources();
 
 if (isProduction) {
-  const dist = path.resolve("dist");
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const dist = path.resolve(moduleDir, "../dist");
   app.use(express.static(dist, { maxAge: "1h", index: false }));
-  app.get("/{*splat}", (_req, res) => res.sendFile(path.join(dist, "index.html")));
+  app.get("/{*splat}", (_req, res) => res.sendFile("index.html", { root: dist }));
 }
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {

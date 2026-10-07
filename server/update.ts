@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import fsSync from "node:fs";
+import { fileURLToPath } from "node:url";
 
 export type UpdateInfo = {
   currentVersion: string;
@@ -27,10 +28,11 @@ const requestFile = path.join(dataDir, "web-update-request.json");
 const statusFile = path.join(dataDir, "web-update-status.json");
 const logFile = process.env.OU_YAML_UPDATE_LOG || "/var/log/ou-yaml/web-update.log";
 const repo = process.env.UPDATE_GITHUB_REPO || "cshaizhihao/OU-YAML";
+const packageJsonFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../package.json");
 
 function currentVersion() {
   try {
-    const packageJson = JSON.parse(fsSync.readFileSync(path.resolve("package.json"), "utf8"));
+    const packageJson = JSON.parse(fsSync.readFileSync(packageJsonFile, "utf8"));
     return String(packageJson.version || "0.0.0");
   } catch {
     return process.env.APP_VERSION || "0.0.0";
