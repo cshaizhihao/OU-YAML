@@ -1,8 +1,5 @@
 services:
   ou-yaml:
-    ports: []
-    expose:
-      - "8787"
     environment:
       TRUST_PROXY: "1"
       COOKIE_SECURE: "true"

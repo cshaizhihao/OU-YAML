@@ -8,7 +8,7 @@ export type GuideTarget = "pool" | "nodes" | "groups" | "rules" | "subscriptions
 
 export function QuickStartView({ project, onConfig, onNavigate, onOpenImport, onDownload }: {
   project: Project;
-  onConfig: (config: MihomoConfig) => void;
+  onConfig: (config: MihomoConfig, updatedAt?: string) => void;
   onNavigate: (target: GuideTarget) => void;
   onOpenImport: () => void;
   onDownload: () => Promise<void>;
@@ -38,7 +38,7 @@ export function QuickStartView({ project, onConfig, onNavigate, onOpenImport, on
       const data: Omit<Subscription, "id" | "projectId" | "lastUpdatedAt" | "lastError" | "nodeCount" | "createdAt"> = { name: name.trim() || "我的订阅", url: url.trim(), format: "auto", intervalMinutes };
       const result = await api.createSubscription(project.id, data);
       const payload = "subscription" in result ? result : { subscription: result };
-      if (payload.config) onConfig(payload.config);
+      if (payload.config) onConfig(payload.config, payload.updatedAt);
       setMessage(payload.error || `已导入 ${payload.subscription.nodeCount} 个节点`);
       if (!payload.error) setUrl("");
     } catch (error) { setMessage(error instanceof Error ? error.message : "订阅导入失败"); }

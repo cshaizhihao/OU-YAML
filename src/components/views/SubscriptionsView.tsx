@@ -7,7 +7,7 @@ import { ConfirmDialog, Drawer } from "../Dialog";
 const emptySubscription = (): Subscription => ({ id: "", projectId: "", name: "新订阅", url: "", format: "auto", intervalMinutes: 0, nodeCount: 0, createdAt: "" });
 const displayHost = (value: string) => { try { return new URL(value).hostname; } catch { return value; } };
 
-export function SubscriptionsView({ project, onConfig, onMessage }: { project: Project; onConfig: (config: MihomoConfig) => void; onMessage: (message: string) => void }) {
+export function SubscriptionsView({ project, onConfig, onMessage }: { project: Project; onConfig: (config: MihomoConfig, updatedAt?: string) => void; onMessage: (message: string) => void }) {
   const [items, setItems] = useState<Subscription[]>([]);
   const [editing, setEditing] = useState<Subscription | null>(null);
   const [deleting, setDeleting] = useState<Subscription | null>(null);
@@ -23,7 +23,7 @@ export function SubscriptionsView({ project, onConfig, onMessage }: { project: P
       } else {
         const result = await api.createSubscription(project.id, subscription);
         const payload = "subscription" in result ? result : { subscription: result };
-        setItems((current) => [payload.subscription, ...current]); if (payload.config) onConfig(payload.config);
+        setItems((current) => [payload.subscription, ...current]); if (payload.config) onConfig(payload.config, payload.updatedAt);
         onMessage(payload.error || `已导入 ${payload.subscription.nodeCount} 个节点`);
       }
       setEditing(null);
@@ -33,7 +33,7 @@ export function SubscriptionsView({ project, onConfig, onMessage }: { project: P
   }
   async function refresh(subscription: Subscription) {
     setBusy(subscription.id);
-    try { const result = await api.refreshSubscription(project.id, subscription.id); setItems((current) => current.map((item) => item.id === result.subscription.id ? result.subscription : item)); onConfig(result.config); onMessage(`已更新 ${result.subscription.nodeCount} 个节点`); }
+    try { const result = await api.refreshSubscription(project.id, subscription.id); setItems((current) => current.map((item) => item.id === result.subscription.id ? result.subscription : item)); onConfig(result.config, result.updatedAt); onMessage(`已更新 ${result.subscription.nodeCount} 个节点`); }
     catch (error) { onMessage(error instanceof Error ? error.message : "订阅更新失败"); load(); }
     finally { setBusy(null); }
   }
@@ -48,7 +48,7 @@ export function SubscriptionsView({ project, onConfig, onMessage }: { project: P
     <div className="view-toolbar"><div className="summary-inline"><span><strong>{items.length}</strong> 个订阅</span><i /><span><strong>{items.reduce((sum, item) => sum + item.nodeCount, 0)}</strong> 个节点</span></div><button className="primary-button" onClick={() => setEditing(emptySubscription())}><Plus size={17} />添加订阅 URL</button></div>
     {items.length ? <div className="subscription-list">{items.map((item) => <article className="subscription-row" key={item.id}><span className="subscription-icon"><Rss size={20} /></span><div className="subscription-main"><h2>{item.name}</h2><span>{displayHost(item.url)}</span>{item.lastError && <small className="subscription-error-detail" title={item.lastError}>{item.lastError}</small>}</div><span className="type-badge">{item.format === "auto" ? "自动识别" : item.format}</span><div className="subscription-stats"><strong>{item.nodeCount}</strong><span>节点</span></div><div className={item.lastError ? "subscription-status error" : "subscription-status"}>{item.lastError ? <><AlertTriangle size={15} /><span>更新失败</span></> : item.lastUpdatedAt ? <><CheckCircle2 size={15} /><span>{new Date(item.lastUpdatedAt).toLocaleString("zh-CN")}</span></> : <><Clock3 size={15} /><span>等待更新</span></>}</div><div className="row-actions"><button className="secondary-button compact-button" disabled={busy === item.id} onClick={() => refresh(item)}>{busy === item.id ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}更新</button><button className="icon-button compact" onClick={() => setEditing({ ...item })} aria-label={`编辑 ${item.name}`}><Pencil size={16} /></button><button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button></div></article>)}</div> : <div className="subscription-empty"><span className="subscription-empty-icon"><Rss size={24} /></span><div><h2>添加第一个订阅</h2><form onSubmit={quickAdd}><label>订阅 URL<input type="url" required value={quickUrl} onChange={(event) => setQuickUrl(event.target.value)} placeholder="https://example.com/subscription" /></label><button className="primary-button" disabled={!!busy || !quickUrl.trim()}>{busy ? <LoaderCircle className="spin" size={17} /> : <Link2 size={17} />}导入节点</button></form><button className="text-button" onClick={() => setEditing(emptySubscription())}><Settings2 size={15} />格式与自动更新设置</button></div></div>}
     <SubscriptionEditor key={editing?.id || (editing ? "new" : "closed")} subscription={editing} busy={!!busy} onClose={() => setEditing(null)} onSave={save} />
-    <ConfirmDialog open={!!deleting} title="删除订阅" message={`确定删除“${deleting?.name}”及其导入的节点吗？删除前会自动创建快照。`} onClose={() => setDeleting(null)} onConfirm={async () => { if (!deleting) return; try { await api.deleteSubscription(project.id, deleting.id, true); setDeleting(null); await load(); const updated = await api.getProject(project.id); onConfig(updated.config); onMessage("订阅已删除"); } catch (error) { onMessage(error instanceof Error ? error.message : "删除失败"); } }} />
+    <ConfirmDialog open={!!deleting} title="删除订阅" message={`确定删除“${deleting?.name}”及其导入的节点吗？删除前会自动创建快照。`} onClose={() => setDeleting(null)} onConfirm={async () => { if (!deleting) return; try { await api.deleteSubscription(project.id, deleting.id, true); setDeleting(null); await load(); const updated = await api.getProject(project.id); onConfig(updated.config, updated.updatedAt); onMessage("订阅已删除"); } catch (error) { onMessage(error instanceof Error ? error.message : "删除失败"); } }} />
   </>;
 }
 

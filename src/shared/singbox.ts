@@ -6,6 +6,16 @@ const without = (source: Record<string, unknown>, keys: string[]) => Object.from
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
 const number = (value: unknown, fallback: number) => typeof value === "number" ? value : fallback;
 
+function durationSeconds(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return fallback;
+  const match = value.trim().match(/^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h|d)?$/i);
+  if (!match) return fallback;
+  const amount = Number(match[1]);
+  const multiplier = { ms: 0.001, s: 1, m: 60, h: 3600, d: 86400 }[String(match[2] || "s").toLowerCase() as "ms" | "s" | "m" | "h" | "d"];
+  return Math.round(amount * multiplier);
+}
+
 function parseOutbound(value: unknown): ProxyNode | ProxyGroup | null {
   const outbound = asObject(value);
   const type = text(outbound.type);
@@ -16,7 +26,7 @@ function parseOutbound(value: unknown): ProxyNode | ProxyGroup | null {
       id: createId(), name: tag, type: type === "selector" ? "select" : "url-test",
       proxies: Array.isArray(outbound.outbounds) ? outbound.outbounds.map(String) : [],
       url: text(outbound.url) || undefined,
-      interval: typeof outbound.interval === "string" ? Number.parseInt(outbound.interval, 10) : number(outbound.interval, 0) || undefined,
+      interval: durationSeconds(outbound.interval) || undefined,
       tolerance: number(outbound.tolerance, 0) || undefined,
       lazy: typeof outbound.idle_timeout === "string" ? true : undefined,
       extra: {}, formatExtra: { singBox: without(outbound, ["type", "tag", "outbounds", "url", "interval", "tolerance", "idle_timeout"]) },
@@ -35,25 +45,30 @@ function parseOutbound(value: unknown): ProxyNode | ProxyGroup | null {
     network: text(transport.type) || undefined, wsPath: text(transport.path) || undefined,
     wsHost: text(headers.Host ?? headers.host) || undefined,
     grpcServiceName: text(transport.service_name) || undefined,
-    extra: {}, formatExtra: { singBox: without(outbound, ["type", "tag", "server", "server_port", "uuid", "password", "method", "tls", "transport"]) },
+    extra: {}, formatExtra: { singBox: { ...without(outbound, ["type", "tag", "server", "server_port", "uuid", "password", "method", "tls", "transport"]), ...(Object.keys(tls).length ? { tls: without(tls, ["enabled", "server_name", "insecure"]) } : {}), ...(Object.keys(transport).length ? { transport } : {}) } },
   };
   return node;
 }
 
-function parseRouteRules(value: unknown): { rules: RuleItem[]; unsupported: unknown[] } {
+function parseRouteRules(value: unknown): { rules: RuleItem[]; unsupported: unknown[]; order: { kind: "rule" | "unsupported" }[] } {
   const input = Array.isArray(value) ? value : [];
   const rules: RuleItem[] = [];
   const unsupported: unknown[] = [];
+  const order: { kind: "rule" | "unsupported" }[] = [];
   const mappings: [string, string][] = [["domain_suffix", "DOMAIN-SUFFIX"], ["domain_keyword", "DOMAIN-KEYWORD"], ["domain", "DOMAIN"], ["ip_cidr", "IP-CIDR"], ["geoip", "GEOIP"], ["geosite", "GEOSITE"], ["process_name", "PROCESS-NAME"], ["rule_set", "RULE-SET"]];
   for (const raw of input) {
     const rule = asObject(raw);
-    const target = text(rule.outbound, text(rule.action) === "reject" ? "REJECT" : "DIRECT");
-    const mapping = mappings.find(([key]) => rule[key] !== undefined);
-    if (!mapping) { unsupported.push(raw); continue; }
-    const values = Array.isArray(rule[mapping[0]]) ? rule[mapping[0]] as unknown[] : [rule[mapping[0]]];
+    const action = text(rule.action);
+    const target = text(rule.outbound, action === "reject" ? "REJECT" : "");
+    const candidates = mappings.filter(([key]) => rule[key] !== undefined);
+    const mapping = candidates[0];
+    const rawValues = mapping ? rule[mapping[0]] : undefined;
+    if (!mapping || !target || candidates.length !== 1 || !((Array.isArray(rawValues) && rawValues.length === 1) || (!Array.isArray(rawValues) && rawValues !== undefined))) { unsupported.push(raw); order.push({ kind: "unsupported" }); continue; }
+    const values = [rawValues];
     for (const value of values) rules.push({ id: createId(), type: mapping[1], value: String(value), target, options: [], enabled: true });
+    order.push({ kind: "rule" });
   }
-  return { rules, unsupported };
+  return { rules, unsupported, order };
 }
 
 export function parseSingBoxJson(source: string): MihomoConfig {
@@ -85,25 +100,31 @@ export function parseSingBoxJson(source: string): MihomoConfig {
     metadata: { singBox: {
       topLevel: without(root, ["log", "inbounds", "outbounds", "route"]),
       logExtra: without(log, ["level"]), inbounds,
-      routeExtra: without(route, ["rules", "final"]), unsupportedRules: routeResult.unsupported,
-      unsupportedOutbounds: outbounds.filter((item) => text(asObject(item).type) === "dns"),
+      routeExtra: without(route, ["rules", "final"]), unsupportedRules: routeResult.unsupported, routeOrder: routeResult.order,
+      unsupportedOutbounds: outbounds.filter((item, index) => !parsed[index] && !["direct", "block"].includes(text(asObject(item).type))),
     } },
   };
 }
 
 function exportNode(node: ProxyNode) {
   const typeMap: Record<string, string> = { ss: "shadowsocks", socks5: "socks" };
+  const singBoxExtra = asObject(node.formatExtra?.singBox);
+  const originalTls = asObject(singBoxExtra.tls);
+  const originalTransport = asObject(singBoxExtra.transport);
+  const { tls: _tls, transport: _transport, ...outboundExtra } = singBoxExtra;
   const transport = node.network && node.network !== "tcp" ? {
+    ...originalTransport,
     type: node.network,
-    ...(node.network === "ws" ? { path: node.wsPath, headers: node.wsHost ? { Host: node.wsHost } : undefined } : {}),
+    ...(node.network === "ws" ? { path: node.wsPath, headers: node.wsHost ? { ...asObject(originalTransport.headers), Host: node.wsHost } : originalTransport.headers } : {}),
     ...(node.network === "grpc" ? { service_name: node.grpcServiceName } : {}),
-  } : undefined;
+  } : Object.keys(originalTransport).length ? originalTransport : undefined;
+  const tls = node.tls || Object.keys(originalTls).length ? { ...originalTls, enabled: node.tls === undefined ? true : node.tls, ...(node.sni ? { server_name: node.sni } : {}), ...(node.skipCertVerify !== undefined ? { insecure: node.skipCertVerify } : {}) } : undefined;
   return {
-    ...node.formatExtra?.singBox,
+    ...outboundExtra,
     type: typeMap[node.type] || node.type, tag: node.name, server: node.server, server_port: node.port,
     ...(node.uuid ? { uuid: node.uuid } : {}), ...(node.password ? { password: node.password } : {}),
     ...(node.cipher ? { method: node.cipher } : {}),
-    ...(node.tls ? { tls: { enabled: true, server_name: node.sni, insecure: node.skipCertVerify || false } } : {}),
+    ...(tls ? { tls } : {}),
     ...(transport ? { transport } : {}),
   };
 }
@@ -137,12 +158,22 @@ export function exportSingBoxJson(config: MihomoConfig): string {
   const unsupportedRules = Array.isArray(metadata.unsupportedRules) ? metadata.unsupportedRules : [];
   const supportedRules = config.rules.filter((rule) => rule.enabled && rule.type !== "MATCH").map(exportRule).filter(Boolean);
   const final = config.rules.find((rule) => rule.enabled && rule.type === "MATCH")?.target;
+  const routeOrder = Array.isArray(metadata.routeOrder) ? metadata.routeOrder : [];
+  const orderedRules: unknown[] = [];
+  let supportedIndex = 0;
+  let unsupportedIndex = 0;
+  for (const item of routeOrder) {
+    const kind = asObject(item).kind;
+    if (kind === "rule" && supportedIndex < supportedRules.length) orderedRules.push(supportedRules[supportedIndex++]);
+    else if (kind === "unsupported" && unsupportedIndex < unsupportedRules.length) orderedRules.push(unsupportedRules[unsupportedIndex++]);
+  }
+  orderedRules.push(...supportedRules.slice(supportedIndex), ...unsupportedRules.slice(unsupportedIndex));
   const output = {
     ...topLevel,
     log: { ...asObject(metadata.logExtra), level: config.logLevel },
     inbounds,
     outbounds: [...config.proxies.map(exportNode), ...config.proxyGroups.map(exportGroup), ...unsupportedOutbounds, { type: "direct", tag: "DIRECT" }, { type: "block", tag: "REJECT" }],
-    route: { ...asObject(metadata.routeExtra), rules: [...supportedRules, ...unsupportedRules], ...(final ? { final } : {}) },
+    route: { ...asObject(metadata.routeExtra), rules: orderedRules, ...(final ? { final } : {}) },
   };
   return JSON.stringify(output, null, 2) + "\n";
 }

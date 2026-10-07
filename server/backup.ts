@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db";
 import type { MihomoConfig, TargetFormat } from "../src/shared/types";
+import { readMihomoConfig } from "../src/shared/schema";
+import { validateConfig } from "../src/shared/mihomo";
 
 interface BackupSubscription { id: string; name: string; url: string; format: string; intervalMinutes: number }
 interface BackupVersion { label: string; targetFormat: TargetFormat; config: MihomoConfig; createdAt: string }
@@ -31,17 +33,42 @@ function validateBackup(value: unknown): UserBackup {
   if (backup.format !== "ou-yaml-backup" || backup.version !== 1 || !Array.isArray(backup.projects)) throw new Error("不是受支持的 OU-YAML 备份");
   if (backup.projects.length > 100) throw new Error("备份中的项目数量超过限制");
   for (const project of backup.projects) {
-    if (!project || typeof project.name !== "string" || !project.config || project.config.version !== 1 || !Array.isArray(project.config.proxies) || !Array.isArray(project.config.proxyGroups) || !Array.isArray(project.config.rules)) throw new Error("备份中包含无效项目");
+    if (!project || typeof project.name !== "string" || project.name.trim().length < 1 || project.name.length > 80 || !["mihomo", "sing-box"].includes(project.targetFormat)) throw new Error("备份中包含无效项目");
+    validateConfigValue(project.config);
     if (!Array.isArray(project.subscriptions) || project.subscriptions.length > 100 || !Array.isArray(project.versions) || project.versions.length > 50) throw new Error("备份中的订阅或历史数量超过限制");
+    for (const subscription of project.subscriptions) {
+      if (!subscription || typeof subscription.id !== "string" || typeof subscription.name !== "string" || subscription.name.trim().length < 1 || subscription.name.length > 80 || !["auto", "links", "mihomo", "sing-box"].includes(subscription.format) || !validSubscriptionUrl(subscription.url) || !Number.isInteger(subscription.intervalMinutes) || subscription.intervalMinutes < 0 || subscription.intervalMinutes > 10080) throw new Error("备份中包含无效订阅");
+    }
+    for (const version of project.versions) {
+      if (!version || typeof version.label !== "string" || version.label.length > 80 || !["mihomo", "sing-box"].includes(version.targetFormat)) throw new Error("备份中包含无效历史版本");
+      validateConfigValue(version.config);
+    }
   }
   return backup as UserBackup;
 }
 
+function validSubscriptionUrl(value: unknown) {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+  } catch { return false; }
+}
+
+function validateConfigValue(value: unknown) {
+  const parsed = readMihomoConfig(value);
+  if (!parsed.success || validateConfig(parsed.data as MihomoConfig).some((issue) => issue.level === "error")) throw new Error("备份中包含无效配置");
+  return parsed.data as MihomoConfig;
+}
+
 function remapSources(config: MihomoConfig, subscriptionIds: Map<string, string>) {
   const copy = structuredClone(config);
-  copy.proxies = copy.proxies.map((node) => node.source?.kind === "subscription" && subscriptionIds.has(node.source.id)
-    ? { ...node, source: { kind: "subscription", id: subscriptionIds.get(node.source.id)! } }
-    : node);
+  copy.proxies = copy.proxies.map((node) => {
+    if (node.source?.kind !== "subscription") return node;
+    if (subscriptionIds.has(node.source.id)) return { ...node, source: { kind: "subscription", id: subscriptionIds.get(node.source.id)! } };
+    const { source: _source, ...withoutSource } = node;
+    return withoutSource;
+  });
   return copy;
 }
 
@@ -60,7 +87,6 @@ export function restoreUserBackup(userId: string, source: string, mode: "merge" 
       db.prepare("INSERT INTO projects (id, user_id, name, config_json, created_at, updated_at, target_format) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .run(projectId, userId, project.name.slice(0, 80), JSON.stringify(config), now, now, project.targetFormat === "sing-box" ? "sing-box" : "mihomo");
       for (const subscription of project.subscriptions) {
-        if (!["auto", "links", "mihomo", "sing-box"].includes(subscription.format) || !/^https?:\/\//.test(subscription.url)) continue;
         db.prepare(`INSERT INTO subscriptions (id, project_id, name, url, format, interval_minutes, node_count, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`)
           .run(subscriptionIds.get(subscription.id), projectId, subscription.name.slice(0, 80), subscription.url.slice(0, 2048), subscription.format, Math.max(0, Math.min(10080, Number(subscription.intervalMinutes) || 0)), now, now);

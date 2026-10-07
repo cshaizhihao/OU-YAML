@@ -24,9 +24,14 @@ async function resolvePublic(hostname: string) {
 export function decodeSubscriptionBody(payload: Buffer, contentEncoding: string, maxBytes: number) {
   let body = payload;
   const encoding = contentEncoding.split(",")[0].trim().toLowerCase();
-  if (encoding === "br") body = brotliDecompressSync(body);
-  else if (encoding === "gzip") body = gunzipSync(body);
-  else if (encoding === "deflate") body = inflateSync(body);
+  try {
+    const options = { maxOutputLength: maxBytes };
+    if (encoding === "br") body = brotliDecompressSync(body, options);
+    else if (encoding === "gzip") body = gunzipSync(body, options);
+    else if (encoding === "deflate") body = inflateSync(body, options);
+  } catch {
+    throw new Error("订阅解压后的内容超过大小限制或压缩格式无效");
+  }
   if (body.length > maxBytes) throw new Error("订阅解压后的内容超过大小限制");
   return body.toString("utf8");
 }

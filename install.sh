@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 REPO_URL="${OU_YAML_REPO_URL:-https://github.com/cshaizhihao/OU-YAML.git}"
 INSTALL_DIR="${OU_YAML_INSTALL_DIR:-/opt/ou-yaml}"
@@ -175,7 +176,18 @@ prepare_repository() {
 write_env() {
   local mode="$1" port="$2" domain="${3:-}" admin_user password password_b64
   if [ -f "${INSTALL_DIR}/.env" ]; then
-    warn "检测到已有 .env，将保留现有账号、密码和数据配置。"
+    local temporary_env
+    warn "检测到已有 .env，将保留账号密码并更新当前访问模式。"
+    temporary_env="$(mktemp "${INSTALL_DIR}/.env.XXXXXX")"
+    grep -Ev '^(OU_YAML_PORT|DOMAIN|TRUST_PROXY|COOKIE_SECURE|APP_ORIGIN)=' "${INSTALL_DIR}/.env" > "${temporary_env}" || true
+    printf 'OU_YAML_PORT=%s\n' "$port" >> "${temporary_env}"
+    if [ "$mode" = "domain" ]; then
+      printf 'DOMAIN=%s\nTRUST_PROXY=1\nCOOKIE_SECURE=true\nAPP_ORIGIN=https://%s\n' "$domain" "$domain" >> "${temporary_env}"
+    else
+      printf 'TRUST_PROXY=0\nCOOKIE_SECURE=false\nAPP_ORIGIN=\n' >> "${temporary_env}"
+    fi
+    chmod 0600 "${temporary_env}"
+    mv -f -- "${temporary_env}" "${INSTALL_DIR}/.env"
     return
   fi
   admin_user="$(ask '管理员账号' 'admin')"
@@ -192,9 +204,9 @@ write_env() {
     printf 'ADMIN_PASSWORD_B64=%s\n' "$password_b64"
     if [ "$mode" = "domain" ]; then
       printf 'DOMAIN=%s\n' "$domain"
-      printf 'TRUST_PROXY=1\nCOOKIE_SECURE=true\n'
+      printf 'TRUST_PROXY=1\nCOOKIE_SECURE=true\nAPP_ORIGIN=https://%s\n' "$domain"
     else
-      printf 'TRUST_PROXY=0\nCOOKIE_SECURE=false\n'
+      printf 'TRUST_PROXY=0\nCOOKIE_SECURE=false\nAPP_ORIGIN=\n'
     fi
   } > "${INSTALL_DIR}/.env"
 }
@@ -208,9 +220,10 @@ install_ip_mode() {
   fi
   detect_reverse_proxy_conflict ip "$port" || fail "检测到端口冲突，已停止安装。"
   write_env ip "$port"
+  install -d -m 0750 -o root -g 1001 /var/log/ou-yaml
   cd "${INSTALL_DIR}"
   step "正在构建并启动 OU-YAML..."
-  docker compose up -d --build
+  docker compose -f docker-compose.yml -f docker-compose.ip.yml up -d --build
   say "${c_green}✓ 安装完成${c_reset}"
   say "访问地址：${c_green}http://服务器IP:${port}${c_reset}"
 }
@@ -251,6 +264,7 @@ install_domain_mode() {
   esac
   detect_reverse_proxy_conflict || fail "检测到反代冲突，已停止安装。"
   write_env domain "$DEFAULT_PORT" "$domain"
+  install -d -m 0750 -o root -g 1001 /var/log/ou-yaml
   cd "${INSTALL_DIR}"
   step "正在构建 OU-YAML 和 Caddy HTTPS 网关..."
   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
@@ -269,6 +283,7 @@ run_install() {
   prepare_repository
   mkdir -p "${INSTALL_DIR}/data"
   chown -R 1001:1001 "${INSTALL_DIR}/data" 2>/dev/null || true
+  chmod 0700 "${INSTALL_DIR}/data"
   case "$mode" in
     1) install_ip_mode;;
     2) install_domain_mode;;

@@ -13,8 +13,8 @@ type NodeDraft = { id?: string; name: string; type: string; server: string; port
 const blank: NodeDraft = { name: "新节点", type: "ss", server: "", port: 443, extra: {}, tags: [] };
 
 function nodeDraft(node: ManagedNode): NodeDraft { return { ...node, extra: node.extra || {}, tags: node.tags || [] }; }
-function nodeFingerprint(node: Pick<ProxyNode, "type" | "server" | "port" | "uuid" | "password" | "cipher" | "sni" | "network" | "wsPath" | "wsHost" | "grpcServiceName">) {
-  return [node.type, node.server, node.port, node.uuid || "", node.password || "", node.cipher || "", node.sni || "", node.network || "", node.wsPath || "", node.wsHost || "", node.grpcServiceName || ""].join("|").toLowerCase();
+function nodeFingerprint(node: ProxyNode) {
+  return [node.type, node.server, node.port, node.uuid || "", node.password || "", node.cipher || "", node.sni || "", node.network || "", node.wsPath || "", node.wsHost || "", node.grpcServiceName || "", node.udp ?? "", node.tls ?? "", node.skipCertVerify ?? "", JSON.stringify(node.extra || {}), JSON.stringify(node.formatExtra || {})].join("|").toLowerCase();
 }
 
 export function NodePoolView({ config, onConfig, onMessage }: { config: MihomoConfig; onConfig: (config: MihomoConfig) => void; onMessage: (value: string) => void }) {
@@ -34,11 +34,11 @@ export function NodePoolView({ config, onConfig, onMessage }: { config: MihomoCo
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
   const load = async () => {
-    const [nextSources, nextNodes] = await Promise.all([api.listNodeSources(), api.listManagedNodes(sourceId || undefined)]);
+    const [nextSources, nextNodes] = await Promise.all([api.listNodeSources(), api.listManagedNodes()]);
     setSources(nextSources); setNodes(nextNodes); setSelected(new Set());
   };
   useEffect(() => { load().catch(error => onMessage(error instanceof Error ? error.message : "节点池加载失败")); }, [sourceId]);
-  const filtered = useMemo(() => nodes.filter(node => `${node.name} ${node.server} ${node.type} ${node.tags.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase())), [nodes, query]);
+  const filtered = useMemo(() => nodes.filter(node => (!sourceId || node.sourceId === sourceId) && `${node.name} ${node.server} ${node.type} ${node.tags.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase())), [nodes, query, sourceId]);
   const visibleIds = useMemo(() => filtered.map(node => node.id), [filtered]);
   const sourceNames = useMemo(() => new Map(sources.map(source => [source.id, source.name])), [sources]);
 

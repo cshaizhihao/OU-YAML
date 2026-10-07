@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 process.env.DATA_DIR = mkdtempSync(path.join(os.tmpdir(), "ou-yaml-domain-test-"));
 const { db } = await import("../server/db");
 const domain = await import("../server/domainService");
+const { restoreUserBackup } = await import("../server/backup");
 
 const userId = randomUUID();
 const projectId = randomUUID();
@@ -46,15 +47,25 @@ test("生成配置发布后可读取并支持撤销", () => {
   assert.ok(profile);
   const published = domain.publishSubscription(userId, profile!.id, "测试订阅", "mihomo", "mixed-port: 7890\n", 1);
   assert.ok(published.token);
-  assert.equal(domain.readPublicSubscription(published.id)?.content, "mixed-port: 7890\n");
-  assert.equal(domain.revokePublishedSubscription(userId, published.id), true);
+  assert.equal(domain.readPublicSubscription(published.token)?.content, "mixed-port: 7890\n");
   assert.equal(domain.readPublicSubscription(published.id), undefined);
+  assert.equal(domain.revokePublishedSubscription(userId, published.id), true);
+  assert.equal(domain.readPublicSubscription(published.token), undefined);
 });
 
 test("过期订阅不可访问", () => {
   const profile = domain.listProfiles(userId)[0];
   const published = domain.publishSubscription(userId, profile.id, "过期订阅", "mihomo", "rules: []\n", 0, new Date(Date.now() - 1000).toISOString());
-  assert.equal(domain.readPublicSubscription(published.id), undefined);
+  assert.equal(domain.readPublicSubscription(published.token), undefined);
+});
+
+test("订阅 Token 轮换会立即废止旧地址", () => {
+  const profile = domain.listProfiles(userId)[0];
+  const published = domain.publishSubscription(userId, profile.id, "轮换订阅", "mihomo", "rules: []\n", 0);
+  const rotated = domain.rotatePublishedSubscription(userId, published.id);
+  assert.ok(rotated?.token);
+  assert.equal(domain.readPublicSubscription(published.token), undefined);
+  assert.equal(domain.readPublicSubscription(rotated!.token)?.content, "rules: []\n");
 });
 
 test("节点池排序会持久化并保持用户隔离", () => {
@@ -88,4 +99,38 @@ test("远程来源替换节点时保留已匹配节点的顺序和元数据", ()
   assert.equal(result.nodes[0].id, second.id);
   assert.equal(result.nodes[0].tags.length, 0);
   assert.equal(result.source.nodeCount, 2);
+});
+
+test("生成配置拒绝跨用户节点、来源和模板引用", () => {
+  const foreignUserId = randomUUID();
+  const foreignStamp = new Date().toISOString();
+  db.prepare("INSERT INTO users (id, username, password_hash, is_admin, is_disabled, created_at) VALUES (?, ?, ?, 0, 0, ?)")
+    .run(foreignUserId, `foreign-${foreignUserId.slice(0, 8)}`, "hash", foreignStamp);
+  const foreignNode = domain.createManagedNode(foreignUserId, { name: "他人的节点", type: "vless", server: "foreign.example.com", port: 443, uuid: "foreign", extra: {} });
+  const foreignSource = domain.createNodeSource(foreignUserId, { name: "他人的来源", kind: "share-links", format: "links" });
+  const foreignTemplate = domain.createRuleTemplate(foreignUserId, { name: "他人的模板", targetFormat: "mihomo", content: [] });
+  assert.throws(() => domain.createProfile(userId, { name: "跨用户节点", targetFormat: "mihomo", config, nodeIds: [foreignNode.id] }), /无权使用的节点/);
+  assert.throws(() => domain.createProfile(userId, { name: "隐藏跨用户节点", targetFormat: "mihomo", config: { ...config, proxies: [{ ...config.proxies[0], id: foreignNode.id }] } }), /无权使用的节点/);
+  assert.throws(() => domain.createProfile(userId, { name: "跨用户来源", targetFormat: "mihomo", config, sourceIds: [foreignSource.id] }), /无权使用的节点来源/);
+  assert.throws(() => domain.createProfile(userId, { name: "跨用户模板", targetFormat: "mihomo", config, templateId: foreignTemplate.id }), /规则模板不存在/);
+});
+
+test("恢复备份会清理悬空订阅来源引用", () => {
+  const backup = {
+    format: "ou-yaml-backup",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    username: "backup-test",
+    projects: [{
+      name: "悬空来源备份",
+      targetFormat: "mihomo",
+      config: { ...config, proxies: [{ ...config.proxies[0], source: { kind: "subscription", id: "missing-subscription" } }] },
+      subscriptions: [],
+      versions: [],
+    }],
+  };
+  assert.deepEqual(restoreUserBackup(userId, JSON.stringify(backup), "merge"), { projects: 1 });
+  const row = db.prepare("SELECT config_json FROM projects WHERE user_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1").get(userId, "悬空来源备份") as { config_json: string };
+  const restored = JSON.parse(row.config_json) as MihomoConfig;
+  assert.equal(restored.proxies[0].source, undefined);
 });

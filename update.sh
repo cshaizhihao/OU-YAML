@@ -8,6 +8,6 @@ export OU_YAML_BUILD_COMMIT="$(git rev-parse HEAD)"
 if grep -q '^DOMAIN=.' .env; then
   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
 else
-  docker compose up -d --build
+  docker compose -f docker-compose.yml -f docker-compose.ip.yml up -d --build
 fi
 docker image prune -f --filter "until=168h"

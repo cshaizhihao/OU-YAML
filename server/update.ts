@@ -22,7 +22,7 @@ export type UpdateStatus = {
 const dataDir = process.env.DATA_DIR || path.resolve("data");
 const requestFile = path.join(dataDir, "web-update-request.json");
 const statusFile = path.join(dataDir, "web-update-status.json");
-const logFile = path.join(dataDir, "web-update.log");
+const logFile = process.env.OU_YAML_UPDATE_LOG || "/var/log/ou-yaml/web-update.log";
 const repo = process.env.UPDATE_GITHUB_REPO || "cshaizhihao/OU-YAML";
 
 function currentVersion() {

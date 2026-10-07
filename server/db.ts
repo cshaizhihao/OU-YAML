@@ -6,10 +6,16 @@ import path from "node:path";
 import type { MihomoConfig, Project, TargetFormat } from "../src/shared/types";
 
 const dataDir = process.env.DATA_DIR || path.resolve("data");
+process.umask(0o077);
 fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+try { fs.chmodSync(dataDir, 0o700); } catch { /* The database open below will report a real permission error. */ }
 export const db = new Database(path.join(dataDir, "ou-yaml.db"));
+for (const file of ["ou-yaml.db", "ou-yaml.db-wal", "ou-yaml.db-shm"]) {
+  try { fs.chmodSync(path.join(dataDir, file), 0o600); } catch { /* SQLite creates WAL files lazily. */ }
+}
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+db.pragma("busy_timeout = 5000");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -195,6 +201,8 @@ const managedNodeColumns = db.prepare("PRAGMA table_info(managed_nodes)").all() 
 if (!managedNodeColumns.some((column) => column.name === "sort_order")) db.exec("ALTER TABLE managed_nodes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
 db.exec("CREATE INDEX IF NOT EXISTS idx_managed_nodes_sort ON managed_nodes(user_id, sort_order, created_at, id)");
 db.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+const schemaVersion = Number((db.prepare("SELECT value FROM schema_meta WHERE key = 'schema-version'").get() as { value?: string } | undefined)?.value || 0);
+if (schemaVersion < 1) db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema-version', '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
 if (!db.prepare("SELECT 1 FROM schema_meta WHERE key = 'managed-node-sort-v1'").get()) {
   db.transaction(() => {
     const users = db.prepare("SELECT DISTINCT user_id FROM managed_nodes").all() as { user_id: string }[];
@@ -206,6 +214,8 @@ if (!db.prepare("SELECT 1 FROM schema_meta WHERE key = 'managed-node-sort-v1'").
     db.prepare("INSERT INTO schema_meta (key, value) VALUES ('managed-node-sort-v1', ?)").run(new Date().toISOString());
   })();
 }
+
+db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema-version', '2') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
 
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
 if (!userColumns.some((column) => column.name === "is_admin")) db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");

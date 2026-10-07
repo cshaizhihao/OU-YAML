@@ -44,7 +44,7 @@ export function reorderGroupMember(groups: ProxyGroup[], targetGroupId: string, 
     if (group.id !== targetGroupId || name === before) return group;
     const from = group.proxies.indexOf(name); const to = group.proxies.indexOf(before);
     if (from < 0 || to < 0) return group;
-    const proxies = [...group.proxies]; const [member] = proxies.splice(from, 1); proxies.splice(to, 0, member);
+    const proxies = [...group.proxies]; const [member] = proxies.splice(from, 1); proxies.splice(from < to ? to - 1 : to, 0, member);
     return { ...group, proxies };
   });
 }
@@ -61,6 +61,6 @@ export function reorderGroups(groups: ProxyGroup[], groupId: string, beforeGroup
   if (from < 0 || to < 0) return groups;
   const next = [...groups];
   const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved);
+  next.splice(from < to ? to - 1 : to, 0, moved);
   return next;
 }

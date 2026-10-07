@@ -68,6 +68,8 @@ http://服务器IP:8787
 
 管理员登录后，可以在「基础设置 → 网页更新」中检查 GitHub 最新版本，并一键完成备份、拉取、重建和重启。安装脚本会自动注册轻量级 systemd 更新代理；网页容器本身不接触 Docker Socket，更新任务由主机代理执行。
 
+网页更新日志位于 `/var/log/ou-yaml/web-update.log`。
+
 如果需要手动更新，也可以运行：
 
 ```bash
@@ -89,6 +91,7 @@ sudo /opt/ou-yaml/backup.sh
 - 复制公开订阅地址。
 - 查看目标客户端、版本、节点数量和发布时间。
 - 支持订阅撤销和过期检查。
+- 公开 Token 仅在首次发布或手动轮换时显示；数据库 ID 不能作为订阅地址。
 - 支持公开访问限流。
 
 ### 📥 订阅来源管理
@@ -222,8 +225,16 @@ npm run build
 cp .env.example .env
 printf '%s' 'change-this-password' | base64 -w0
 # 将输出写入 ADMIN_PASSWORD_B64
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.ip.yml up -d --build
 ```
+
+IP 模式会在宿主机暴露 `${OU_YAML_PORT:-8787}`。域名 + HTTPS 模式使用：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+```
+
+域名模式仅由 Caddy 暴露 80/443，应用端口 `8787` 不会直接暴露到宿主机。
 
 查看运行状态：
 
@@ -240,6 +251,7 @@ docker compose logs -f ou-yaml
 | `ADMIN_USERNAME` | 首次启动创建的管理员账号 |
 | `ADMIN_PASSWORD_B64` | Base64 编码后的管理员密码 |
 | `DOMAIN` | 域名模式下的访问域名 |
+| `APP_ORIGIN` | 允许执行修改操作的网页来源；域名安装时自动设置 |
 | `TRUST_PROXY` | 是否信任反向代理，域名模式为 `1` |
 | `COOKIE_SECURE` | 是否启用 Secure Cookie，HTTPS 模式为 `true` |
 | `DATA_DIR` | SQLite 数据目录，容器内默认为 `/app/data` |

@@ -1,14 +1,16 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { db, hashToken } from './db';
 import type { MihomoConfig, ProxyNode, TargetFormat } from '../src/shared/types';
+import { readMihomoConfig } from '../src/shared/schema';
+import { validateConfig } from '../src/shared/mihomo';
 
 function now() { return new Date().toISOString(); }
 function readJson<T>(value: unknown, fallback: T): T { try { return JSON.parse(String(value)) as T; } catch { return fallback; } }
 function readFlag(value: unknown) { return Number(value) === 1 || value === true; }
 type ManagedNodeInput = Omit<ProxyNode, "id"> & { id?: string; sourceId?: string; tags?: string[]; note?: string };
 
-function managedNodeIdentity(node: Pick<ProxyNode, "type" | "server" | "port" | "uuid" | "password" | "cipher" | "sni" | "network" | "wsPath" | "wsHost" | "grpcServiceName">) {
-  return [node.type, node.server, node.port, node.uuid || "", node.password || "", node.cipher || "", node.sni || "", node.network || "", node.wsPath || "", node.wsHost || "", node.grpcServiceName || ""].join("\u001f").toLowerCase();
+function managedNodeIdentity(node: ProxyNode) {
+  return [node.type, node.server, node.port, node.uuid || "", node.password || "", node.cipher || "", node.sni || "", node.network || "", node.wsPath || "", node.wsHost || "", node.grpcServiceName || "", node.udp ?? "", node.tls ?? "", node.skipCertVerify ?? "", JSON.stringify(node.extra || {}), JSON.stringify(node.formatExtra || {})].join("\u001f").toLowerCase();
 }
 
 function readManagedNode(row: Record<string, unknown>) {
@@ -65,15 +67,15 @@ export function listManagedNodes(userId: string, sourceId?: string) {
   return rows.map(readManagedNode);
 }
 
-export function createNodeSource(userId: string, input: { name: string; kind: string; url?: string; format?: string }) {
+export function createNodeSource(userId: string, input: { name: string; kind: string; url?: string; format?: string; enabled?: boolean }) {
   const id = randomUUID(); const stamp = now();
-  db.prepare(`INSERT INTO node_sources (id,user_id,name,kind,url,format,enabled,node_count,created_at,updated_at) VALUES (?,?,?,?,?,?,1,0,?,?)`).run(id, userId, input.name, input.kind, input.url || null, input.format || 'auto', stamp, stamp);
+  db.prepare(`INSERT INTO node_sources (id,user_id,name,kind,url,format,enabled,node_count,created_at,updated_at) VALUES (?,?,?,?,?,?,?,0,?,?)`).run(id, userId, input.name, input.kind, input.url || null, input.format || 'auto', input.enabled === false ? 0 : 1, stamp, stamp);
   return listNodeSources(userId).find(item => item.id === id)!;
 }
 
-export function updateNodeSource(userId: string, id: string, input: { name: string; kind: string; url?: string; format?: string }) {
-  const result = db.prepare("UPDATE node_sources SET name = ?, kind = ?, url = ?, format = ?, updated_at = ? WHERE id = ? AND user_id = ?")
-    .run(input.name, input.kind, input.url || null, input.format || "auto", now(), id, userId);
+export function updateNodeSource(userId: string, id: string, input: { name: string; kind: string; url?: string; format?: string; enabled?: boolean }) {
+  const result = db.prepare("UPDATE node_sources SET name = ?, kind = ?, url = ?, format = ?, enabled = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+    .run(input.name, input.kind, input.url || null, input.format || "auto", input.enabled === false ? 0 : 1, now(), id, userId);
   if (!result.changes) return undefined;
   return listNodeSources(userId).find(item => item.id === id);
 }
@@ -201,8 +203,23 @@ export function deleteManagedNode(userId: string, id: string) {
 }
 
 export function createProfile(userId: string, input: { name: string; targetFormat: TargetFormat; config: MihomoConfig; nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) {
+  const parsedConfig = readMihomoConfig(input.config);
+  if (!parsedConfig.success) throw new Error("生成配置格式无效");
+  const issues = validateConfig(input.config);
+  if (issues.some((issue) => issue.level === "error")) throw new Error("生成配置存在错误，请先修复配置");
+  const nodeIds = [...new Set(input.nodeIds || [])];
+  const sourceIds = [...new Set(input.sourceIds || [])];
+  if (nodeIds.length > 5000 || sourceIds.length > 500) throw new Error("生成配置引用数量超过限制");
+  const configIds = new Set(input.config.proxies.map((node) => node.id));
+  const referencedNodeIds = [...new Set([...nodeIds, ...configIds])];
+  const managedRows = referencedNodeIds.length ? db.prepare(`SELECT id, user_id FROM managed_nodes WHERE id IN (${referencedNodeIds.map(() => '?').join(',')})`).all(...referencedNodeIds) as { id: string; user_id: string }[] : [];
+  if (managedRows.some((row) => row.user_id !== userId)) throw new Error("生成配置包含无权使用的节点");
+  const managedIds = new Set(managedRows.map((row) => row.id));
+  if (nodeIds.some((id) => !managedIds.has(id) && !configIds.has(id))) throw new Error("生成配置包含无权使用的节点");
+  if (sourceIds.length && Number((db.prepare(`SELECT COUNT(*) AS count FROM node_sources WHERE user_id = ? AND id IN (${sourceIds.map(() => '?').join(',')})`).get(userId, ...sourceIds) as { count: number }).count) !== sourceIds.length) throw new Error("生成配置包含无权使用的节点来源");
+  if (input.templateId && !db.prepare("SELECT id FROM rule_templates WHERE id = ? AND (is_builtin = 1 OR user_id = ?)").get(input.templateId, userId)) throw new Error("规则模板不存在或无权使用");
   const id = randomUUID(); const stamp = now();
-  db.prepare(`INSERT INTO generation_profiles (id,user_id,name,target_format,config_json,node_ids_json,source_ids_json,template_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, userId, input.name, input.targetFormat, JSON.stringify(input.config), JSON.stringify(input.nodeIds || []), JSON.stringify(input.sourceIds || []), input.templateId || null, 'active', stamp, stamp);
+  db.prepare(`INSERT INTO generation_profiles (id,user_id,name,target_format,config_json,node_ids_json,source_ids_json,template_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, userId, input.name, input.targetFormat, JSON.stringify(input.config), JSON.stringify(nodeIds), JSON.stringify(sourceIds), input.templateId || null, 'active', stamp, stamp);
   return getProfile(userId, id);
 }
 
@@ -216,6 +233,10 @@ export function listProfiles(userId: string) { return (db.prepare('SELECT id FRO
 
 export function publishSubscription(userId: string, profileId: string, name: string, targetFormat: TargetFormat, content: string, nodeCount: number, expiresAt?: string) {
   const profile = getProfile(userId, profileId); if (!profile) throw new Error('生成配置不存在');
+  if (profile.targetFormat !== targetFormat) throw new Error('发布格式与生成配置不一致');
+  if (!content.trim() || content.length > 10_000_000) throw new Error('发布内容无效或超过 10MB');
+  if (!Number.isInteger(nodeCount) || nodeCount < 0 || nodeCount > profile.config.proxies.length) throw new Error('节点数量无效');
+  if (expiresAt && !Number.isFinite(new Date(expiresAt).getTime())) throw new Error('过期时间无效');
   const id = randomUUID(); const token = randomBytes(32).toString('base64url'); const stamp = now();
   const previous = db.prepare('SELECT MAX(version) AS version FROM generated_subscriptions WHERE profile_id = ?').get(profileId) as { version?: number };
   db.prepare(`INSERT INTO generated_subscriptions (id,profile_id,user_id,name,target_format,token_hash,content,version,node_count,expires_at,revoked,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)`).run(id, profileId, userId, name, targetFormat, hashToken(token), content, Number(previous?.version || 0) + 1, nodeCount, expiresAt || null, stamp, stamp);
@@ -227,12 +248,20 @@ export function listPublishedSubscriptions(userId: string) {
 }
 
 export function readPublicSubscription(token: string) {
-  const row = db.prepare('SELECT * FROM generated_subscriptions WHERE (token_hash = ? OR id = ?) AND revoked = 0').get(hashToken(token), token) as Record<string, unknown> | undefined;
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(token)) return undefined;
+  const row = db.prepare('SELECT * FROM generated_subscriptions WHERE token_hash = ? AND revoked = 0').get(hashToken(token)) as Record<string, unknown> | undefined;
   if (!row || (row.expires_at && new Date(String(row.expires_at)).getTime() <= Date.now())) return undefined;
   return { content: String(row.content), targetFormat: String(row.target_format) as TargetFormat, name: String(row.name), version: Number(row.version) };
 }
 
 export function revokePublishedSubscription(userId: string, id: string) { return db.prepare("UPDATE generated_subscriptions SET revoked = 1, updated_at = ? WHERE id = ? AND user_id = ?").run(now(), id, userId).changes > 0; }
+
+export function rotatePublishedSubscription(userId: string, id: string) {
+  const token = randomBytes(32).toString('base64url');
+  const result = db.prepare("UPDATE generated_subscriptions SET token_hash = ?, updated_at = ? WHERE id = ? AND user_id = ? AND revoked = 0").run(hashToken(token), now(), id, userId);
+  if (!result.changes) return undefined;
+  return { token };
+}
 
 export function listRuleTemplates(userId: string) {
   const rows = db.prepare('SELECT * FROM rule_templates WHERE is_builtin = 1 OR user_id = ? ORDER BY is_builtin DESC, updated_at DESC').all(userId) as Record<string, unknown>[];
@@ -243,6 +272,17 @@ export function createRuleTemplate(userId: string, input: { name: string; descri
   const id = randomUUID(); const stamp = now();
   db.prepare('INSERT INTO rule_templates (id,user_id,name,description,target_format,content_json,is_builtin,created_at,updated_at) VALUES (?,?,?,?,?,?,0,?,?)').run(id, userId, input.name, input.description || '', input.targetFormat, JSON.stringify(input.content), stamp, stamp);
   return listRuleTemplates(userId).find(item => item.id === id)!;
+}
+
+export function updateRuleTemplate(userId: string, id: string, input: { name: string; description?: string; targetFormat: TargetFormat; content: unknown[] }) {
+  const result = db.prepare('UPDATE rule_templates SET name = ?, description = ?, target_format = ?, content_json = ?, updated_at = ? WHERE id = ? AND user_id = ? AND is_builtin = 0')
+    .run(input.name, input.description || '', input.targetFormat, JSON.stringify(input.content), now(), id, userId);
+  if (!result.changes) return undefined;
+  return listRuleTemplates(userId).find((item) => item.id === id);
+}
+
+export function deleteRuleTemplate(userId: string, id: string) {
+  return db.prepare('DELETE FROM rule_templates WHERE id = ? AND user_id = ? AND is_builtin = 0').run(id, userId).changes > 0;
 }
 
 export function listJobs(userId: string) {

@@ -38,7 +38,9 @@ function common(name: string, type: string, server: string, port: number): Proxy
 function parseSs(input: string): ProxyNode {
   const withoutScheme = input.slice(5);
   const [beforeFragment, fragment] = withoutScheme.split("#", 2);
-  const [core] = beforeFragment.split("?", 1);
+  const [rawCore, query = ""] = beforeFragment.split("?", 2);
+  const core = rawCore.replace(/\/$/, "");
+  const params = new URLSearchParams(query);
   if (!core.includes("@")) {
     const decoded = decodeBase64(core);
     const at = decoded.lastIndexOf("@");
@@ -46,9 +48,11 @@ function parseSs(input: string): ProxyNode {
     const credentials = decoded.slice(0, at);
     const address = hostPort(decoded.slice(at + 1));
     const separator = credentials.indexOf(":");
+    if (separator <= 0 || separator === credentials.length - 1) throw new Error("SS 链接缺少加密方式或密码");
     const node = common(decodeName(fragment, address.server), "ss", address.server, address.port);
     node.cipher = credentials.slice(0, separator);
     node.password = credentials.slice(separator + 1);
+    if (params.get("plugin")) node.extra.plugin = params.get("plugin");
     return node;
   }
   const at = core.lastIndexOf("@");
@@ -57,16 +61,20 @@ function parseSs(input: string): ProxyNode {
   if (!credentials.includes(":")) credentials = decodeURIComponent(core.slice(0, at));
   const address = hostPort(core.slice(at + 1));
   const separator = credentials.indexOf(":");
+  if (separator <= 0 || separator === credentials.length - 1) throw new Error("SS 链接缺少加密方式或密码");
   const node = common(decodeName(fragment, address.server), "ss", address.server, address.port);
   node.cipher = credentials.slice(0, separator);
   node.password = credentials.slice(separator + 1);
+  if (params.get("plugin")) node.extra.plugin = params.get("plugin");
   return node;
 }
 
 function parseVmess(input: string): ProxyNode {
   const payload = JSON.parse(decodeBase64(input.slice("vmess://".length))) as Record<string, unknown>;
   const server = String(payload.add || "");
-  const node = common(String(payload.ps || server || "VMess"), "vmess", server, Number(payload.port || 443));
+  const port = Number(payload.port || 443);
+  if (!server || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error("VMess 服务器或端口无效");
+  const node = common(String(payload.ps || server || "VMess"), "vmess", server, port);
   node.uuid = String(payload.id || "");
   node.cipher = String(payload.scy || "auto");
   node.network = String(payload.net || "tcp");
@@ -83,9 +91,11 @@ function parseSsr(input: string): ProxyNode {
   const [main, query = ""] = decoded.split("/?", 2);
   const fields = main.split(":");
   if (fields.length < 6) throw new Error("SSR 链接字段不足");
+  const port = Number(fields[1]);
+  if (!fields[0] || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SSR 服务器或端口无效");
   const params = new URLSearchParams(query);
   const server = fields[0];
-  const node = common(params.get("remarks") ? decodeBase64(params.get("remarks")!) : server, "ssr", server, Number(fields[1]));
+  const node = common(params.get("remarks") ? decodeBase64(params.get("remarks")!) : server, "ssr", server, port);
   node.cipher = fields[3];
   node.password = decodeBase64(fields.slice(5).join(":"));
   node.extra = { protocol: fields[2], obfs: fields[4] };
@@ -101,22 +111,33 @@ function parseUrlNode(input: string): ProxyNode {
   const typeMap: Record<string, string> = { "socks": "socks5", "socks5": "socks5", "hy2": "hysteria2", "hysteria": "hysteria2" };
   const type = typeMap[url.protocol.slice(0, -1).toLowerCase()] || url.protocol.slice(0, -1).toLowerCase();
   const server = url.hostname.replace(/^\[|\]$/g, "");
-  const node = common(decodeName(url.hash.slice(1), server), type, server, Number(url.port || (url.searchParams.get("tls") ? 443 : 80)));
+  const defaultPorts: Record<string, number> = { vless: 443, vmess: 443, trojan: 443, hysteria2: 443, tuic: 443, snell: 443, socks5: 1080, http: 80 };
+  const port = Number(url.port || defaultPorts[type] || (url.searchParams.get("tls") ? 443 : 80));
+  if (!server || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error("分享链接服务器或端口无效");
+  const node = common(decodeName(url.hash.slice(1), server), type, server, port);
   const username = decodeURIComponent(url.username);
   const password = decodeURIComponent(url.password);
   if (type === "vless" || type === "vmess") node.uuid = username;
   else if (type === "tuic") { node.uuid = username; node.password = password; }
   else if (type === "socks5" || type === "http") { node.password = password; if (username) node.extra.username = username; }
   else node.password = username || password;
-  node.tls = ["tls", "reality"].includes(url.searchParams.get("security") || "") || url.searchParams.get("tls") === "1";
+  const security = url.searchParams.get("security") || "";
+  node.tls = ["tls", "reality"].includes(security) || url.searchParams.get("tls") === "1";
   node.sni = url.searchParams.get("sni") || url.searchParams.get("peer") || undefined;
   node.skipCertVerify = url.searchParams.get("allowInsecure") === "1" || url.searchParams.get("insecure") === "1";
   node.network = url.searchParams.get("type") || url.searchParams.get("network") || undefined;
   node.wsPath = url.searchParams.get("path") || undefined;
   node.wsHost = url.searchParams.get("host") || undefined;
   node.grpcServiceName = url.searchParams.get("serviceName") || undefined;
+  const fingerprint = url.searchParams.get("fp") || url.searchParams.get("fingerprint");
+  const publicKey = url.searchParams.get("pbk") || url.searchParams.get("publicKey");
+  const shortId = url.searchParams.get("sid") || url.searchParams.get("shortId");
+  if (fingerprint) node.extra["client-fingerprint"] = fingerprint;
+  if (security === "reality" && (publicKey || shortId)) node.extra["reality-opts"] = { ...(publicKey ? { "public-key": publicKey } : {}), ...(shortId ? { "short-id": shortId } : {}) };
+  const alpn = url.searchParams.get("alpn");
+  if (alpn) node.extra.alpn = alpn.split(",").map((item) => item.trim()).filter(Boolean);
   for (const [key, value] of url.searchParams) {
-    if (!["security", "tls", "sni", "peer", "allowInsecure", "insecure", "type", "network", "path", "host", "serviceName"].includes(key)) node.extra[key] = value;
+    if (!["security", "tls", "sni", "peer", "allowInsecure", "insecure", "type", "network", "path", "host", "serviceName", "fp", "fingerprint", "pbk", "publicKey", "sid", "shortId", "alpn"].includes(key)) node.extra[key] = value;
   }
   return node;
 }

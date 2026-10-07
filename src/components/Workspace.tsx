@@ -49,6 +49,8 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   const [kernelBusy, setKernelBusy] = useState(false);
   const [kernelResult, setKernelResult] = useState<KernelValidationResult | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
+  const editRevision = useRef(0);
+  const saveInFlight = useRef<Promise<void> | null>(null);
 
   const loadProjects = useCallback(async () => {
     const list = await api.listProjects();
@@ -66,6 +68,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   const nav = useMemo(() => user.isAdmin ? [...baseNav, { id: "admin" as View, label: "系统管理", hint: "用户与权限", section: "管理", icon: ShieldCheck }] : baseNav, [user.isAdmin]);
 
   const updateProject = useCallback((updater: (current: Project) => Project) => {
+    editRevision.current += 1;
     setProject((current) => current ? updater(current) : current);
     setStatus("dirty");
   }, []);
@@ -73,19 +76,37 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   useEffect(() => {
     if (!project || status !== "dirty") return;
     window.clearTimeout(saveTimer.current);
+    const snapshot = project;
+    const revision = editRevision.current;
     saveTimer.current = window.setTimeout(async () => {
+      if (revision !== editRevision.current) return;
+      if (saveInFlight.current) return;
       setStatus("saving");
-      try {
-        const saved = await api.saveProject(project);
-        setStatus("saved");
-        setProjects((current) => current.map((item) => item.id === project.id ? saved : item));
-      } catch (error) { setStatus("error"); setMessage(error instanceof Error ? error.message : "保存失败"); }
+      const operation = (async () => {
+        const saved = await api.saveProject(snapshot);
+        setProject((current) => current && current.id === snapshot.id ? { ...current, updatedAt: saved.updatedAt } : current);
+        setProjects((current) => current.map((item) => item.id === snapshot.id ? saved : item));
+        if (revision === editRevision.current) setStatus("saved");
+      })();
+      saveInFlight.current = operation;
+      try { await operation; }
+      catch (error) {
+        if (revision === editRevision.current) {
+          setStatus("error");
+          setMessage(error instanceof Error && (error as Error & { status?: number }).status === 409 ? "项目已在其他操作中更新，请刷新项目后再保存" : error instanceof Error ? error.message : "保存失败");
+        }
+      }
+      finally { if (saveInFlight.current === operation) saveInFlight.current = null; }
     }, 700);
     return () => window.clearTimeout(saveTimer.current);
   }, [project, status]);
 
   async function chooseProject(id: string) {
     if (id === project?.id) return;
+    if (status !== "saved") {
+      setMessage("当前项目还有未完成的保存，请稍候再切换");
+      return;
+    }
     setProject(await api.getProject(id)); setStatus("saved");
   }
 
@@ -158,7 +179,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={kernelValidate}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
 
       <section className="content-area">
-        {view === "start" && <QuickStartView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onNavigate={(target: GuideTarget) => setView(target)} onOpenImport={() => setShowImport(true)} onDownload={download} />}
+        {view === "start" && <QuickStartView project={project} onConfig={(config, updatedAt) => { setProject((current) => current ? { ...current, config, updatedAt: updatedAt || current.updatedAt } : current); setStatus("saved"); }} onNavigate={(target: GuideTarget) => setView(target)} onOpenImport={() => setShowImport(true)} onDownload={download} />}
         {view === "links" && <GeneratedSubscriptionsView onMessage={setMessage} />}
         {view === "sources" && <SourceManagerView onMessage={setMessage} />}
         {view === "pool" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
@@ -167,7 +188,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
         {view === "nodes" && <NodesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
-        {view === "subscriptions" && <SubscriptionsView project={project} onConfig={(config) => { setProject((current) => current ? { ...current, config } : current); setStatus("saved"); }} onMessage={setMessage} />}
+        {view === "subscriptions" && <SubscriptionsView project={project} onConfig={(config, updatedAt) => { setProject((current) => current ? { ...current, config, updatedAt: updatedAt || current.updatedAt } : current); setStatus("saved"); }} onMessage={setMessage} />}
         {view === "history" && <HistoryView project={project} onRestore={(restored) => { setProject(restored); setStatus("saved"); }} onMessage={setMessage} />}
         {view === "settings" && <SettingsView project={project} isAdmin={user.isAdmin} onChange={updateProject} onReload={loadProjects} onMessage={setMessage} />}
         {view === "source" && <SourceView config={project.config} format={project.targetFormat} source={project.targetFormat === "sing-box" ? exportSingBoxJson(project.config) : exportMihomoYaml(project.config)} onApply={(config) => updateProject((current) => ({ ...current, config }))} />}

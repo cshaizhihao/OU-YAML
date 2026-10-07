@@ -15,7 +15,9 @@ test("批量加入成员时保持顺序并去重", () => {
 
 test("策略组内成员可以重新排序", () => {
   const output = reorderGroupMember(groups(), "a", "香港 01", "DIRECT");
-  assert.deepEqual(output[0].proxies, ["日本 01", "DIRECT", "香港 01"]);
+  assert.deepEqual(output[0].proxies, ["日本 01", "香港 01", "DIRECT"]);
+  const movedDown = reorderGroupMember(groups(), "a", "DIRECT", "香港 01");
+  assert.deepEqual(movedDown[0].proxies, ["DIRECT", "香港 01", "日本 01"]);
 });
 
 test("成员跨组移动时从原组移除并加入目标组", () => {
@@ -31,6 +33,7 @@ test("策略组可以整体重新排序", () => {
     { id: "c", name: "C", type: "select", proxies: [], extra: {} },
   ] as any;
   assert.deepEqual(reorderGroups(groups, "c", "a").map((group: any) => group.id), ["c", "a", "b"]);
+  assert.deepEqual(reorderGroups(groups, "a", "c").map((group: any) => group.id), ["b", "a", "c"]);
 });
 
 test("策略组拖放会阻止自引用和循环引用", () => {

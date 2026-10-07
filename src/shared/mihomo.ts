@@ -1,6 +1,7 @@
 import YAML from "yaml";
 import type { MihomoConfig, ProxyGroup, ProxyNode, RuleItem, ValidationIssue } from "./types";
 import { createId } from "./id";
+import { readMihomoConfig } from "./schema";
 
 const TOP_LEVEL_KEYS = new Set(["mixed-port", "allow-lan", "mode", "log-level", "ipv6", "external-controller", "proxies", "proxy-groups", "rules"]);
 const PROXY_KEYS = new Set(["name", "type", "server", "port", "udp", "tls", "skip-cert-verify", "servername", "sni", "uuid", "password", "cipher", "network", "ws-opts", "grpc-opts"]);
@@ -162,6 +163,13 @@ export function exportMihomoYaml(config: MihomoConfig): string {
 
 export function validateConfig(config: MihomoConfig): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const structural = readMihomoConfig(config);
+  if (!structural.success) {
+    for (const issue of structural.error.issues.slice(0, 50)) {
+      issues.push({ level: "error", scope: "config", message: `${issue.path.join(".") || "配置"}：${issue.message}` });
+    }
+    return issues;
+  }
   const duplicates = (values: string[]) => [...new Set(values.filter((value, index) => values.indexOf(value) !== index))];
   for (const name of duplicates(config.proxies.map((proxy) => proxy.name))) issues.push({ level: "error", scope: "proxy", message: `节点名称重复：${name}` });
   for (const name of duplicates(config.proxyGroups.map((group) => group.name))) issues.push({ level: "error", scope: "group", message: `策略组名称重复：${name}` });

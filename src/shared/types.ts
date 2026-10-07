@@ -73,6 +73,7 @@ export interface RuleItem {
   options: string[];
   enabled: boolean;
   comment?: string;
+  formatExtra?: { singBox?: Record<string, unknown> };
 }
 
 export interface MihomoConfig {

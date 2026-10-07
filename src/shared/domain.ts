@@ -58,8 +58,8 @@ export interface GeneratedSubscription {
   userId: string;
   name: string;
   targetFormat: TargetFormat;
-  token: string;
-  content: string;
+  token?: string;
+  content?: string;
   version: number;
   nodeCount: number;
   expiresAt?: string;

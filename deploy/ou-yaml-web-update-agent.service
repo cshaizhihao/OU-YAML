@@ -6,4 +6,15 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=@INSTALL_DIR@ /var/log/ou-yaml /run
 ExecStart=/bin/bash @INSTALL_DIR@/deploy/ou-yaml-web-update-agent.sh

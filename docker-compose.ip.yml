@@ -1,0 +1,4 @@
+services:
+  ou-yaml:
+    ports:
+      - "${OU_YAML_PORT:-8787}:8787"
