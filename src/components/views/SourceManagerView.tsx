@@ -187,8 +187,8 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
         <footer>
           {item.url && <button className="secondary-button compact-button" disabled={!!diagnosing} onClick={() => void diagnose(item)}>{diagnosing === item.id ? "诊断中…" : "诊断连接"}</button>}
           <button className="secondary-button compact-button" disabled={!item.url || !item.enabled || refreshing === item.id} onClick={() => void refresh(item)}>{refreshing === item.id ? <RefreshCw className="spin" size={15} /> : <RefreshCw size={15} />}同步</button>
-          <button className="icon-button compact" onClick={() => { setDraft(sourceDraft(item)); setPreview(null); }} aria-label={`编辑 ${item.name}`}><Pencil size={16} /></button>
-          <button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button>
+          <button className="secondary-button compact-button source-edit-action" onClick={() => { setDraft(sourceDraft(item)); setPreview(null); }} aria-label={`编辑 ${item.name}`}><Pencil size={15} />编辑</button>
+          <button className="secondary-button compact-button danger-outline source-delete-action" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={15} />删除</button>
         </footer>
       </article>)}</div> : <div className="empty-state featured-empty" data-guide-id={guideTargets.sourceList}>
       <div><UploadCloud size={25} /></div><h2>建立第一个节点来源</h2><p>可粘贴订阅 URL、批量分享链接，或者上传 Mihomo 与 sing-box 配置。</p><button className="primary-button" onClick={() => setDraft(emptySource())}><Plus size={17} />添加来源</button>

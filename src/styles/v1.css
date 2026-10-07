@@ -1498,3 +1498,299 @@ button:disabled {
   z-index: auto;
   margin-top: 4px;
 }
+
+:root {
+  --ink: #fffaff;
+  --ink-soft: #f0e9fb;
+  --ink-faint: #d8cce9;
+  --line: rgba(236, 224, 255, .28);
+  --line-strong: rgba(226, 208, 255, .56);
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  text-rendering: optimizeLegibility;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #b9acd0;
+  opacity: 1;
+}
+
+.sidebar-brand small,
+.nav-item > span small,
+.sidebar-help small,
+.user-chip small,
+.sidebar-section-label {
+  color: #c9b9df;
+  opacity: 1;
+}
+
+.nav-item {
+  color: #eee6fa;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  color: #fff;
+}
+
+.page-heading p,
+.toolbar-description,
+.form-hint,
+.node-detection-controls p,
+.group-board-hint,
+.settings-section p,
+.panel-card-heading p {
+  color: var(--ink-soft);
+}
+
+.secondary-button {
+  color: #f8f1ff;
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, .09);
+}
+
+.secondary-button:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(235, 216, 255, .72);
+  background: rgba(191, 153, 255, .22);
+}
+
+.text-button {
+  color: #d6b9ff;
+}
+
+.text-button:hover:not(:disabled) {
+  color: #f0ddff;
+}
+
+.icon-button {
+  color: #e2d5f1;
+}
+
+.icon-button:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(191, 153, 255, .2);
+}
+
+.primary-button:disabled {
+  color: #eee3fb;
+  border-color: rgba(224, 204, 255, .35);
+  background: linear-gradient(135deg, rgba(143, 113, 180, .9), rgba(111, 82, 149, .9));
+}
+
+.validation-pill.ok {
+  color: #8ff1c5;
+  border-color: rgba(104, 226, 171, .42);
+  background: rgba(51, 185, 135, .14);
+}
+
+.validation-pill.warning {
+  color: #ffdc8d;
+  border-color: rgba(245, 199, 107, .44);
+  background: rgba(245, 199, 107, .13);
+}
+
+.validation-pill.error {
+  color: #ffb5bf;
+  border-color: rgba(255, 143, 157, .44);
+  background: rgba(255, 122, 143, .14);
+}
+
+.status-badge.active,
+.status-toggle.active,
+.status-dot.active {
+  color: #8ff1c5;
+  background: rgba(51, 185, 135, .16);
+}
+
+.status-badge.disabled,
+.status-toggle,
+.status-dot {
+  color: #d8cce9;
+  background: rgba(255, 255, 255, .09);
+}
+
+.source-card header div > span,
+.source-card-metrics small,
+.source-recovery > small,
+.node-row-source,
+.node-row-tags,
+.node-name-stack small,
+.pool-node-main span,
+.group-column-header > div span,
+.group-member > div span,
+.subscription-meta,
+.subscription-version small,
+.token-hint,
+.published-overview small {
+  color: var(--ink-faint);
+}
+
+.source-card-address,
+.subscription-main code,
+.published-result code,
+.quick-result code {
+  color: #f1e7ff;
+}
+
+.source-card-metrics > span,
+.published-overview > span,
+.update-safety,
+.source-recovery,
+.source-diagnostics {
+  border-color: var(--line);
+}
+
+.source-card > footer {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.source-edit-action,
+.source-delete-action {
+  min-width: 66px;
+}
+
+.source-delete-action {
+  color: #ffb5bf;
+  border-color: rgba(255, 143, 157, .38);
+  background: rgba(255, 122, 143, .1);
+}
+
+.source-delete-action:hover:not(:disabled) {
+  color: #ffdbe0;
+  border-color: rgba(255, 171, 184, .68);
+  background: rgba(255, 122, 143, .2);
+}
+
+.node-copy-button {
+  color: #fff7ff;
+  border-color: rgba(229, 207, 255, .62);
+  background: rgba(190, 153, 255, .24);
+}
+
+.node-copy-button:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(248, 232, 255, .9);
+  background: rgba(196, 160, 255, .38);
+}
+
+.node-copy-label {
+  font-size: 11px;
+}
+
+.node-row-actions .diagnostic-action,
+.node-row-actions .flag-action {
+  border: 1px solid rgba(226, 204, 255, .3);
+}
+
+.rule-reference > div > span,
+.rule-advanced-details,
+.beginner-rule-card,
+.beginner-rule-card > header,
+.template-option,
+.generator-row,
+.generator-select-all {
+  color: var(--ink);
+}
+
+.section-tabs {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.section-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.section-tabs button {
+  flex: 0 0 auto;
+}
+
+.admin-add-button {
+  min-width: 112px;
+}
+
+.toast {
+  color: #fffaff;
+}
+
+.toast span {
+  color: #f0e9fb;
+}
+
+@media (max-width: 840px) {
+  .section-tabs button {
+    min-width: max-content;
+  }
+
+  .node-row-actions {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    justify-content: initial;
+    align-items: center;
+  }
+
+  .node-probe-cluster,
+  .node-extra-actions {
+    justify-self: start;
+  }
+
+  .node-copy-button {
+    width: 100% !important;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .node-copy-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .source-card > footer > button {
+    min-height: 38px;
+  }
+
+  .admin-add-button {
+    width: auto !important;
+    min-width: 112px;
+    padding-inline: 12px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .section-tabs {
+    justify-content: flex-start;
+  }
+
+  .main-shell > .section-tabs {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .main-shell > .section-tabs button {
+    min-height: 34px;
+    gap: 4px;
+    padding-inline: 7px;
+    font-size: 11px;
+  }
+
+  .main-shell > .section-tabs button svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .source-edit-action,
+  .source-delete-action {
+    flex: 1 1 0 !important;
+  }
+}
