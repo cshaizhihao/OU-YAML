@@ -2,7 +2,7 @@ import type { NodeSource, ManagedNode, GenerationProfile, GeneratedSubscription 
 import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
 
 
-export type UpdateInfo = { currentVersion: string; latestVersion: string | null; hasUpdate: boolean; releaseUrl: string | null; releaseNotes: string; publishedAt: string | null; agentAvailable: boolean };
+export type UpdateInfo = { currentVersion: string; latestVersion: string | null; currentCommit: string | null; latestCommit: string | null; updateKind: "version" | "build" | null; hasUpdate: boolean; releaseUrl: string | null; releaseNotes: string; publishedAt: string | null; agentAvailable: boolean };
 export type UpdateStatus = { status: "idle" | "requested" | "running" | "completed" | "failed"; message: string; progress: number; updatedAt: string | null };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {

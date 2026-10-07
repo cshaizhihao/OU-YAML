@@ -281,6 +281,8 @@ run_install() {
   mode="$(ask '请选择 1 或 2' '1')"
   ensure_dependencies
   prepare_repository
+  export OU_YAML_BUILD_COMMIT
+  OU_YAML_BUILD_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse HEAD)"
   mkdir -p "${INSTALL_DIR}/data"
   chown -R 1001:1001 "${INSTALL_DIR}/data" 2>/dev/null || true
   chmod 0700 "${INSTALL_DIR}/data"

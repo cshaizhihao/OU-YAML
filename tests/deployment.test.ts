@@ -23,5 +23,6 @@ test("安装、更新和备份脚本使用正确的部署覆盖与 SQLite 排除
     assert.match(source, /docker-compose\.yml[^\n]+docker-compose\.ip\.yml/);
     assert.match(source, /docker-compose\.yml[^\n]+docker-compose\.caddy\.yml/);
   }
+  assert.match(install, /OU_YAML_BUILD_COMMIT=.*git[^\n]+rev-parse HEAD/);
   assert.match(backup, /! -name 'ou-yaml\.db\*'/);
 });

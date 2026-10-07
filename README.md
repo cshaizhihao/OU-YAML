@@ -8,7 +8,7 @@
     作者：<code>nodeseek@cshaizhihao</code>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.3.0-2E4E3F?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/version-1.3.1-2E4E3F?style=flat-square" alt="version" />
     <img src="https://img.shields.io/badge/Mihomo-Clash%20Meta-C85A3E?style=flat-square" alt="Mihomo" />
     <img src="https://img.shields.io/badge/sing--box-supported-73629B?style=flat-square" alt="sing-box" />
   </p>

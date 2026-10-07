@@ -15,13 +15,80 @@ test("没有 GitHub Release 时从 main 分支清单检查版本", async () => {
     const url = String(input);
     calls.push(url);
     if (url.includes("/releases/latest")) return new Response("not found", { status: 404 });
+    if (url.includes("/commits/main")) return new Response(JSON.stringify({ sha: "b".repeat(40), commit: { message: "new build" } }), { status: 200, headers: { "Content-Type": "application/json" } });
     return new Response(JSON.stringify({ version: "99.0.0" }), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
   try {
     const result = await checkForUpdate();
     assert.equal(result.latestVersion, "99.0.0");
     assert.equal(result.hasUpdate, true);
-    assert.equal(calls.length, 2);
+    assert.equal(result.updateKind, "version");
+    assert.equal(calls.length, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("版本号相同时通过 main 提交发现新构建", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCommit = process.env.APP_COMMIT;
+  process.env.APP_COMMIT = "a".repeat(40);
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/releases/latest")) return new Response(JSON.stringify({ tag_name: "v1.3.1", body: "release" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (url.includes("/commits/main")) return new Response(JSON.stringify({ sha: "b".repeat(40), commit: { message: "new build" } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ version: "1.3.1" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const result = await checkForUpdate();
+    assert.equal(result.currentVersion, "1.3.1");
+    assert.equal(result.latestVersion, "1.3.1");
+    assert.equal(result.hasUpdate, true);
+    assert.equal(result.updateKind, "build");
+    assert.equal(result.currentCommit, "a".repeat(40));
+    assert.equal(result.latestCommit, "b".repeat(40));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCommit === undefined) delete process.env.APP_COMMIT;
+    else process.env.APP_COMMIT = originalCommit;
+  }
+});
+
+test("本地版本高于 main 时不提示降级", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCommit = process.env.APP_COMMIT;
+  process.env.APP_COMMIT = "a".repeat(40);
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/releases/latest")) return new Response("not found", { status: 404 });
+    if (url.includes("/commits/main")) return new Response(JSON.stringify({ sha: "b".repeat(40) }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ version: "1.2.9" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const result = await checkForUpdate();
+    assert.equal(result.hasUpdate, false);
+    assert.equal(result.updateKind, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCommit === undefined) delete process.env.APP_COMMIT;
+    else process.env.APP_COMMIT = originalCommit;
+  }
+});
+
+test("Release 落后于 main 时展示 main 构建信息", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/releases/latest")) return new Response(JSON.stringify({ tag_name: "v1.3.0", html_url: "https://example.com/old", body: "old notes" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (url.includes("/commits/main")) return new Response(JSON.stringify({ sha: "b".repeat(40), html_url: "https://example.com/new", commit: { message: "new build", committer: { date: "2026-10-07T00:00:00Z" } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ version: "99.0.0" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const result = await checkForUpdate();
+    assert.equal(result.latestVersion, "99.0.0");
+    assert.equal(result.releaseUrl, "https://example.com/new");
+    assert.match(result.releaseNotes, /new build/);
+    assert.equal(result.publishedAt, "2026-10-07T00:00:00Z");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -5,6 +5,9 @@ import fsSync from "node:fs";
 export type UpdateInfo = {
   currentVersion: string;
   latestVersion: string | null;
+  currentCommit: string | null;
+  latestCommit: string | null;
+  updateKind: "version" | "build" | null;
   hasUpdate: boolean;
   releaseUrl: string | null;
   releaseNotes: string;
@@ -32,6 +35,15 @@ function currentVersion() {
   } catch {
     return process.env.APP_VERSION || "0.0.0";
   }
+}
+
+function normalizeCommit(value: string | undefined) {
+  const commit = String(value || "").trim().toLowerCase();
+  return /^[0-9a-f]{7,40}$/.test(commit) ? commit : null;
+}
+
+function commitsMatch(left: string, right: string) {
+  return left === right || left.startsWith(right) || right.startsWith(left);
 }
 
 
@@ -68,6 +80,7 @@ export async function readUpdateLog() {
 
 export async function checkForUpdate(): Promise<UpdateInfo> {
   const current = currentVersion();
+  const installedCommit = normalizeCommit(process.env.APP_COMMIT);
   const agentAvailable = await fs.access(path.join(dataDir, "web-update-agent.enabled")).then(() => true).catch(() => false);
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "OU-YAML-updater" };
   const request = async (url: string) => {
@@ -77,31 +90,76 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
     finally { clearTimeout(timer); }
   };
 
-  const releaseResponse = await request(`https://api.github.com/repos/${repo}/releases/latest`);
-  let latest = "";
+  const [releaseResult, commitResult, manifestResult] = await Promise.allSettled([
+    request(`https://api.github.com/repos/${repo}/releases/latest`),
+    request(`https://api.github.com/repos/${repo}/commits/main`),
+    request(`https://raw.githubusercontent.com/${repo}/main/package.json`),
+  ]);
+  let releaseVersion = "";
+  let mainVersion = "";
+  let latestCommit: string | null = null;
+  let latestCommitMessage = "";
+  let latestCommitUrl: string | null = null;
+  let latestCommitPublishedAt: string | null = null;
   let releaseUrl: string | null = null;
   let releaseNotes = "";
   let publishedAt: string | null = null;
-  if (releaseResponse.ok) {
+  const releaseResponse = releaseResult.status === "fulfilled" ? releaseResult.value : null;
+  if (releaseResponse?.ok) {
     const release = await releaseResponse.json() as { tag_name?: string; html_url?: string; body?: string; published_at?: string };
-    latest = String(release.tag_name || "").replace(/^v/i, "");
+    releaseVersion = String(release.tag_name || "").replace(/^v/i, "");
     releaseUrl = release.html_url || null;
     releaseNotes = String(release.body || "").slice(0, 6000);
     publishedAt = release.published_at || null;
-  } else if (releaseResponse.status === 404) {
-    const manifestResponse = await request(`https://raw.githubusercontent.com/${repo}/main/package.json`);
-    if (!manifestResponse.ok) throw new Error(`无法读取 GitHub 最新版本（HTTP ${manifestResponse.status}）`);
+  }
+
+  const manifestResponse = manifestResult.status === "fulfilled" ? manifestResult.value : null;
+  if (manifestResponse?.ok) {
     const manifest = await manifestResponse.json() as { version?: string };
-    latest = String(manifest.version || "").replace(/^v/i, "");
+    mainVersion = String(manifest.version || "").replace(/^v/i, "");
+  }
+
+  const commitResponse = commitResult.status === "fulfilled" ? commitResult.value : null;
+  if (commitResponse?.ok) {
+    const commit = await commitResponse.json() as { sha?: string; html_url?: string; commit?: { message?: string; committer?: { date?: string } } };
+    latestCommit = normalizeCommit(commit.sha);
+    latestCommitMessage = String(commit.commit?.message || "").split("\n")[0].slice(0, 300);
+    latestCommitUrl = commit.html_url || `https://github.com/${repo}/commits/main`;
+    latestCommitPublishedAt = commit.commit?.committer?.date || null;
+    if (!releaseUrl) releaseUrl = latestCommitUrl;
+    if (!publishedAt) publishedAt = latestCommitPublishedAt;
+  }
+
+  const latest = mainVersion || releaseVersion;
+  if (!latest) {
+    const status = manifestResponse?.status || releaseResponse?.status;
+    throw new Error(`无法读取 GitHub 最新版本${status ? `（HTTP ${status}）` : ""}`);
+  }
+  if (mainVersion && releaseVersion && compareVersions(mainVersion, releaseVersion) !== 0) {
+    releaseUrl = latestCommitUrl || `https://github.com/${repo}/commits/main`;
+    releaseNotes = "";
+    publishedAt = latestCommitPublishedAt;
+  }
+  const versionComparison = compareVersions(latest, current);
+  const versionUpdate = versionComparison > 0;
+  const buildUpdate = versionComparison === 0 && Boolean(installedCommit && latestCommit && !commitsMatch(installedCommit, latestCommit));
+  const updateKind = versionUpdate ? "version" : buildUpdate ? "build" : null;
+  if (!releaseNotes) {
+    releaseUrl = releaseUrl || `https://github.com/${repo}/commits/main`;
+    releaseNotes = latestCommitMessage
+      ? `main 分支最新构建：${latestCommitMessage}`
+      : "当前更新依据 main 分支的版本与构建提交检查。";
+  } else if (updateKind === "build" && latestCommitMessage) {
+    releaseNotes = `main 分支有新构建：${latestCommitMessage}`;
     releaseUrl = `https://github.com/${repo}/commits/main`;
-    releaseNotes = "仓库尚未发布 GitHub Release，当前版本依据 main 分支的 package.json 检查。";
-  } else {
-    throw new Error(`GitHub API ${releaseResponse.status}`);
   }
   return {
     currentVersion: current,
     latestVersion: latest || null,
-    hasUpdate: Boolean(latest) && compareVersions(latest, current) > 0,
+    currentCommit: installedCommit,
+    latestCommit,
+    updateKind,
+    hasUpdate: Boolean(updateKind),
     releaseUrl,
     releaseNotes,
     publishedAt,
