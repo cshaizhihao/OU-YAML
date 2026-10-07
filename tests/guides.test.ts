@@ -5,6 +5,13 @@ import { test } from "node:test";
 import { GUIDE_VERSION, guideRegistry, guideTargets } from "../src/guides/registry";
 
 const targetOwners = {
+  subscriptionRules: "src/components/views/SubscriptionEditorView.tsx",
+  subscriptionSave: "src/components/views/SubscriptionEditorView.tsx",
+  subscriptionSaved: "src/components/views/SubscriptionEditorView.tsx",
+  homeTasks: "src/components/views/SubscriptionHomeView.tsx",
+  homeSubscriptions: "src/components/views/SubscriptionHomeView.tsx",
+  homePublish: "src/components/views/SubscriptionHomeView.tsx",
+  publishReview: "src/components/views/QuickSetupView.tsx",
   quickSetup: "src/components/views/QuickSetupView.tsx",
   quickImport: "src/components/views/QuickSetupView.tsx",
   quickConfigure: "src/components/views/QuickSetupView.tsx",

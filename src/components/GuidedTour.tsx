@@ -154,6 +154,7 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
     let target: HTMLElement | null = null;
     let timer: number | undefined;
     if (step.quickStep !== undefined) window.dispatchEvent(new CustomEvent("ou-yaml:quick-step", { detail: step.quickStep }));
+    if (step.target === guideTargets.homeSubscriptions) window.dispatchEvent(new Event("ou-yaml:home-overview"));
     const readRect = () => {
       if (cancelled) return;
       if (!target || !document.documentElement.contains(target)) return setTargetRect(null);

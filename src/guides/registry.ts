@@ -1,8 +1,15 @@
-export const GUIDE_VERSION = "1.7";
+export const GUIDE_VERSION = "1.8";
 
-export type GuideView = "home" | "sources" | "nodes" | "groups" | "rules" | "preview" | "history" | "generator" | "links" | "templates" | "settings" | "admin";
+export type GuideView = "home" | "sources" | "nodes" | "groups" | "rules" | "preview" | "history" | "generator" | "links" | "subscription" | "templates" | "settings" | "admin";
 
 export const guideTargets = {
+  subscriptionRules: "subscription-rules",
+  subscriptionSave: "subscription-save",
+  subscriptionSaved: "subscription-saved",
+  homeTasks: "home-tasks",
+  homeSubscriptions: "home-subscriptions",
+  homePublish: "home-publish",
+  publishReview: "publish-review",
   quickSetup: "quick-setup",
   quickImport: "quick-import",
   quickConfigure: "quick-configure",
@@ -57,13 +64,31 @@ export type GuideDefinition = {
 
 export const guideRegistry: readonly GuideDefinition[] = [
   {
+    id: "website", title: "让某个网站走指定线路", description: "添加中文网站规则，发布到原地址，再刷新客户端。", duration: "约 2 分钟",
+    steps: [
+      { id: "choose", view: "home", target: guideTargets.homeSubscriptions, advanceOn: "subscription-rules-opened", title: "先选中要修改的订阅", description: "在这份订阅的卡片上点击“编辑分流”，不是新建订阅。尚未生成过链接时，请先用三步教程创建。" },
+      { id: "rule", view: "subscription", target: guideTargets.subscriptionRules, advanceOn: "website-rule-added", title: "为网站选择连接方式", description: "填写域名，例如 example.com；选择直接连接或代理组，点击“添加网站规则”。这些修改尚未影响客户端。" },
+      { id: "publish", view: "subscription", target: guideTargets.subscriptionSave, advanceOn: "subscription-updated", title: "把规则更新到原订阅", description: "点击“检查并更新原订阅”，确认名称、数量变化与原地址不变，再点击“确认更新原订阅”。失败不会推进或覆盖旧内容。" },
+      { id: "client", view: "subscription", target: guideTargets.subscriptionSaved, title: "最后在客户端刷新", description: "更新成功只改变服务器内容。回到手机或电脑代理客户端，点击更新订阅，再访问目标网站验证。不用重新填写地址。" },
+    ],
+  },
+  {
+    id: "troubleshoot", title: "订阅不能用，怎么办？", description: "区分来源拉取、节点连通和客户端刷新，避免盲目重装。", duration: "约 3 分钟",
+    steps: [
+      { id: "start", view: "home", target: guideTargets.homeTasks, title: "先判断哪里出了问题", description: "首页状态只表示链接是否过期、撤销或同步报错，不代表节点已通过实测。来源失败时上次发布内容仍保留，不要先重置地址。" },
+      { id: "source", view: "sources", target: guideTargets.sourceList, title: "客户端能导入，服务器却报错？", description: "点击来源的“诊断连接”，查看 404、权限、DNS 或 TLS 建议。服务器网络与手机不同，404 不能靠换请求头保证修复。" },
+      { id: "node", view: "nodes", target: guideTargets.nodeDiagnostics, title: "地址正常但连不上网络？", description: "使用“代理实测”验证鉴权和 HTTPS 转发。TCP 可达不等于代理可用，服务器实测也不等于你的手机网络情况。" },
+      { id: "client", view: "home", target: guideTargets.homeTasks, title: "确认客户端拿到新内容", description: "规则变化需要检查发布，节点库变化可同步原订阅。随后在客户端更新订阅并确认选中的节点；不要重复安装应用。" },
+    ],
+  },
+  {
     id: "quickstart",
     title: "三步创建第一个订阅",
     description: "粘贴链接、选择推荐设置、复制订阅，成功后自动前进。",
     duration: "约 5 分钟",
     steps: [
       { id: "import", view: "home", target: guideTargets.quickImport, quickStep: 0, advanceOn: "imported", title: "粘贴并导入订阅", description: "填写订阅或节点链接，点击“导入并继续”。如果已有节点，可以直接使用。导入成功后教程自动前进。", tip: "只想了解流程时，可以暂停教程并点击“先看演示”。" },
-      { id: "configure", view: "home", target: guideTargets.quickConfigure, quickStep: 1, advanceOn: "published", title: "选择推荐配置并发布", description: "基础分流适合 Mihomo。检查节点选择后点击“生成我的订阅”，系统完成校验、分组和发布。失败原因会显示在页面下方。" },
+      { id: "configure", view: "home", target: guideTargets.quickConfigure, quickStep: 1, advanceOn: "published", title: "选择推荐配置并发布", description: "基础分流适合 Mihomo。点击“生成我的订阅”（已有链接时为“检查发布变化”），阅读变化摘要，再点击“确认并发布”。只有发布成功后教程才会前进。" },
       { id: "copy", view: "home", target: guideTargets.quickResult, quickStep: 2, advanceOn: "copied", title: "复制到客户端", description: "复制订阅链接，在客户端的“订阅 / 配置”中从 URL 添加，然后更新订阅。后续可以继续使用同一个地址。" },
       { id: "help", view: "home", target: guideTargets.helpButton, title: "随时继续学习", description: "右下角可以学习节点实测、分流和自动同步。日后有新的操作方式，会在这里提示新增教程。" },
     ],

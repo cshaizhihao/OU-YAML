@@ -1,4 +1,6 @@
 import type { NodeSource, ManagedNode, GenerationProfile, GeneratedSubscription } from "./shared/domain";
+import type { QuickPublishInput, QuickPublishPreview } from "./shared/publication";
+import type { SubscriptionEditInput, SubscriptionEditorState } from "./shared/subscriptionEditor";
 import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
 
 
@@ -63,7 +65,8 @@ export const api = {
   updateRuleTemplate: (id: string, data: { name: string; description?: string; targetFormat: TargetFormat; content: unknown[] }) => request<any>(`/api/rule-templates/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteRuleTemplate: (id: string) => request<{ deleted: boolean }>(`/api/rule-templates/${id}`, { method: "DELETE" }),
   listGenerationProfiles: () => request<GenerationProfile[]>("/api/generation-profiles"),
-  quickPublish: (id: string, data: { nodeIds: string[]; preset: "balanced" | "simple" | "current"; autoUpdate: boolean; includeNewNodes: boolean; updatedAt: string }) => request<GeneratedSubscription & { kernelChecked: boolean }>(`/api/projects/${id}/quick-publish`, { method: "POST", body: JSON.stringify(data) }),
+  previewQuickPublish: (id: string, data: QuickPublishInput) => request<QuickPublishPreview>(`/api/projects/${id}/quick-preview`, { method: "POST", body: JSON.stringify(data) }),
+  quickPublish: (id: string, data: QuickPublishInput) => request<GeneratedSubscription & { kernelChecked: boolean }>(`/api/projects/${id}/quick-publish`, { method: "POST", body: JSON.stringify(data) }),
   setProfileSync: (id: string, data: { autoUpdate: boolean; includeNewNodes: boolean }) => request<GenerationProfile>(`/api/generation-profiles/${id}/sync`, { method: "PUT", body: JSON.stringify(data) }),
   syncProfile: (id: string) => request<{ synced: boolean }>(`/api/generation-profiles/${id}/sync`, { method: "POST" }),
   getSubscriptionToken: (id: string) => request<{ token: string }>(`/api/generated-subscriptions/${id}/token`),
@@ -71,6 +74,9 @@ export const api = {
   updateGenerationProfile: (id: string, data: Pick<GenerationProfile, "name" | "targetFormat" | "config"> & { nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) => request<GenerationProfile>(`/api/generation-profiles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteGenerationProfile: (id: string) => request<{ deleted: boolean }>(`/api/generation-profiles/${id}`, { method: "DELETE" }),
   listGeneratedSubscriptions: () => request<GeneratedSubscription[]>("/api/generated-subscriptions"),
+  getSubscriptionEditor: (id: string) => request<SubscriptionEditorState>(`/api/generated-subscriptions/${id}/editor`),
+  saveSubscriptionEditor: (id: string, input: SubscriptionEditInput) => request<SubscriptionEditorState & { kernelChecked: boolean }>(`/api/generated-subscriptions/${id}/editor`, { method: "PUT", body: JSON.stringify(input) }),
+  renameSubscription: (id: string, name: string) => request<GeneratedSubscription>(`/api/generated-subscriptions/${id}/name`, { method: "PUT", body: JSON.stringify({ name }) }),
   revokeGeneratedSubscription: (id: string) => request<{ revoked: boolean }>(`/api/generated-subscriptions/${id}/revoke`, { method: "POST" }),
   rotateGeneratedSubscriptionToken: (id: string) => request<{ token: string }>(`/api/generated-subscriptions/${id}/token`, { method: "POST" }),
   updateGeneratedSubscription: (id: string, data: { name: string; content: string; nodeCount: number; expiresAt?: string }) => request<GeneratedSubscription>(`/api/generated-subscriptions/${id}`, { method: "PUT", body: JSON.stringify(data) }),

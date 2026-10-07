@@ -93,10 +93,15 @@ after(async () => {
 test("快捷发布与恢复地址需要登录，并隔离不存在的资源", async () => {
   const anonymous = await fetch(`${baseUrl}/api/projects/unknown/quick-publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   assert.equal(anonymous.status, 401);
+  assert.equal((await fetch(`${baseUrl}/api/projects/unknown/quick-preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 401);
+  assert.equal((await api("/api/projects/unknown/quick-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 400);
   assert.equal((await fetch(`${baseUrl}/api/generated-subscriptions/unknown/token`)).status, 401);
   const missing = await api("/api/generated-subscriptions/unknown/token");
   assert.equal(missing.status, 404);
   assert.equal(missing.headers.get("cache-control"), "no-store");
+  assert.equal((await fetch(`${baseUrl}/api/generated-subscriptions/unknown/editor`)).status, 401);
+  assert.equal((await api("/api/generated-subscriptions/unknown/editor")).status, 404);
+  assert.equal((await api("/api/generated-subscriptions/unknown/name", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "" }) })).status, 400);
   const source = await api("/api/node-sources/unknown/diagnose", { method: "POST" });
   assert.equal(source.status, 404);
   const proxy = await api("/api/managed-nodes/unknown/proxy-test", { method: "POST" });

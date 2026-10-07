@@ -3,6 +3,7 @@ import { CheckCircle2, Clock3, FileUp, Globe2, Link2, Pencil, Plus, RefreshCw, S
 import { api } from "../../api";
 import { guideTargets } from "../../guides/registry";
 import type { NodeSource } from "../../shared/domain";
+import { sourceErrorAdvice } from "../../shared/subscriptionStatus";
 import { ConfirmDialog, Drawer } from "../Dialog";
 
 type SourceDraft = {
@@ -181,7 +182,7 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
           <span><strong>{intervalLabel(item.intervalMinutes)}</strong><small>同步周期</small></span>
           <span><strong>{item.lastRequestProfile || "-"}</strong><small>请求模式</small></span>
         </div>
-        {item.lastError ? <div className="source-card-error"><ShieldAlert size={15} /><span title={item.lastError}>{item.lastError}</span></div> : <div className="source-card-success"><CheckCircle2 size={15} />{item.lastUpdatedAt ? `最近同步 ${new Date(item.lastUpdatedAt).toLocaleString("zh-CN")}` : "等待首次同步"}</div>}
+        {item.lastError ? <div className="source-recovery"><div className="source-card-error"><ShieldAlert size={15} /><span title={item.lastError}>{item.lastError}</span></div><p>{sourceErrorAdvice(item.lastError)}</p><small>{item.lastUpdatedAt ? `最近成功：${new Date(item.lastUpdatedAt).toLocaleString("zh-CN")}` : "尚未成功导入"}。本次失败不会清空已导入节点或已发布内容。</small></div> : <div className="source-card-success"><CheckCircle2 size={15} />{item.lastUpdatedAt ? `最近同步 ${new Date(item.lastUpdatedAt).toLocaleString("zh-CN")}` : "等待首次同步"}</div>}
         {diagnostics[item.id] && <details open className="source-diagnostics"><summary>诊断结果（订阅路径与 Token 已隐藏）</summary>{diagnostics[item.id]}</details>}
         <footer>
           {item.url && <button className="secondary-button compact-button" disabled={!!diagnosing} onClick={() => void diagnose(item)}>{diagnosing === item.id ? "诊断中…" : "诊断连接"}</button>}

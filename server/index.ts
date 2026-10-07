@@ -21,7 +21,8 @@ import { checkForUpdate, readUpdateLog, readUpdateStatus, requestWebUpdate } fro
 import { csrfOriginGuard } from "./csrf";
 import { addCountryFlag, lookupNodeCountry, tcpPingNode } from "./nodeProbe";
 import { previewExport } from "../src/shared/exportConfig";
-import { configureProfileSync, validatedContent, quickPublish, readSubscriptionToken, syncAutoProfiles, syncProfile } from "./publicationService";
+import { configureProfileSync, validatedContent, previewQuickPublish, quickPublish, readSubscriptionToken, syncAutoProfiles, syncProfile } from "./publicationService";
+import { getSubscriptionEditor, renameSubscription, saveSubscriptionEditor } from "./subscriptionEditor";
 import { probeProxy } from "./proxyProbe";
 import { diagnoseSource } from "./sourceDiagnostics";
 
@@ -612,8 +613,15 @@ app.post("/api/node-sources/:id/diagnose", requireAuth, nodeProbeLimiter, async 
   try { res.json(await diagnoseSource(source)); }
   catch (error) { res.status(422).json({ error: (error as Error).message }); }
 });
+const quickPublishSchema = z.object({ nodeIds: z.array(z.string()).min(1).max(5000), preset: z.enum(["balanced", "simple", "current"]), autoUpdate: z.boolean(), includeNewNodes: z.boolean(), updatedAt: z.string().datetime(), previewRevision: z.string().regex(/^[a-f0-9]{64}$/).optional(), name: z.string().trim().min(1).max(120).optional() });
+app.post("/api/projects/:id/quick-preview", requireAuth, (req, res) => {
+  const parsed = quickPublishSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "发布检查参数无效" });
+  try { res.json(previewQuickPublish(req.user!.id, String(req.params.id), parsed.data)); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
 app.post("/api/projects/:id/quick-publish", requireAuth, async (req, res) => {
-  const parsed = z.object({ nodeIds: z.array(z.string()).min(1).max(5000), preset: z.enum(["balanced", "simple", "current"]), autoUpdate: z.boolean(), includeNewNodes: z.boolean(), updatedAt: z.string().datetime() }).safeParse(req.body);
+  const parsed = quickPublishSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "快捷发布参数无效" });
   try { res.json(await quickPublish(req.user!.id, String(req.params.id), parsed.data)); }
   catch (error) { res.status(422).json({ error: (error as Error).message }); }
@@ -672,6 +680,23 @@ app.put("/api/rule-templates/:id", requireAuth, (req, res) => {
 app.delete("/api/rule-templates/:id", requireAuth, (req, res) => res.json({ deleted: deleteRuleTemplate(req.user!.id, String(req.params.id)) }));
 app.get("/api/jobs", requireAuth, (req, res) => res.json(listJobs(req.user!.id)));
 app.get("/api/generated-subscriptions", requireAuth, (req, res) => res.json(listPublishedSubscriptions(req.user!.id)));
+app.get("/api/generated-subscriptions/:id/editor", requireAuth, (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(getSubscriptionEditor(req.user!.id, String(req.params.id))); }
+  catch (error) { res.status(404).json({ error: (error as Error).message }); }
+});
+app.put("/api/generated-subscriptions/:id/name", requireAuth, (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "订阅名称需为 1–120 个字符" });
+  try { res.json(renameSubscription(req.user!.id, String(req.params.id), parsed.data.name)); }
+  catch (error) { res.status(404).json({ error: (error as Error).message }); }
+});
+app.put("/api/generated-subscriptions/:id/editor", requireAuth, async (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(120), config: mihomoConfigSchema, revision: z.string().regex(/^[a-f0-9]{64}$/) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "订阅编辑参数无效" });
+  try { res.json(await saveSubscriptionEditor(req.user!.id, String(req.params.id), { ...parsed.data, config: parsed.data.config as MihomoConfig })); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
 app.get("/api/generated-subscriptions/:id/token", requireAuth, (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try { res.json({ token: readSubscriptionToken(req.user!.id, String(req.params.id)) }); }

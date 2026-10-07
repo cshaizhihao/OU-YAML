@@ -29,7 +29,7 @@ test("三步发布创建项目绑定，重复发布保持地址并隔离用户",
   const second = await publication.quickPublish(userId, projectId, { nodeIds: [node.id], preset: "current", autoUpdate: true, includeNewNodes: true, updatedAt: project.updated_at });
   assert.equal(result.token, second.token);
   assert.equal(result.id, second.id);
-  assert.equal(second.version, 2);
+  assert.equal(second.version, result.version);
   assert.equal(second.expiresAt, expiry);
   await assert.rejects(publication.quickPublish(userId, projectId, { nodeIds: [node.id], preset: "simple", autoUpdate: true, includeNewNodes: true, updatedAt: stamp }), /变化/);
 });

@@ -5,8 +5,10 @@ import { api } from "../../api";
 import type { GeneratedSubscription, GenerationProfile } from "../../shared/domain";
 import { ConfirmDialog } from "../Dialog";
 import { copyText } from "../../shared/clipboard";
+import { SubscriptionActions } from "../SubscriptionActions";
+import type { SubscriptionEditorTab } from "../../shared/subscriptionEditor";
 
-export function GeneratedSubscriptionsView({ onMessage }: { onMessage: (value: string) => void }) {
+export function GeneratedSubscriptionsView({ onMessage, onEdit }: { onMessage: (value: string) => void; onEdit: (id: string, tab: SubscriptionEditorTab) => void }) {
   const [items, setItems] = useState<GeneratedSubscription[]>([]);
   const [profiles, setProfiles] = useState<GenerationProfile[]>([]);
   const [tokens, setTokens] = useState<Record<string, string>>({});
@@ -124,6 +126,7 @@ export function GeneratedSubscriptionsView({ onMessage }: { onMessage: (value: s
           {!item.revoked && <button className="icon-button compact danger" onClick={() => setRevoking(item)} aria-label={`撤销 ${item.name}`}><ShieldOff size={16} /></button>}
           <button className="icon-button compact danger" onClick={() => setDeleting(item)} aria-label={`删除 ${item.name}`}><Trash2 size={16} /></button>
         </div>
+        <SubscriptionActions item={item} onEdit={onEdit} onRenamed={(renamed) => setItems((current) => current.map((value) => value.id === renamed.id ? renamed : value))} />
       </article>;
     })}</div> : <div className="empty-state"><div><Link2 size={24} /></div><h2>{query ? "没有匹配的订阅" : "还没有发布订阅"}</h2><p>{query ? "换个关键词再试试。" : "在“生成方案”中完成校验并发布第一个公开地址。"}</p>{!query && <span className="empty-security-note"><ShieldCheck size={15} />公开地址加密保存在服务器，可随时复制</span>}</div>}
 

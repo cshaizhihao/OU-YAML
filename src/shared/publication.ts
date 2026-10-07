@@ -1,6 +1,17 @@
 import { createEmptyConfig, type MihomoConfig, type ProxyNode } from "./types";
 import { applyRuleTemplate } from "./ruleTemplates";
 
+export type QuickPublishInput = { nodeIds: string[]; preset: "balanced" | "simple" | "current"; autoUpdate: boolean; includeNewNodes: boolean; updatedAt: string; previewRevision?: string; name?: string };
+export type QuickPublishPreview = {
+  revision: string;
+  existingName?: string;
+  existingVersion?: number;
+  createsNewLink: boolean;
+  contentChanged: boolean;
+  before: { nodes: number; groups: number; rules: number } | null;
+  after: { nodes: number; groups: number; rules: number };
+};
+
 export function recommendedConfig(nodes: ProxyNode[], preset: "balanced" | "simple") {
   const config = createEmptyConfig();
   const used = new Set<string>(["DIRECT", "REJECT", "节点选择"]);
