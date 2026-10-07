@@ -105,9 +105,11 @@ function parseSsr(input: string): ProxyNode {
   const server = fields[0];
   const node = common(params.get("remarks") ? decodeBase64(params.get("remarks")!) : server, "ssr", server, port);
   node.cipher = fields[3];
-  node.password = decodeBase64(fields[6] || "");
+  const obfsParamField = fields.length >= 7 ? fields[5] : "";
+  const passwordField = fields.length >= 7 ? fields[6] : fields[5];
+  node.password = decodeBase64(passwordField || "");
   node.extra = { protocol: fields[2], obfs: fields[4] };
-  if (fields[5]) node.extra["obfs-param"] = decodeBase64(fields[5]);
+  if (obfsParamField) node.extra["obfs-param"] = decodeBase64(obfsParamField);
   const protocolParam = params.get("protoparam");
   const obfsParam = params.get("obfsparam");
   if (protocolParam) node.extra["protocol-param"] = decodeBase64(protocolParam);
@@ -240,13 +242,14 @@ export function serializeShareLink(node: ProxyNode): string | null {
     return `ss://${encodeBase64(`${node.cipher}:${node.password}`)}@${address}${plugin}${name}`;
   }
   if (type === "ssr") {
+    if (!node.cipher || !node.password || node.server.includes(":")) return null;
     const protocol = String(node.extra.protocol || "origin");
     const obfs = String(node.extra.obfs || "plain");
     const obfsParam = typeof node.extra["obfs-param"] === "string" ? encodeBase64(node.extra["obfs-param"] as string) : "";
     const password = encodeBase64(node.password || "");
     const query = new URLSearchParams({ remarks: encodeBase64(node.name), protoparam: typeof node.extra["protocol-param"] === "string" ? encodeBase64(node.extra["protocol-param"] as string) : "", obfsparam: obfsParam });
-    const decoded = `${node.server}:${node.port}:${protocol}:${node.cipher || "none"}:${obfs}:${obfsParam}:${password}/?${query}`;
-    return `ssr://${encodeBase64(decoded)}`;
+    const decoded = `${node.server}:${node.port}:${protocol}:${node.cipher}:${obfs}:${obfsParam}:${password}/?${query}`;
+    return `ssr://${encodeBase64(decoded).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
   }
   if (["vless", "trojan", "hysteria2", "snell"].includes(type)) {
     const params = new URLSearchParams();

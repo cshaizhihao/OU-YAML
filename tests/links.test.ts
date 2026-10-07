@@ -4,6 +4,19 @@ import { parseShareLink, parseShareLinks, serializeShareLink } from "../src/shar
 
 const base64 = (value: string) => Buffer.from(value).toString("base64url");
 
+test("SSR 使用标准七段主体并保留混淆参数", () => {
+  const input = `ssr://${base64(`ssr.example.com:443:origin:aes-128-gcm:plain:${base64("cdn.example.com")}:${base64("secret")}/?remarks=${base64("SSR 标准链接")}&obfsparam=${base64("cdn.example.com")}`)}`;
+  const node = parseShareLink(input);
+  assert.equal(node.password, "secret");
+  assert.equal(node.extra["obfs-param"], "cdn.example.com");
+  const output = serializeShareLink(node);
+  assert.ok(output);
+  const fields = Buffer.from(output.slice(6), "base64url").toString().split("/?")[0].split(":");
+  assert.equal(fields.length, 7);
+  assert.equal(Buffer.from(fields[5], "base64").toString(), "cdn.example.com");
+  assert.equal(Buffer.from(fields[6], "base64").toString(), "secret");
+});
+
 test("解析 SS SIP002 链接", () => {
   const node = parseShareLink(`ss://${base64("aes-128-gcm:secret")}@ss.example.com:8388#Tokyo`);
   assert.equal(node.type, "ss");
