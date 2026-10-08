@@ -6,6 +6,8 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
+import { api as clientApi, ApiError } from "../src/api";
+import type { MihomoConfig } from "../src/shared/types";
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ou-yaml-api-test-"));
 const password = "test-password-123";
@@ -65,7 +67,7 @@ before(async () => {
       DATA_DIR: dataDir,
       ADMIN_USERNAME: "admin",
       ADMIN_PASSWORD: password,
-      NODE_ENV: "test",
+      NODE_ENV: "production",
       APP_ORIGIN: baseUrl,
     },
     stdio: ["pipe", "pipe", "pipe"],
@@ -106,6 +108,84 @@ test("快捷发布与恢复地址需要登录，并隔离不存在的资源", as
   assert.equal(source.status, 404);
   const proxy = await api("/api/managed-nodes/unknown/proxy-test", { method: "POST" });
   assert.equal(proxy.status, 404);
+});
+
+test("未知 API 在生产 SPA 回退前返回 JSON 404", async () => {
+  const response = await api("/api/route-that-does-not-exist", { headers: { Accept: "text/html" } });
+  assert.equal(response.status, 404);
+  assert.match(response.headers.get("content-type") || "", /^application\/json/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.match((await response.json() as { error: string }).error, /API 接口不存在/);
+});
+
+test("订阅编辑 API 可以载入、保存并重新载入真实订阅", async () => {
+  const projectResponse = await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "编辑器 API 回归" }) });
+  assert.equal(projectResponse.status, 201);
+  const project = await projectResponse.json() as { id: string; updatedAt: string };
+  const nodeResponse = await api("/api/managed-nodes", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "编辑器 API 节点", type: "vless", server: "example.com", port: 443, uuid: "editor-api-test", enabled: true, tags: [], extra: {} }),
+  });
+  assert.equal(nodeResponse.status, 201);
+  const node = await nodeResponse.json() as { id: string };
+  const input = { nodeIds: [node.id], preset: "simple", autoUpdate: false, includeNewNodes: false, updatedAt: project.updatedAt, name: "编辑器 API 订阅" };
+  const previewResponse = await api(`/api/projects/${project.id}/quick-preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+  assert.equal(previewResponse.status, 200);
+  const preview = await previewResponse.json() as { revision: string };
+  const publishResponse = await api(`/api/projects/${project.id}/quick-publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, previewRevision: preview.revision }) });
+  const publishBody = await publishResponse.text();
+  assert.equal(publishResponse.status, 200, publishBody);
+  const published = JSON.parse(publishBody) as { id: string };
+
+  const editorResponse = await api(`/api/generated-subscriptions/${published.id}/editor`);
+  assert.equal(editorResponse.status, 200);
+  const editor = await editorResponse.json() as { subscription: { name: string; version: number }; config: MihomoConfig; revision: string };
+  const groupName = "编辑器 API 保存后重载";
+  const oldGroupName = editor.config.proxyGroups[0].name;
+  const config = {
+    ...editor.config,
+    proxyGroups: editor.config.proxyGroups.map((group, index) => index === 0 ? { ...group, name: groupName } : group),
+    rules: editor.config.rules.map((rule) => rule.target === oldGroupName ? { ...rule, target: groupName } : rule),
+  };
+  const saveResponse = await api(`/api/generated-subscriptions/${published.id}/editor`, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "已保存的编辑器订阅", config, revision: editor.revision }),
+  });
+  const saveBody = await saveResponse.text();
+  assert.equal(saveResponse.status, 200, saveBody);
+  const saved = JSON.parse(saveBody) as { subscription: { name: string; version: number }; config: MihomoConfig; revision: string };
+  assert.equal(saved.subscription.name, "已保存的编辑器订阅");
+  assert.equal(saved.config.proxyGroups[0].name, groupName);
+
+  const reloadResponse = await api(`/api/generated-subscriptions/${published.id}/editor`);
+  assert.equal(reloadResponse.status, 200);
+  const reloaded = await reloadResponse.json() as typeof saved;
+  assert.equal(reloaded.subscription.name, saved.subscription.name);
+  assert.equal(reloaded.subscription.version, saved.subscription.version);
+  assert.equal(reloaded.config.proxyGroups[0].name, groupName);
+  assert.equal(reloaded.revision, saved.revision);
+});
+
+test("API 客户端区分网络、HTTP、非 JSON 和无效 JSON，并保留 204 与 YAML 导出", async () => {
+  const originalFetch = globalThis.fetch;
+  let responseFactory: () => Response | Promise<Response> = () => new Response("{}", { headers: { "Content-Type": "application/json" } });
+  globalThis.fetch = (async () => responseFactory()) as typeof fetch;
+  try {
+    responseFactory = () => new Response("not json", { headers: { "Content-Type": "text/html" } });
+    await assert.rejects(clientApi.me(), (error: unknown) => error instanceof ApiError && error.kind === "invalid-response");
+    responseFactory = () => new Response("{", { headers: { "Content-Type": "application/json" } });
+    await assert.rejects(clientApi.me(), (error: unknown) => error instanceof ApiError && error.kind === "invalid-response");
+    responseFactory = () => new Response(JSON.stringify({ error: "服务端拒绝请求" }), { status: 503, headers: { "Content-Type": "application/json" } });
+    await assert.rejects(clientApi.me(), (error: unknown) => error instanceof ApiError && error.kind === "http" && error.status === 503 && error.message === "服务端拒绝请求");
+    responseFactory = () => { throw new Error("offline"); };
+    await assert.rejects(clientApi.me(), (error: unknown) => error instanceof ApiError && error.kind === "network");
+    responseFactory = () => new Response(null, { status: 204 });
+    assert.equal(await clientApi.logout(), undefined);
+    responseFactory = () => new Response("proxies: []\n", { headers: { "Content-Type": "application/yaml; charset=utf-8" } });
+    assert.equal(await clientApi.exportConfig({} as MihomoConfig, "mihomo"), "proxies: []\n");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("浏览器跨站修改请求会被 Origin 防护拒绝", async () => {
@@ -210,4 +290,18 @@ test("节点 TCP 检测阻止探测本机和局域网", async () => {
   const response = await api(`/api/managed-nodes/${node.id}/tcp-ping`, { method: "POST" });
   assert.equal(response.status, 422);
   assert.match((await response.json() as { error: string }).error, /本机或局域网/);
+});
+
+test("入口 IP 归属地查询失败时不改节点名称或更新时间", async () => {
+  const created = await api("/api/managed-nodes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "归属地失败节点", type: "vless", server: "127.0.0.1", port: 443, uuid: "country-failure", extra: {} }),
+  });
+  assert.equal(created.status, 201);
+  const node = await created.json() as { id: string; name: string; updatedAt: string };
+  const response = await api(`/api/managed-nodes/${node.id}/country-flag`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ basis: "entry" }) });
+  assert.equal(response.status, 422);
+  const nodes = await (await api("/api/managed-nodes")).json() as { id: string; name: string; updatedAt: string }[];
+  assert.deepEqual(nodes.find((item) => item.id === node.id), node);
 });

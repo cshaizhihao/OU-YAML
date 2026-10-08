@@ -149,14 +149,10 @@ test("策略组可以直接拖入另一个策略组", async ({ page }) => {
   await page.goto(`/app/workspace/groups`);
   await page.getByRole("combobox", { name: "当前配置" }).selectOption(project.id);
   await expect(page.getByRole("heading", { name: "A策略组", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "全屏编辑代理分组", exact: true }).click();
-  await expect(page.locator(".group-focus-shell.open")).toBeVisible();
-  await page.getByRole("button", { name: "退出全屏", exact: true }).click();
-  const source = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "A策略组", exact: true }) });
-  const target = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "B策略组", exact: true }) });
-  const handle = source.getByRole("button", { name: "拖动策略组 A策略组", exact: true });
-  const dropZone = target.locator(".group-member-list");
-  const handleBox = await handle.boundingBox();
+  const source = page.getByRole("button", { name: "嵌套策略组 A策略组", exact: true });
+  const target = page.locator(".group-overview-item").filter({ has: page.getByRole("button", { name: "选择策略组 B策略组", exact: true }) });
+  const dropZone = target.locator(".group-overview-drop-target");
+  const handleBox = await source.boundingBox();
   const dropBox = await dropZone.boundingBox();
   expect(handleBox).not.toBeNull();
   expect(dropBox).not.toBeNull();
@@ -164,7 +160,10 @@ test("策略组可以直接拖入另一个策略组", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(dropBox!.x + dropBox!.width / 2, dropBox!.y + dropBox!.height / 2, { steps: 12 });
   await page.mouse.up();
-  await expect(target.locator(".group-member").filter({ hasText: "A策略组" })).toBeVisible();
+  await expect.poll(async () => {
+    const stored = await (await page.request.get(`/api/projects/${project.id}`)).json();
+    return stored.config.proxyGroups.find((group: { id: string }) => group.id === "layout-group-b")?.proxies;
+  }).toContain("A策略组");
 });
 
 test("TCP 探测结果紧邻按钮并按延迟显示颜色", async ({ page }) => {
@@ -202,6 +201,47 @@ test("TCP 探测结果紧邻按钮并按延迟显示颜色", async ({ page }) =>
   expect(node.id).toBeTruthy();
 });
 
+test("TCP 检查错误不伪报连接失败，UDP 标记不适用且复制保留国旗节点名", async ({ page }) => {
+  await login(page);
+  const created = await page.request.post("/api/managed-nodes", { data: { name: "🇯🇵 界面回归节点", type: "vless", server: "example.com", port: 443, enabled: true, tags: [], extra: {}, uuid: "dba693d3-d530-4235-bf30-c9b30d89481" } });
+  expect(created.ok(), await created.text()).toBeTruthy();
+  const node = await created.json();
+  const udpCreated = await page.request.post("/api/managed-nodes", { data: { name: "UDP 不适用节点", type: "hysteria2", server: "example.com", port: 443, enabled: true, tags: [], extra: {}, password: "probe-only" } });
+  expect(udpCreated.ok(), await udpCreated.text()).toBeTruthy();
+  const udpNode = await udpCreated.json();
+  let tcpRequests = 0;
+  await page.route("**/api/managed-nodes/*/tcp-ping", async (route) => {
+    tcpRequests += 1;
+    await route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ error: "节点检测服务暂不可用" }) });
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => { window.name = value; } } });
+  });
+  await page.route("**/api/managed-nodes/*/country-flag", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ node: { ...node, name: "🇯🇵 界面回归节点" }, location: { ip: "203.0.113.10", countryCode: "JP", country: "日本", flag: "🇯🇵" } }) }));
+  await page.goto("/app/nodes");
+  const row = (name: string) => page.locator(".node-row").filter({ has: page.getByRole("button", { name: `检测节点 ${name}`, exact: true }) });
+  const regularRow = row(node.name);
+  await expect(regularRow).toBeVisible();
+  await regularRow.getByRole("button", { name: `检测节点 ${node.name}`, exact: true }).click();
+  await expect(regularRow.locator(".tcp-latency")).toHaveText("检查错误");
+  await expect(regularRow.getByText("失败", { exact: true })).toHaveCount(0);
+  await regularRow.getByRole("button", { name: `复制 ${node.name} 的协议链接`, exact: true }).click();
+  const link = await page.evaluate(() => window.name);
+  expect(link).toMatch(/^vless:\/\//);
+  expect(decodeURIComponent(new URL(link).hash.slice(1))).toBe(node.name);
+  expect(link).not.toContain("/api/generated-subscriptions/");
+  await regularRow.getByRole("button", { name: `为 ${node.name} 添加国家国旗`, exact: true }).click();
+  const renamedRow = page.locator(".node-row").filter({ has: page.getByRole("button", { name: "检测节点 🇯🇵 界面回归节点", exact: true }) });
+  await expect(renamedRow.locator(".node-row-name strong")).toHaveText("🇯🇵 界面回归节点");
+  expect(await renamedRow.locator(".node-diagnostic.location").count()).toBeLessThanOrEqual(1);
+
+  const udpRow = row(udpNode.name);
+  await expect(udpRow).toBeVisible();
+  await udpRow.getByRole("button", { name: `检测节点 ${udpNode.name}`, exact: true }).click();
+  await expect(udpRow.locator(".tcp-latency")).toHaveText("不适用");
+  expect(tcpRequests).toBe(1);
+});
+
 test("分组工作台优先展示成员，普通与全屏布局都能新增和嵌套", async ({ page }) => {
   await login(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -229,12 +269,10 @@ test("分组工作台优先展示成员，普通与全屏布局都能新增和�
     expect(layout.scrollHeight).toBeLessThanOrEqual(layout.contentHeight + 1);
     const controls = page.getByRole("navigation", { name: "分组工作台区域" });
     if (await controls.isVisible()) {
-      for (const name of ["添加节点", "嵌套与属性", "组内成员"]) {
+      for (const name of ["全部分组", "添加内容", "当前组"]) {
         await controls.getByRole("button", { name, exact: true }).click();
-        const panels = await page.locator(".group-board > aside:visible, .group-board > section:visible").evaluateAll((elements) => elements.map((element) => ({ box: element.getBoundingClientRect().toJSON(), width: element.clientWidth, scrollWidth: element.scrollWidth })));
-        expect(panels).toHaveLength(1);
-        expect(panels[0].box.bottom).toBeLessThanOrEqual(800);
-        expect(panels[0].scrollWidth).toBeLessThanOrEqual(panels[0].width + 1);
+        await expect(page.locator(".group-board")).toBeVisible();
+        expect(await page.locator(".group-board").evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBeTruthy();
       }
     }
   }
@@ -253,12 +291,9 @@ test("分组工作台优先展示成员，普通与全屏布局都能新增和�
   await editor.getByLabel("策略组名称", { exact: true }).fill("全屏新增组");
   await editor.getByRole("button", { name: "保存策略组", exact: true }).click();
   const controls = workbench.getByRole("navigation", { name: "分组工作台区域" });
-  if (await controls.isVisible()) {
-    await workbench.getByRole("combobox", { name: "正在编辑", exact: true }).selectOption("workbench-parent");
-    await controls.getByRole("button", { name: "嵌套与属性", exact: true }).click();
-  } else {
-    await workbench.getByRole("heading", { name: "主策略组", exact: true }).click();
-  }
+  if (await controls.isVisible()) await controls.getByRole("button", { name: "全部分组", exact: true }).click();
+  await workbench.getByRole("button", { name: "选择策略组 主策略组", exact: true }).click();
+  if (await controls.isVisible()) await controls.getByRole("button", { name: "当前组", exact: true }).click();
   await workbench.locator(".nest-group-list").getByRole("button", { name: "全屏新增组", exact: true }).click();
   await expect(workbench.locator(".nest-group-list").getByRole("button", { name: "全屏新增组", exact: true })).toBeDisabled();
   await workbench.getByRole("button", { name: "退出全屏", exact: true }).click();

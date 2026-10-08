@@ -1,6 +1,7 @@
 import dns from "node:dns/promises";
 import net from "node:net";
 import { isPublicAddress } from "./safeFetch";
+export { addCountryFlag } from "../src/shared/nodeNames";
 
 export type ResolvedAddress = { address: string; family: number };
 export type TcpPingResult = {
@@ -98,12 +99,6 @@ export function countryCodeToFlag(countryCode: string) {
   return [...normalized].map((letter) => String.fromCodePoint(0x1f1e6 + letter.charCodeAt(0) - 65)).join("");
 }
 
-export function addCountryFlag(name: string, flag: string) {
-  const cleanName = name.replace(/^(?:[\u{1F1E6}-\u{1F1FF}]{2}[\s·|｜-]*)+/u, "").trim() || "节点";
-  const prefix = `${flag} `;
-  return `${prefix}${cleanName.slice(0, Math.max(1, 160 - prefix.length))}`;
-}
-
 async function fetchCountry(address: string, fetcher: Fetcher) {
   const services = [
     {
@@ -134,6 +129,7 @@ async function fetchCountry(address: string, fetcher: Fetcher) {
 
 export async function lookupNodeCountry(server: string, options: { lookup?: Lookup; fetcher?: Fetcher } = {}): Promise<CountryLookupResult> {
   const addresses = await (options.lookup || defaultLookup)(normalizeHostname(server));
+  if (!addresses.length) throw new Error("节点服务器没有解析到 IP 地址");
   const ip = addresses[0].address;
   const cached = !options.lookup && !options.fetcher ? countryCache.get(ip) : undefined;
   if (cached && cached.expiresAt > Date.now()) return cached.value;

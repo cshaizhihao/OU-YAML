@@ -62,10 +62,12 @@ export async function checkForUpdate(channel: UpdateChannel = "stable"): Promise
     const results = await Promise.all([
       requestJson(`https://api.github.com/repos/${repo}/releases/latest`).catch(() => null),
       requestJson(`https://api.github.com/repos/${repo}/commits/main`),
-      requestJson(`https://raw.githubusercontent.com/${repo}/main/package.json`),
     ]);
     [release, commit] = results;
-    version = String(results[2]?.version || "");
+    const previewCommit = normalizeCommit(commit?.sha);
+    if (!previewCommit || previewCommit.length !== 40) throw new Error("无法确认目标版本及构建提交，请重试");
+    const manifest = await requestJson(`https://raw.githubusercontent.com/${repo}/${previewCommit}/package.json`);
+    version = String(manifest?.version || "");
   }
   const latestCommit = normalizeCommit(commit?.sha);
   if (!/^\d+\.\d+\.\d+$/.test(version) || !latestCommit || latestCommit.length !== 40) throw new Error("无法确认目标版本及构建提交，请重试");

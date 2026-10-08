@@ -129,6 +129,7 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
   const [modalOpen, setModalOpen] = useState(false);
   const activeGuide = controller.active ? findGuide(controller.active.guideId) : undefined;
   const step = activeGuide && controller.active ? activeGuide.steps[controller.active.stepIndex] : undefined;
+  const pause = controller.pause;
 
   useEffect(() => {
     if (!step) return;
@@ -150,9 +151,22 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
   }, [step, modalOpen]);
 
   useEffect(() => {
-    if (!step || step.view === currentView) return;
-    navigate(step.view);
-  }, [currentView, navigate, step]);
+    if (!step) return;
+    const beforeNavigate = (event: Event) => {
+      queueMicrotask(() => { if (event.defaultPrevented) pause(); });
+    };
+    window.addEventListener("ou-yaml:before-navigate", beforeNavigate);
+    return () => window.removeEventListener("ou-yaml:before-navigate", beforeNavigate);
+  }, [pause, step]);
+
+  useEffect(() => {
+    if (!step) return;
+    if (step.view === "subscription" && !new URLSearchParams(window.location.search).get("id")) {
+      controller.start("website");
+      return;
+    }
+    if (step.view !== currentView) navigate(step.view);
+  }, [currentView, navigate, step, controller.start]);
 
   useEffect(() => {
     setTargetRect(null);
@@ -167,19 +181,19 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
     if (step.target === guideTargets.homeSubscriptions) window.dispatchEvent(new Event("ou-yaml:home-overview"));
     const readRect = () => {
       if (cancelled) return;
-      if (!target || !document.documentElement.contains(target)) return setTargetRect(null);
+      if (!target || !document.documentElement.contains(target) || !target.getClientRects().length) return setTargetRect(null);
       const rect = target.getBoundingClientRect();
       setTargetRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
     };
     const find = () => {
       if (cancelled) return;
       target = document.querySelector<HTMLElement>(`[data-guide-id="${step.target}"]`);
-      if (!target && attempts < 25) {
+      if ((!target || !target.getClientRects().length) && attempts < 25) {
         attempts += 1;
         timer = window.setTimeout(find, 100);
         return;
       }
-      if (!target) return setTargetRect(null);
+      if (!target || !target.getClientRects().length) return setTargetRect(null);
       target.scrollIntoView({ block: "center", inline: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       timer = window.setTimeout(readRect, 280);
       readRect();
@@ -205,10 +219,12 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
   useEffect(() => {
     if (!step) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (modalOpen || (event.target as HTMLElement)?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (event.defaultPrevented || modalOpen || (event.target as HTMLElement)?.closest("input, textarea, select, [contenteditable='true']")) return;
       if (event.key === "Escape") controller.pause();
-      if (event.key === "ArrowRight") controller.next();
-      if (event.key === "ArrowLeft") controller.previous();
+      if (popoverRef.current?.contains(event.target as Node)) {
+        if (event.key === "ArrowRight") { event.preventDefault(); controller.next(); }
+        if (event.key === "ArrowLeft") { event.preventDefault(); controller.previous(); }
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -250,21 +266,20 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
 }
 
 function WelcomeGuide({ controller, username }: { controller: GuideController; username: string }) {
-  if (!controller.welcomeOpen) return null;
+  const guide = findGuide("quickstart");
+  if (!controller.welcomeOpen || !guide) return null;
   return <div className="guide-welcome-overlay" role="presentation">
     <section className="guide-welcome" role="dialog" aria-modal="true" aria-labelledby="guide-welcome-title">
       <div className="guide-welcome-art"><span><GraduationCap size={29} /></span><i /><i /><i /></div>
       <span className="eyebrow">OU-YAML · 新手模式</span>
       <h1 id="guide-welcome-title">欢迎使用，{username}</h1>
-      <p>不需要会写 YAML。只做三件事：粘贴链接、选择设置、复制订阅地址。</p>
+      <p>第一次使用：导入节点、选择配置并发布。已有订阅：到“我的订阅”编辑，再更新原地址。</p>
       <div className="guide-welcome-features">
-        <span><ListChecks size={18} /><strong>第一步</strong><small>粘贴订阅或节点链接</small></span>
-        <span><BookOpenCheck size={18} /><strong>第二步</strong><small>选择推荐设置并发布</small></span>
-        <span><Clock3 size={18} /><strong>第三步</strong><small>复制地址到客户端</small></span>
+        {guide.steps.map((step, index) => <span key={step.id}><ListChecks size={18} /><strong>第 {index + 1} 步</strong><small>{step.title}</small></span>)}
       </div>
       <div className="guide-welcome-actions">
         <button className="text-button" onClick={controller.skipWelcome}>暂时跳过</button>
-        <button className="primary-button" onClick={() => controller.start("quickstart")}><Play size={17} />开始三步教程</button>
+        <button className="primary-button" onClick={() => controller.start(guide.id)}><Play size={17} />开始三步教程</button>
       </div>
     </section>
   </div>;
@@ -284,13 +299,16 @@ export function GuideTrigger({ controller, className = "" }: { controller: Guide
 }
 
 export function GuideExperience({ controller, username, currentView, navigate }: { controller: GuideController; username: string; currentView: GuideView; navigate: (view: GuideView) => void }) {
-  const visibleGuides = guideRegistry.filter((guide) => ["quickstart", "nodes", "groups", "rules", "publish"].includes(guide.id));
+  const mainGuides = ["quickstart", "website", controller.active?.guideId || controller.resume?.guideId];
+  const visibleGuides = mainGuides.flatMap((id, index) => { const guide = findGuide(id); return guide && mainGuides.indexOf(id) === index ? [guide] : []; });
+  const moreGuides = guideRegistry.filter((guide) => !mainGuides.includes(guide.id));
   return <>
     <WelcomeGuide controller={controller} username={username} />
     <GuidedPopover controller={controller} currentView={currentView} navigate={navigate} />
     <Drawer title="新手教程与帮助" open={controller.centerOpen} onClose={controller.closeCenter}>
-      <div className="guide-library-intro"><span><Compass size={22} /></span><div><strong>从当前进度继续，或学习单项功能</strong><p>教程会自动跳转并高亮对应操作，不会修改你的配置。</p></div></div>
+      <div className="guide-library-intro"><span><Compass size={22} /></span><div><strong>创建新订阅，或编辑已有订阅</strong><p>首次使用请走三步教程；已发布订阅请回到“我的订阅”编辑并更新原地址。</p></div></div>
       <div className="guide-library-list">{visibleGuides.map((guide) => <GuideCard key={guide.id} guide={guide} completed={controller.completed.includes(guide.id)} resume={controller.resume || undefined} onStart={(step) => controller.start(guide.id, step)} />)}</div>
+      <details><summary>更多教程：导入、分组、分流与排障</summary><div className="guide-library-list">{moreGuides.map((guide) => <GuideCard key={guide.id} guide={guide} completed={controller.completed.includes(guide.id)} resume={controller.resume || undefined} onStart={(step) => controller.start(guide.id, step)} />)}</div></details>
       <div className="guide-maintenance-note"><Sparkles size={16} /><span><strong>教程版本 {GUIDE_VERSION}</strong><small>这里只在操作流程变化时提示新教程，日常修复不会重复弹出欢迎页。</small></span></div>
     </Drawer>
   </>;

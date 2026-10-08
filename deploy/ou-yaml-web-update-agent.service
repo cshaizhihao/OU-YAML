@@ -17,4 +17,6 @@ RestrictSUIDSGID=true
 LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ReadWritePaths=@INSTALL_DIR@ /var/log/ou-yaml /run
+Environment=OU_YAML_INSTALL_DIR=@INSTALL_DIR@
+WorkingDirectory=@INSTALL_DIR@
 ExecStart=/bin/bash @INSTALL_DIR@/deploy/ou-yaml-web-update-agent.sh

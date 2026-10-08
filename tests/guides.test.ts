@@ -62,6 +62,22 @@ test("教程和步骤标识唯一且覆盖核心流程", () => {
   for (const guide of guideRegistry) for (const step of guide.steps) assert.ok(targetValues.includes(step.target), `${guide.id}:${step.id}`);
 });
 
+test("主教程保持三步以内并区分新建、已有订阅和分组入口", () => {
+  for (const guide of guideRegistry) assert.ok(guide.steps.length <= 3, `${guide.id} 超过三步`);
+  const quickstart = guideRegistry.find((guide) => guide.id === "quickstart");
+  const website = guideRegistry.find((guide) => guide.id === "website");
+  const groups = guideRegistry.find((guide) => guide.id === "groups");
+  assert.deepEqual(quickstart?.steps.map((step) => step.target), [guideTargets.quickImport, guideTargets.quickConfigure, guideTargets.quickResult]);
+  assert.match(quickstart?.description || "", /导入节点、选择配置并发布/);
+  assert.match(quickstart?.description || "", /已有订阅更新原地址/);
+  assert.equal(website?.steps.at(-1)?.target, guideTargets.subscriptionSave);
+  assert.match(website?.steps[0]?.description || "", /不是新建订阅/);
+  assert.match(website?.steps.at(-1)?.description || "", /原地址不变/);
+  assert.deepEqual(groups?.steps.map((step) => step.target), [guideTargets.groupBoard, guideTargets.groupNodePool, guideTargets.groupCreate]);
+  assert.match(groups?.steps[0]?.description || "", /全部分组.*当前组/);
+  assert.match(groups?.steps[1]?.description || "", /添加到/);
+});
+
 test("每一个教程目标都由页面中的稳定锚点实现", () => {
   for (const [key, filename] of Object.entries(targetOwners)) {
     const source = fs.readFileSync(path.resolve(filename), "utf8");

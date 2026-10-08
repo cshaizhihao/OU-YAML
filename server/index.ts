@@ -48,7 +48,7 @@ app.use(cookieParser());
 
 const publicSubscriptionLimiter = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false });
 const loginLimit = z.coerce.number().int().min(10).max(200).catch(10).parse(process.env.LOGIN_RATE_LIMIT ?? 10);
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: loginLimit, standardHeaders: "draft-8", legacyHeaders: false });
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: loginLimit, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "登录请求过于频繁，请稍后重试" } });
 const importLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "订阅请求过于频繁，请一分钟后重试" } });
 const nodeProbeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 240, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "节点检测请求过于频繁，请稍后再试" } });
 const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(256) });
@@ -821,6 +821,11 @@ const subscriptionTimer = setInterval(() => { void sweepSubscriptions(); void sw
 subscriptionTimer.unref();
 void sweepSubscriptions();
 void sweepNodeSources().then(syncAutoProfiles);
+
+app.use("/api", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.status(404).json({ error: "API 接口不存在，请刷新页面或检查服务端版本与反向代理配置" });
+});
 
 if (isProduction) {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));

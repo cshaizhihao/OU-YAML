@@ -20,6 +20,6 @@ export default defineConfig({
     command: "node dist-server/index.js",
     url: "http://127.0.0.1:18787/api/auth/me",
     reuseExistingServer: false,
-    env: { NODE_ENV: "production", PORT: "18787", DATA_DIR: mkdtempSync(path.join(os.tmpdir(), "ou-e2e-")), ADMIN_USERNAME: "admin", ADMIN_PASSWORD: "ou-yaml-e2e-12345", LOGIN_RATE_LIMIT: "100", COOKIE_SECURE: "false", APP_ORIGIN: "http://127.0.0.1:18787" },
+    env: { NODE_ENV: "production", PORT: "18787", DATA_DIR: mkdtempSync(path.join(os.tmpdir(), "ou-e2e-")), ADMIN_USERNAME: "admin", ADMIN_PASSWORD: "ou-yaml-e2e-12345", LOGIN_RATE_LIMIT: "200", COOKIE_SECURE: "false", APP_ORIGIN: "http://127.0.0.1:18787" },
   },
 });

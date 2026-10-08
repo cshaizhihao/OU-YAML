@@ -9,7 +9,7 @@
     <a href="./CHANGELOG.md">更新记录</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.9.0-A33D57?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/version-2.0.0-A33D57?style=flat-square" alt="version" />
     <img src="https://img.shields.io/badge/UI-V1.0.0-AD8BF2?style=flat-square" alt="UI baseline" />
     <img src="https://img.shields.io/badge/Node.js-22%2B-247B78?style=flat-square" alt="Node.js" />
     <img src="https://img.shields.io/badge/Mihomo-supported-D5962A?style=flat-square" alt="Mihomo" />
@@ -31,7 +31,7 @@ OU-YAML 是一个自托管的代理配置工作台。它把订阅 URL、配置�
 
 无需反复手写 YAML，也无需为每次节点变化重新更换客户端订阅地址。
 
-### ✨ v1.9.0 · 更清晰、更紧凑的工作台
+### ✨ v2.0.0 · 更清晰可靠的编辑与分组工作台
 
 - 💜 紫色 Liquid Glass 工作台：清晰的材质层级、克制的环境光和丝滑微动效。
 - 🧭 导入 → 节点 → 分组 → 规则 → 生成的主流程更明确，新手只需跟随三步向导。
@@ -41,6 +41,10 @@ OU-YAML 是一个自托管的代理配置工作台。它把订阅 URL、配置�
 - 🔁 已生成订阅可自定义名称、再次编辑分组/规则，并保持原订阅地址不变。
 - 📚 中文规则默认只展示摘要，点击「编辑」再展开参数与英文原文；删除前统一确认。
 - 👁️ 提升文字与控件对比度，移动端长规则自动换行；教程不会遮挡订阅发布按钮。
+- 🧭 分组总览始终可发现，明确区分选择组、拖动排序和拖入嵌套；手机支持触摸拖放。
+- 🏳️ 国旗会写入节点真实名称并同步引用，避免只显示装饰图标或重复旗帜。
+- 🛠️ API 错误与非 JSON 响应可诊断，未知 API 不再返回应用 HTML 页面。
+- ♻️ 安装、在线升级和失败回滚加强数据备份与健康检查。
 
 已经发布过？回到「我的订阅」就能复制原链接、查看最近更新与异常；只有需要添加节点或修改配置时才重新进入向导。
 

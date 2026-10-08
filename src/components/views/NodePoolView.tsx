@@ -38,7 +38,7 @@ type NodeDraft = {
 };
 
 type BatchDraft = { addTags: string; removeTags: string; prefix: string; find: string; replace: string };
-type NodeDiagnostic = Partial<TcpPingResult> & { country?: string; countryCode?: string; flag?: string; exitIp?: string; mode?: "tcp" | "proxy"; checkedAt?: string };
+type NodeDiagnostic = Partial<TcpPingResult> & { country?: string; countryCode?: string; countryIp?: string; exitIp?: string; probeStatus?: "result" | "error" | "unsupported"; mode?: "tcp" | "proxy"; checkedAt?: string };
 
 const blank: NodeDraft = { name: "新节点", type: "ss", server: "", port: 443, enabled: true, extra: {}, tags: [] };
 const emptyBatch = (): BatchDraft => ({ addTags: "", removeTags: "", prefix: "", find: "", replace: "" });
@@ -254,15 +254,21 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   }
 
   async function probeNode(node: ManagedNode, announce = false) {
+    if (probeMode === "tcp" && ["hysteria2", "tuic", "wireguard"].includes(node.type)) {
+      const message = "UDP 节点不支持 TCP 端口检测，请使用代理实测";
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], resolvedAddress: null, exitIp: undefined, reachable: undefined, latencyMs: null, error: message, mode: "tcp", probeStatus: "unsupported", checkedAt: new Date().toISOString() } }));
+      if (announce) onMessage(message);
+      return null;
+    }
     setBusy(setProbeBusy, node.id, true);
     try {
       const result = probeMode === "proxy" ? await api.proxyTestManagedNode(node.id) : await api.tcpPingManagedNode(node.id);
-      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], error: undefined, exitIp: undefined, ...result, mode: probeMode, checkedAt: new Date().toISOString() } }));
-      if (announce) onMessage(result.reachable ? `${node.name} ${probeMode === "proxy" ? "代理实测" : "TCP 连接"}成功，延迟 ${result.latencyMs}ms` : `${node.name} 无法连接：${result.error || "TCP 连接失败"}`);
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], error: undefined, exitIp: undefined, ...result, mode: probeMode, probeStatus: "result", checkedAt: new Date().toISOString() } }));
+      if (announce) onMessage(result.reachable ? `${node.name} ${probeMode === "proxy" ? "代理实测" : "TCP 连接"}成功，延迟 ${result.latencyMs}ms` : `${node.name} 无法连接：${result.error || (probeMode === "proxy" ? "代理实测失败" : "TCP 连接失败")}`);
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : "检测失败";
-      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], exitIp: undefined, reachable: false, latencyMs: null, error: message, mode: probeMode, checkedAt: new Date().toISOString() } }));
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], resolvedAddress: null, exitIp: undefined, reachable: undefined, latencyMs: null, error: message, mode: probeMode, probeStatus: "error", checkedAt: new Date().toISOString() } }));
       if (announce) onMessage(message);
       return null;
     } finally {
@@ -273,12 +279,16 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   async function probeSelectedNodes() {
     const targets = selectedNodes.slice(0, 100);
     if (!targets.length) return;
+    const unsupported = probeMode === "tcp" ? targets.filter((node) => ["hysteria2", "tuic", "wireguard"].includes(node.type)) : [];
     let reachable = 0;
+    let completed = 0;
     await runLimited(targets, probeMode === "proxy" ? 2 : 4, async (node) => {
       const result = await probeNode(node, false);
+      if (result) completed += 1;
       if (result?.reachable) reachable += 1;
     });
-    onMessage(`节点检测完成：${reachable}/${targets.length} 个节点可连接${selectedNodes.length > 100 ? "，单次最多检测 100 个" : ""}`);
+    const errors = targets.length - completed - unsupported.length;
+    onMessage(`节点检测完成：${completed ? `${reachable}/${completed} 个可连接` : "无可用检测结果"}${errors ? `，${errors} 个检查错误` : ""}${unsupported.length ? `，${unsupported.length} 个不适用` : ""}${selectedNodes.length > 100 ? "，单次最多检测 100 个" : ""}`);
   }
 
   async function applyCountryFlag(node: ManagedNode, announce = true) {
@@ -286,7 +296,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
     try {
       const result = await api.applyManagedNodeCountryFlag(node.id, flagBasis);
       setNodes((current) => current.map((item) => item.id === node.id ? result.node : item));
-      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], resolvedAddress: result.location.ip, country: result.location.country, countryCode: result.location.countryCode, flag: result.location.flag } }));
+      setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], countryIp: result.location.ip, country: result.location.country, countryCode: result.location.countryCode } }));
       if (announce) {
         await onProjectReload();
         onMessage(`已根据${flagBasis === "exit" ? "代理出口" : "服务器入口"} IP ${result.location.ip} 添加 ${result.location.country || result.location.countryCode} 国旗（替换原国旗，不重复叠加）`);
@@ -516,12 +526,12 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: `node:${node.id}`, data: { kind: "managed-node", nodeId: node.id } });
   return <div ref={setNodeRef} className={`node-row${isDragging ? " dragging" : ""}${node.enabled ? "" : " is-disabled"}`} style={{ transform: CSS.Transform.toString(transform), transition }} role="row">
     <span className="node-row-check"><button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动节点 ${node.name}`}><GripVertical size={16} /></button><input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} aria-label={`选择 ${node.name}`} /></span>
-    <span className="node-row-name"><span className="entity-icon"><Server size={16} /></span><span className="node-name-stack"><strong title={node.name}>{node.name}</strong>{inProject && <small><CheckCircle2 size={12} />当前项目</small>}{diagnostic && (diagnostic.exitIp || diagnostic.country) && <small className="node-diagnostic location" title={diagnostic.resolvedAddress || undefined}><MapPin size={11} />{diagnostic.exitIp ? `出口 ${diagnostic.exitIp}` : `${diagnostic.flag || ""} ${diagnostic.country || ""}`}</small>}{node.note && <small title={node.note}>{node.note}</small>}</span></span>
+    <span className="node-row-name"><span className="entity-icon"><Server size={16} /></span><span className="node-name-stack"><strong title={node.name}>{node.name}</strong>{inProject && <small><CheckCircle2 size={12} />当前项目</small>}{diagnostic && (diagnostic.exitIp || diagnostic.country) && <small className="node-diagnostic location" title={diagnostic.countryIp || diagnostic.resolvedAddress || undefined}><MapPin size={11} />{diagnostic.country ? `${diagnostic.country}${diagnostic.countryIp ? ` · ${diagnostic.countryIp}` : ""}` : `出口 ${diagnostic.exitIp}`}</small>}{node.note && <small title={node.note}>{node.note}</small>}</span></span>
     <span className="node-row-type"><span className="type-badge">{node.type.toUpperCase()}</span></span>
     <span className="node-row-server mono" title={`${node.server}:${node.port}`}>{node.server}:{node.port}</span>
     <span className="node-row-source" title={sourceName || "手动添加"}>{sourceName || "手动添加"}</span>
     <span className="node-row-tags" title={node.tags.join("、")}>{node.tags.length ? node.tags.map((tag) => <b key={tag}>{tag}</b>) : "-"}</span>
     <span className="node-row-status"><button className={node.enabled ? "status-toggle active" : "status-toggle"} onClick={onToggle}>{node.enabled ? <CheckCircle2 size={14} /> : <Ban size={14} />}{node.enabled ? "已启用" : "已停用"}</button></span>
-    <span className="node-row-actions" role="group" aria-label={`${node.name} 的节点操作`}><span className="node-probe-cluster"><button className="secondary-button compact-button diagnostic-action" disabled={probeBusy} onClick={onProbe} title="运行上方选择的连通性检查，结果显示在按钮旁" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}<span className="node-action-label">测速</span></button>{!probeBusy && diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined && <span className={`tcp-latency ${latencyLevel(diagnostic.latencyMs)}`} role="status" title={`${diagnostic.mode === "proxy" ? "代理实测" : "TCP 端口"} · ${diagnostic.checkedAt ? new Date(diagnostic.checkedAt).toLocaleTimeString("zh-CN") : ""}`}>{diagnostic.latencyMs}ms</span>}{!probeBusy && diagnostic?.reachable === false && <span className="tcp-latency bad" role="status" aria-label={diagnostic.error || "连接失败"} title={diagnostic.error || "连接失败"}><CircleX size={13} />失败</span>}</span><button className="secondary-button compact-button diagnostic-action flag-action" disabled={flagBusy} onClick={onFlag} title="按上方选择的 IP 依据给节点名称添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={15} /> : <Flag size={15} />}<span className="node-action-label">国旗</span></button><button className="secondary-button compact-button node-copy-button copy-action" onClick={onCopyLink} aria-label={`复制 ${node.name} 的协议链接`} title={`复制此 ${node.type.toUpperCase()} 节点的协议链接`}><Copy size={15} /><span className="node-copy-label">复制节点链接</span></button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}><span className="node-more-label">更多</span><span className="node-more-dots" aria-hidden="true">•••</span></button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`} title="编辑节点"><Pencil size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`} title="删除节点"><Trash2 size={16} /></button></span></span>
+    <span className="node-row-actions" role="group" aria-label={`${node.name} 的节点操作`}><span className="node-probe-cluster"><button className="secondary-button compact-button diagnostic-action" disabled={probeBusy} onClick={onProbe} title="运行上方选择的连通性检查，结果显示在按钮旁" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}<span className="node-action-label">测速</span></button>{!probeBusy && diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined && <span className={`tcp-latency ${latencyLevel(diagnostic.latencyMs)}`} role="status" title={`${diagnostic.mode === "proxy" ? "代理实测" : "TCP 端口"} · ${diagnostic.checkedAt ? new Date(diagnostic.checkedAt).toLocaleTimeString("zh-CN") : ""}`}>{diagnostic.latencyMs}ms</span>}{!probeBusy && diagnostic?.reachable === false && diagnostic.probeStatus === "result" && <span className="tcp-latency bad" role="status" aria-label={diagnostic.error || "连接失败"} title={diagnostic.error || "连接失败"}><CircleX size={13} />失败</span>}{!probeBusy && diagnostic?.probeStatus === "unsupported" && <span className="tcp-latency" role="status" title={diagnostic.error}>不适用</span>}{!probeBusy && diagnostic?.probeStatus === "error" && <span className="tcp-latency" role="status" title={diagnostic.error}>检查错误</span>}</span><button className="secondary-button compact-button diagnostic-action flag-action" disabled={flagBusy} onClick={onFlag} title="按上方选择的 IP 依据给节点名称添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={15} /> : <Flag size={15} />}<span className="node-action-label">国旗</span></button><button className="secondary-button compact-button node-copy-button copy-action" onClick={onCopyLink} aria-label={`复制 ${node.name} 的协议链接`} title={`复制此 ${node.type.toUpperCase()} 节点的协议链接`}><Copy size={15} /><span className="node-copy-label">复制节点链接</span></button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}><span className="node-more-label">更多</span><span className="node-more-dots" aria-hidden="true">•••</span></button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`} title="编辑节点"><Pencil size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`} title="删除节点"><Trash2 size={16} /></button></span></span>
   </div>;
 }

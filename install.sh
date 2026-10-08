@@ -32,9 +32,9 @@ warn() { say "${c_yellow}⚠${c_reset} $*"; }
 fail() { say "${c_red}✕${c_reset} $*" >&2; exit 1; }
 read_input() {
   if [ "$INPUT_FD" -eq 3 ]; then
-    read -r "$@" <&3
+    read -r "$@" <&3 || fail "终端输入已关闭，安装已停止。"
   else
-    read -r "$@"
+    read -r "$@" || fail "终端输入已关闭，安装已停止。"
   fi
 }
 
@@ -80,70 +80,38 @@ NOTICE
 }
 
 detect_reverse_proxy_conflict() {
-  local mode="${1:-domain}" app_port="${2:-}" found=() conflicts=() listeners=() service binary port_filter
-  local has_port_conflict=0
-  for service in nginx nginx.service apache2 httpd caddy traefik haproxy; do
-    if [[ "$service" == *.service ]]; then continue; fi
-    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$service" 2>/dev/null; then
-      found+=("运行中的 ${service}")
-      conflicts+=("运行中的 ${service}")
-    fi
-  done
+  local mode="${1:-domain}" app_port="${2:-}" found=() listeners="" binary port_filter output listen_port
   for binary in nginx apache2 httpd caddy traefik haproxy; do
-    if command -v "$binary" >/dev/null 2>&1 && [[ ! " ${found[*]} " == *" ${binary}"* ]]; then found+=("已安装 ${binary}"); fi
+    if command -v "$binary" >/dev/null 2>&1; then found+=("已安装 ${binary}"); fi
   done
   if [ "$mode" = "domain" ]; then
     port_filter='( sport = :80 or sport = :443 )'
-  elif [[ "$app_port" =~ ^[0-9]+$ ]]; then
-    port_filter="( sport = :${app_port} )"
   else
-    port_filter=''
+    port_filter="( sport = :${app_port} )"
   fi
-  if [ -n "$port_filter" ] && command -v ss >/dev/null 2>&1; then
-    while IFS= read -r listener; do
-      [ -n "$listener" ] && listeners+=("$listener")
-    done < <(ss -ltnH "$port_filter" 2>/dev/null || true)
-  elif [ -n "$port_filter" ] && command -v lsof >/dev/null 2>&1; then
-    local listen_port
-    if [ "$mode" = "domain" ]; then
-      for listen_port in 80 443; do
-        while IFS= read -r listener; do
-          [ -n "$listener" ] && listeners+=("$listener")
-        done < <(lsof -nP -iTCP:"$listen_port" -sTCP:LISTEN 2>/dev/null || true)
-      done
-    else
-      while IFS= read -r listener; do
-        [ -n "$listener" ] && listeners+=("$listener")
-      done < <(lsof -nP -iTCP:"$app_port" -sTCP:LISTEN 2>/dev/null || true)
-    fi
+  command -v ss >/dev/null 2>&1 || { echo "需要 ss 检查端口占用，请先安装 iproute2。" >&2; return 1; }
+  listeners="$(ss -ltnH "$port_filter")" || return 1
+  if [ "$mode" = "domain" ]; then
+    output="$(ss -lunH 'sport = :443')" || return 1
+    listeners+="$output"
   fi
-  if [ "${#listeners[@]}" -gt 0 ]; then
-    has_port_conflict=1
-    if [ "$mode" = "domain" ]; then
-      found+=("80/443 端口已有监听")
-      conflicts+=("80/443 端口已有监听")
-    else
-      found+=("${app_port} 端口已有监听")
-      conflicts+=("${app_port} 端口已有监听")
-    fi
+  if command -v docker >/dev/null 2>&1; then
+    output="$(docker ps --format '{{.Ports}}')" || return 1
+    local ports=("$app_port")
+    if [ "$mode" = "domain" ]; then ports=(80 443); fi
+    for listen_port in "${ports[@]}"; do
+      if printf '%s\n' "$output" | grep -Eq ":${listen_port}->"; then listeners+="$output"; fi
+    done
   fi
   if [ "${#found[@]}" -gt 0 ]; then
-    warn "检测到可能与 OU-YAML 冲突的反向代理或端口占用：${found[*]}"
-    if [ "$mode" = "domain" ]; then
-      warn "域名模式需要 Docker Caddy 使用 80/443 端口。"
-      if [ "${#conflicts[@]}" -gt 0 ] && [ "${OU_YAML_ALLOW_REVERSE_PROXY_CONFLICT:-0}" != "1" ]; then
-        say "请先停止已有反代，或确认它们不占用 80/443 后重新运行。"
-        say "如已确认风险，可设置 OU_YAML_ALLOW_REVERSE_PROXY_CONFLICT=1 强制继续。"
-        return 1
-      fi
-      if [ "${#conflicts[@]}" -gt 0 ]; then warn "已设置强制继续，将由用户自行处理反代冲突。"; else warn "检测到相关程序但当前未发现活动冲突，继续安装。"; fi
-    elif [ "$has_port_conflict" -eq 1 ]; then
-      say "IP + 端口模式需要使用未被占用的 ${app_port} 端口。"
-      return 1
-    else
-      warn "当前为 IP + 端口模式，已有反代只要不占用 ${app_port} 通常可以共存。"
-    fi
+    warn "检测到反向代理：${found[*]}。仅在所需端口空闲时继续。"
   fi
+  if [ -n "$listeners" ]; then
+    warn "所需端口已被占用，已停止安装。现有服务不会被停止。"
+    printf '%s\n' "$listeners" >&2
+    return 1
+  fi
+  return 0
 }
 
 ensure_dependencies() {
@@ -161,7 +129,7 @@ ensure_dependencies() {
     curl -fsSL https://get.docker.com | sh
   fi
   docker compose version >/dev/null 2>&1 || fail "需要 Docker Compose v2，请先安装或升级 Docker。"
-  systemctl enable --now docker >/dev/null 2>&1 || true
+  docker info >/dev/null 2>&1 || fail "Docker 服务不可用，请启动 Docker 后重试。"
 }
 
 prepare_repository() {
@@ -182,6 +150,7 @@ prepare_repository() {
   source "${INSTALL_DIR}/deploy/release.sh"
   select_update_target "${OU_YAML_UPDATE_CHANNEL:-stable}" || fail "无法确认安装版本，请检查 GitHub 连通性或稍后重试。"
   git checkout --detach "${UPDATE_TARGET}"
+  source "${INSTALL_DIR}/deploy/release.sh"
 }
 
 write_env() {
@@ -227,13 +196,7 @@ write_env() {
 }
 
 install_ip_mode() {
-  local port
-  port="$(ask 'OU-YAML 访问端口' "$DEFAULT_PORT")"
-  [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || fail "端口必须是 1-65535 之间的数字。"
-  if command -v ss >/dev/null 2>&1 && ss -ltnH "sport = :${port}" 2>/dev/null | grep -q .; then
-    fail "端口 ${port} 已被其他程序占用，请更换端口后重试。"
-  fi
-  detect_reverse_proxy_conflict ip "$port" || fail "检测到端口冲突，已停止安装。"
+  local port="$1"
   write_env ip "$port"
   install -d -m 0750 -o root -g 1001 /var/log/ou-yaml
   cd "${INSTALL_DIR}"
@@ -251,16 +214,16 @@ install_web_update_agent() {
   step "正在启用网页端一键更新代理..."
   sed "s&@INSTALL_DIR@&${INSTALL_DIR}&g" "${INSTALL_DIR}/deploy/ou-yaml-web-update-agent.service" > /etc/systemd/system/ou-yaml-web-update-agent.service
   install -m 0644 "${INSTALL_DIR}/deploy/ou-yaml-web-update-agent.timer" /etc/systemd/system/ou-yaml-web-update-agent.timer
-  touch "${INSTALL_DIR}/data/web-update-agent.enabled"
-  chown 1001:1001 "${INSTALL_DIR}/data/web-update-agent.enabled" 2>/dev/null || true
   systemctl daemon-reload
   systemctl enable --now ou-yaml-web-update-agent.timer
+  touch "${INSTALL_DIR}/data/web-update-agent.enabled"
+  chown 1001:1001 "${INSTALL_DIR}/data/web-update-agent.enabled" 2>/dev/null || true
 }
 
-install_domain_mode() {
-  local domain cf_mode
+configure_domain_mode() {
+  local cf_mode
   domain="$(ask '请输入已完成 DNS 解析的域名')"
-  [[ "$domain" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || fail "域名格式看起来不正确。"
+  [ "${#domain}" -le 253 ] && [[ "$domain" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]] || fail "域名格式看起来不正确。"
   say ""
   say "Cloudflare 接入方式："
   say "  1. 不开启小黄云（DNS only）"
@@ -278,6 +241,10 @@ install_domain_mode() {
     *) fail "Cloudflare 模式选择无效。";;
   esac
   detect_reverse_proxy_conflict || fail "检测到反代冲突，已停止安装。"
+}
+
+install_domain_mode() {
+  local domain="$1"
   write_env domain "$DEFAULT_PORT" "$domain"
   install -d -m 0750 -o root -g 1001 /var/log/ou-yaml
   cd "${INSTALL_DIR}"
@@ -287,21 +254,61 @@ install_domain_mode() {
   say "访问地址：${c_green}https://${domain}${c_reset}"
 }
 
+redeploy_existing_install() {
+  cd "${INSTALL_DIR}"
+  git diff --quiet && git diff --cached --quiet || fail "安装目录存在本地修改，请先保留修改后再部署。"
+  export OU_YAML_BUILD_COMMIT
+  OU_YAML_BUILD_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse HEAD)"
+  source "${INSTALL_DIR}/deploy/release.sh"
+  if grep -q '^DOMAIN=.' "${INSTALL_DIR}/.env"; then
+    deploy_service -f docker-compose.yml -f docker-compose.caddy.yml
+  else
+    deploy_service -f docker-compose.yml -f docker-compose.ip.yml
+  fi
+  local health
+  health="$(docker inspect -f '{{.State.Health.Status}}' ou-yaml 2>/dev/null || true)"
+  [ "$health" = healthy ] || fail "重新部署后服务仍未通过健康检查，请检查 Docker 日志。"
+}
+
 run_install() {
   [[ "${INSTALL_DIR}" =~ ^/[A-Za-z0-9._/-]+$ ]] || fail "安装目录需为不含空格或特殊字符的绝对路径。"
-  if [ -f "${INSTALL_DIR}/.env" ] && [ -d "${INSTALL_DIR}/.git" ]; then
+  [ ! -L "${INSTALL_DIR}" ] && [ ! -L "${INSTALL_DIR}/data" ] && [ ! -L "${INSTALL_DIR}/.env" ] || fail "安装目录、数据目录和 .env 不能是符号链接。"
+  if [ -d "${INSTALL_DIR}/.git" ]; then
+    ensure_dependencies
+    if [ ! -f "${INSTALL_DIR}/.env" ]; then
+      warn "发现未完成的安装，将保留已有数据并继续安装。"
+      run_fresh_install
+      return
+    fi
+    if [ "$(docker inspect -f '{{.State.Health.Status}}' ou-yaml 2>/dev/null || true)" != healthy ]; then
+      warn "已有安装未通过健康检查，正在使用原配置重试部署。"
+      redeploy_existing_install
+    fi
     if [ -f "${INSTALL_DIR}/deploy/ou-yaml-web-update-agent.service" ]; then install_web_update_agent; fi
     say "检测到已有安装。请在网页“系统设置 → 网页更新”升级，原访问方式和数据会保留。"
     say "命令行备用：sudo ${INSTALL_DIR}/update.sh"
     return
   fi
+  run_fresh_install
+}
+
+run_fresh_install() {
   art
   say "安装方式："
   say "  1. IP + 端口访问"
   say "  2. 域名访问（Caddy HTTPS）"
-  local mode
+  local mode port domain
   mode="$(ask '请选择 1 或 2' '1')"
   case "$mode" in 1|2) ;; *) fail "安装方式选择无效。";; esac
+  case "$mode" in
+    1)
+      port="$(ask 'OU-YAML 访问端口' "$DEFAULT_PORT")"
+      [[ "$port" =~ ^[0-9]{1,5}$ ]] && [ "$((10#$port))" -ge 1 ] && [ "$((10#$port))" -le 65535 ] || fail "端口必须是 1-65535 之间的数字。"
+      port="$((10#$port))"
+      detect_reverse_proxy_conflict ip "$port" || fail "检测到端口冲突或无法检查端口，已停止安装。"
+      ;;
+    2) configure_domain_mode;;
+  esac
   ensure_dependencies
   prepare_repository
   export OU_YAML_BUILD_COMMIT
@@ -310,8 +317,8 @@ run_install() {
   chown -R 1001:1001 "${INSTALL_DIR}/data" 2>/dev/null || true
   chmod 0700 "${INSTALL_DIR}/data"
   case "$mode" in
-    1) install_ip_mode;;
-    2) install_domain_mode;;
+    1) install_ip_mode "$port";;
+    2) install_domain_mode "$domain";;
     *) fail "安装方式选择无效。";;
   esac
   install_web_update_agent

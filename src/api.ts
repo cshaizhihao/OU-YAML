@@ -2,6 +2,7 @@ import type { NodeSource, ManagedNode, GenerationProfile, GeneratedSubscription 
 import type { QuickPublishInput, QuickPublishPreview } from "./shared/publication";
 import type { SubscriptionEditInput, SubscriptionEditorState } from "./shared/subscriptionEditor";
 import type { KernelInfo, KernelValidationResult, MihomoConfig, Project, ProjectSummary, ProjectVersion, SessionUser, Subscription, TargetFormat, UserAccount, ValidationIssue } from "./shared/types";
+import { z } from "zod";
 
 
 export type UpdateInfo = { currentVersion: string; latestVersion: string | null; currentCommit: string | null; latestCommit: string | null; updateKind: "version" | "build" | null; hasUpdate: boolean; releaseUrl: string | null; releaseNotes: string; publishedAt: string | null; agentAvailable: boolean };
@@ -11,20 +12,73 @@ export type ProxyProbeResult = TcpPingResult & { exitIp: string; countryCode?: s
 export type NodeCountryResult = { node: ManagedNode; location: { ip: string; countryCode: string; country: string; flag: string } };
 export type ImportPreview = { config?: MihomoConfig; nodes: MihomoConfig["proxies"]; format: TargetFormat | "links"; warnings: string[]; issues: ValidationIssue[]; requestProfile?: string };
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    headers: options?.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...options?.headers },
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({ error: "请求失败" }));
-    const error = new Error(body.error || "请求失败") as Error & { issues?: ValidationIssue[]; status?: number };
-    error.issues = body.issues;
-    error.status = response.status;
-    throw error;
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number, public readonly url: string, public readonly kind: "http" | "network" | "invalid-response", public readonly issues?: ValidationIssue[]) {
+    super(message);
+    this.name = "ApiError";
   }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+}
+
+const validationIssuesSchema = z.array(z.object({
+  level: z.enum(["error", "warning"]), scope: z.enum(["config", "proxy", "group", "rule"]), id: z.string().optional(), message: z.string(),
+}));
+const subscriptionEditorSchema = z.object({
+  subscription: z.object({ id: z.string().min(1), name: z.string() }).passthrough(),
+  config: z.object({
+    proxies: z.array(z.object({ id: z.string() }).passthrough()),
+    proxyGroups: z.array(z.unknown()),
+    rules: z.array(z.unknown()),
+  }).passthrough(),
+  revision: z.string().min(1),
+}).passthrough();
+const managedNodesSchema = z.array(z.object({
+  id: z.string(), name: z.string(), type: z.string(), server: z.string(), port: z.number(), enabled: z.boolean(),
+}).passthrough());
+
+function isJson(response: Response) {
+  const contentType = response.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase() || "";
+  return contentType === "application/json" || /^application\/[\w.+-]+\+json$/.test(contentType);
+}
+
+function invalidResponse(response: Response, url: string, detail: string) {
+  return new ApiError(`接口返回${detail}（HTTP ${response.status}）。请刷新页面重试；若持续出现，请检查服务端与反向代理配置。`, response.status, url, "invalid-response");
+}
+
+async function fetchResponse(url: string, options?: RequestInit) {
+  const headers = new Headers(options?.headers);
+  if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  let response: Response;
+  try { response = await fetch(url, { ...options, headers }); }
+  catch { throw new ApiError("无法连接服务器，请检查网络后重试。", 0, url, "network"); }
+  if (!response.ok) {
+    const body: unknown = isJson(response) ? await response.json().catch(() => undefined) : undefined;
+    const envelope = z.object({ error: z.unknown().optional(), issues: z.unknown().optional() }).safeParse(body);
+    const message = envelope.success && typeof envelope.data.error === "string" && envelope.data.error.trim() ? envelope.data.error : `请求失败（HTTP ${response.status}）。请稍后重试；若持续出现，请检查服务端与反向代理配置。`;
+    const issues = validationIssuesSchema.safeParse(envelope.success ? envelope.data.issues : undefined);
+    throw new ApiError(message, response.status, url, "http", issues.success ? issues.data : undefined);
+  }
+  return response;
+}
+
+function isExportContent(response: Response) {
+  const contentType = response.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase() || "";
+  return isJson(response) || ["application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml", "text/plain"].includes(contentType);
+}
+
+async function request<T>(url: string, options?: RequestInit, schema?: z.ZodType<unknown>): Promise<T> {
+  const response = await fetchResponse(url, options);
+  if (response.status === 204 && !schema) return undefined as T;
+  if (!isJson(response)) throw invalidResponse(response, url, "了非 JSON 内容");
+  let body: unknown;
+  try { body = await response.json(); }
+  catch { throw invalidResponse(response, url, "的 JSON 无法解析"); }
+  if (schema) {
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) throw invalidResponse(response, url, "的数据格式不符合预期");
+    return parsed.data as T;
+  }
+  if (!body || typeof body !== "object") throw invalidResponse(response, url, "的数据格式不符合预期");
+  return body as T;
 }
 
 export const api = {
@@ -48,7 +102,7 @@ export const api = {
   updateNodeSource: (id: string, data: Pick<NodeSource, "name" | "kind" | "format" | "enabled" | "intervalMinutes" | "skipCertVerify"> & { url?: string; userAgent?: string }) => request<NodeSource>(`/api/node-sources/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   refreshNodeSource: (id: string) => request<{ source: NodeSource; nodes: ManagedNode[]; warnings: string[] }>(`/api/node-sources/${id}/refresh`, { method: "POST" }),
   importNodeSource: (id: string, content: string) => request<{ source: NodeSource; nodes: ManagedNode[]; warnings: string[] }>(`/api/node-sources/${id}/import`, { method: "POST", headers: { "Content-Type": "text/plain" }, body: content }),
-  listManagedNodes: (sourceId?: string) => request<ManagedNode[]>(`/api/managed-nodes${sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ""}`),
+  listManagedNodes: (sourceId?: string) => request<ManagedNode[]>(`/api/managed-nodes${sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ""}`, undefined, managedNodesSchema),
   createManagedNode: (data: Partial<ManagedNode> & Pick<ManagedNode, "name" | "type" | "server" | "port">) => request<ManagedNode>("/api/managed-nodes", { method: "POST", body: JSON.stringify(data) }),
   updateManagedNode: (id: string, data: Partial<ManagedNode> & Pick<ManagedNode, "name" | "type" | "server" | "port">) => request<ManagedNode>(`/api/managed-nodes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   reorderManagedNodes: (ids: string[]) => request<ManagedNode[]>("/api/managed-nodes/order", { method: "PUT", body: JSON.stringify({ ids }) }),
@@ -76,8 +130,8 @@ export const api = {
   updateGenerationProfile: (id: string, data: Pick<GenerationProfile, "name" | "targetFormat" | "config"> & { nodeIds?: string[]; sourceIds?: string[]; templateId?: string }) => request<GenerationProfile>(`/api/generation-profiles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteGenerationProfile: (id: string) => request<{ deleted: boolean }>(`/api/generation-profiles/${id}`, { method: "DELETE" }),
   listGeneratedSubscriptions: () => request<GeneratedSubscription[]>("/api/generated-subscriptions"),
-  getSubscriptionEditor: (id: string) => request<SubscriptionEditorState>(`/api/generated-subscriptions/${id}/editor`),
-  saveSubscriptionEditor: (id: string, input: SubscriptionEditInput) => request<SubscriptionEditorState & { kernelChecked: boolean }>(`/api/generated-subscriptions/${id}/editor`, { method: "PUT", body: JSON.stringify(input) }),
+  getSubscriptionEditor: (id: string) => request<SubscriptionEditorState>(`/api/generated-subscriptions/${id}/editor`, undefined, subscriptionEditorSchema.refine((editor) => editor.subscription.id === id)),
+  saveSubscriptionEditor: (id: string, input: SubscriptionEditInput) => request<SubscriptionEditorState & { kernelChecked: boolean }>(`/api/generated-subscriptions/${id}/editor`, { method: "PUT", body: JSON.stringify(input) }, subscriptionEditorSchema.extend({ kernelChecked: z.boolean() }).refine((editor) => editor.subscription.id === id)),
   renameSubscription: (id: string, name: string) => request<GeneratedSubscription>(`/api/generated-subscriptions/${id}/name`, { method: "PUT", body: JSON.stringify({ name }) }),
   revokeGeneratedSubscription: (id: string) => request<{ revoked: boolean }>(`/api/generated-subscriptions/${id}/revoke`, { method: "POST" }),
   rotateGeneratedSubscriptionToken: (id: string) => request<{ token: string }>(`/api/generated-subscriptions/${id}/token`, { method: "POST" }),
@@ -95,13 +149,8 @@ export const api = {
   kernelInfo: () => request<KernelInfo[]>("/api/tools/kernels"),
   kernelValidate: (config: MihomoConfig, format: TargetFormat) => request<KernelValidationResult>("/api/tools/kernel-validate", { method: "POST", body: JSON.stringify({ config, format }) }),
   exportConfig: async (config: MihomoConfig, format: TargetFormat) => {
-    const response = await fetch("/api/tools/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config, format }) });
-    if (!response.ok) {
-      const body = await response.json();
-      const error = new Error(body.error) as Error & { issues?: ValidationIssue[] };
-      error.issues = body.issues;
-      throw error;
-    }
+    const response = await fetchResponse("/api/tools/export", { method: "POST", body: JSON.stringify({ config, format }) });
+    if (!isExportContent(response)) throw invalidResponse(response, "/api/tools/export", "了非文本导出内容");
     return response.text();
   },
   listSubscriptions: (projectId: string) => request<Subscription[]>(`/api/projects/${projectId}/subscriptions`),
@@ -113,14 +162,9 @@ export const api = {
   createVersion: (projectId: string, label = "手动快照") => request<ProjectVersion>(`/api/projects/${projectId}/versions`, { method: "POST", body: JSON.stringify({ label }) }),
   restoreVersion: (projectId: string, id: string) => request<Project>(`/api/projects/${projectId}/versions/${id}/restore`, { method: "POST" }),
   downloadBackup: async () => {
-    const response = await fetch("/api/account/backup");
-    if (!response.ok) throw new Error("备份下载失败");
+    const response = await fetchResponse("/api/account/backup");
+    if (!isJson(response)) throw invalidResponse(response, "/api/account/backup", "了非 JSON 内容");
     return response.blob();
   },
-  restoreBackup: async (content: string, mode: "merge" | "replace") => {
-    const response = await fetch(`/api/account/restore?mode=${mode}`, { method: "POST", headers: { "Content-Type": "text/plain" }, body: content });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "恢复失败");
-    return body as { projects: number };
-  },
+  restoreBackup: (content: string, mode: "merge" | "replace") => request<{ projects: number }>(`/api/account/restore?mode=${mode}`, { method: "POST", headers: { "Content-Type": "text/plain" }, body: content }),
 };

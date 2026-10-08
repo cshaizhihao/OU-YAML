@@ -1,4 +1,4 @@
-export const GUIDE_VERSION = "1.9";
+export const GUIDE_VERSION = "2.0";
 
 export type GuideView = "home" | "sources" | "nodes" | "groups" | "rules" | "preview" | "history" | "generator" | "links" | "subscription" | "templates" | "settings" | "admin";
 
@@ -82,11 +82,11 @@ export const guideRegistry: readonly GuideDefinition[] = [
   {
     id: "quickstart",
     title: "三步创建第一个订阅",
-    description: "粘贴链接、选择推荐设置、复制订阅，成功后自动前进。",
+    description: "导入节点、选择配置并发布；也可以沿用已有订阅更新原地址。",
     duration: "约 5 分钟",
     steps: [
-      { id: "import", view: "home", target: guideTargets.quickImport, quickStep: 0, advanceOn: "imported", title: "粘贴并导入订阅", description: "填写订阅或节点链接，点击“导入并继续”。如果已有节点，可以直接使用。导入成功后教程自动前进。", tip: "只想了解流程时，可以暂停教程并点击“先看演示”。" },
-      { id: "configure", view: "home", target: guideTargets.quickConfigure, quickStep: 1, advanceOn: "published", title: "选择推荐配置并发布", description: "基础分流适合 Mihomo。点击“生成我的订阅”（已有链接时为“检查发布变化”），阅读变化摘要，再点击“确认并发布”。只有发布成功后教程才会前进。" },
+      { id: "import", view: "home", target: guideTargets.quickImport, quickStep: 0, advanceOn: "imported", title: "粘贴并导入订阅", description: "第一次创建时，填写订阅或节点链接并点击“导入并继续”；已有节点也可以直接使用。导入成功后教程自动前进。", tip: "已有订阅要改内容时，先暂停教程，再到“我的订阅”选择对应卡片编辑。" },
+      { id: "configure", view: "home", target: guideTargets.quickConfigure, quickStep: 1, advanceOn: "published", title: "选择推荐配置并发布", description: "可选推荐配置直接发布，也可点击“手动编辑分组后再发布”自定义分组与分流。检查变更摘要后确认发布；首次创建地址，之后更新原地址。" },
       { id: "copy", view: "home", target: guideTargets.quickResult, quickStep: 2, advanceOn: "copied", title: "复制到客户端", description: "复制订阅链接，在客户端的“订阅 / 配置”中从 URL 添加，然后更新订阅。后续可以继续使用同一个地址。" },
     ],
   },
@@ -115,12 +115,12 @@ export const guideRegistry: readonly GuideDefinition[] = [
   {
     id: "groups",
     title: "代理组与链式代理",
-    description: "学习把节点和策略组拖入目标组。",
+    description: "查看所有策略组，选择当前组并添加节点。",
     duration: "约 3 分钟",
     steps: [
-      { id: "group-create", view: "groups", target: guideTargets.groupCreate, title: "创建策略组", description: "选择组用于手动切换；自动测速、故障转移和负载均衡适合进阶使用。" },
-      { id: "group-pool", view: "groups", target: guideTargets.groupNodePool, title: "从节点池拖入", description: "把左侧节点拖到中间的策略组，也可以使用卡片中的快速添加。" },
-      { id: "group-board", view: "groups", target: guideTargets.groupBoard, title: "组也可以放入组中", description: "拖动整个策略组到另一个组，可建立嵌套选择，但并不意味着流量逐跳转发。链式代理请选择对应类型，按入口到出口放入具体节点；导出时转换成 Mihomo 的 dialer-proxy。系统会阻止循环引用。" },
+      { id: "group-board", view: "groups", target: guideTargets.groupBoard, title: "从全部分组选择当前组", description: "“全部分组”列出所有策略组，选中后在“当前组”查看成员。组顺序手柄用于排序，嵌套手柄用于把组加入其他组。" },
+      { id: "group-pool", view: "groups", target: guideTargets.groupNodePool, title: "添加内容到当前组", description: "先确认“添加到”的组名，再点击节点加号或勾选后批量加入。手机上切换到“添加内容”；也可以把节点拖入当前组成员区。" },
+      { id: "group-create", view: "groups", target: guideTargets.groupCreate, title: "需要时再创建策略组", description: "点击“添加策略组”创建新组。手动选择适合入门；嵌套用于选择其他组，链式代理则按入口到出口放入具体节点。系统会阻止循环引用。" },
     ],
   },
   {

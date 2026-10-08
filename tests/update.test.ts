@@ -48,6 +48,7 @@ test("没有 GitHub Release 时从 main 分支清单检查版本", async () => {
     assert.equal(result.hasUpdate, true);
     assert.equal(result.updateKind, "version");
     assert.equal(calls.length, 3);
+    assert.ok(calls[2].endsWith(`/${"b".repeat(40)}/package.json`));
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -5,6 +5,7 @@ import { readMihomoConfig } from '../src/shared/schema';
 import { validateConfig } from '../src/shared/mihomo';
 import { previewExport } from "../src/shared/exportConfig";
 import { sealToken } from './tokenVault';
+import { addCountryFlag, countryFlagForRename } from '../src/shared/nodeNames';
 
 function now() { return new Date().toISOString(); }
 function readJson<T>(value: unknown, fallback: T): T { try { return JSON.parse(String(value)) as T; } catch { return fallback; } }
@@ -124,37 +125,52 @@ function touchProjectsForNodes(userId: string, nodeIds: string[]) {
   }
 }
 
-function renameDefaultProjectAliases(userId: string, nodeId: string, previousName: string, nextName: string) {
-  if (previousName === nextName) return;
-  const projects = db.prepare(`SELECT projects.id, projects.config_json, projects.updated_at
-    FROM projects JOIN project_nodes ON project_nodes.project_id = projects.id
-    WHERE projects.user_id = ? AND project_nodes.node_id = ? AND project_nodes.alias = ?`)
-    .all(userId, nodeId, previousName) as { id: string; config_json: string; updated_at: string }[];
+function renameNodeAliases(userId: string, nodeId: string, previousName: string, nextName: string) {
+  const flag = countryFlagForRename(previousName, nextName);
+  if (previousName === nextName && !flag) return;
+  const nextAlias = (alias: string) => {
+    const name = alias === previousName ? nextName : flag ? addCountryFlag(alias, flag, Infinity) : alias;
+    if (name.length > 200) throw new Error(`添加国旗后别名超过 200 字符：${alias}`);
+    return name;
+  };
+  const renameConfig = (config: MihomoConfig, previousAlias: string, alias: string, scope: string, bindings: { node_id: string; alias: string }[] = []) => {
+    const names = new Set([previousAlias, ...config.proxies.filter((node) => node.id === nodeId).map((node) => node.name)]);
+    const otherNames = [...config.proxies.filter((node) => node.id !== nodeId).map((node) => node.name), ...config.proxyGroups.map((group) => group.name), ...bindings.filter((binding) => binding.node_id !== nodeId).map((binding) => binding.alias), "DIRECT", "REJECT", "REJECT-DROP", "PASS", "GLOBAL"];
+    if (otherNames.includes(alias) || otherNames.some((name) => names.has(name))) throw new Error(`${scope}存在节点名称冲突：${alias}，请先调整别名`);
+    const rename = (name: string) => names.has(name) ? alias : name;
+    return {
+      ...config,
+      proxies: config.proxies.map((node) => node.id === nodeId ? { ...node, name: alias } : node),
+      proxyGroups: config.proxyGroups.map((group) => ({ ...group, proxies: group.proxies.map(rename) })),
+      rules: config.rules.map((rule) => ({ ...rule, target: rename(rule.target) })),
+    };
+  };
+  const projects = db.prepare(`SELECT projects.id, projects.name, projects.config_json, projects.updated_at, project_nodes.alias
+    FROM projects LEFT JOIN project_nodes ON project_nodes.project_id = projects.id AND project_nodes.node_id = ?
+    WHERE projects.user_id = ?`)
+    .all(nodeId, userId) as { id: string; name: string; config_json: string; updated_at: string; alias: string | null }[];
   const updateProject = db.prepare("UPDATE projects SET config_json = ?, updated_at = ? WHERE id = ? AND user_id = ?");
   const updateAlias = db.prepare("UPDATE project_nodes SET alias = ?, updated_at = ? WHERE project_id = ? AND node_id = ? AND alias = ?");
   for (const project of projects) {
     const config = readJson<MihomoConfig>(project.config_json, {} as MihomoConfig);
-    if (!Array.isArray(config.proxies) || !Array.isArray(config.proxyGroups) || !Array.isArray(config.rules)) continue;
+    const previousAlias = project.alias ?? config.proxies?.find((node) => node.id === nodeId)?.name;
+    if (previousAlias === undefined) continue;
+    const alias = nextAlias(previousAlias);
+    if (alias === previousAlias && !config.proxies?.some((node) => node.id === nodeId && node.name !== alias)) continue;
+    if (!Array.isArray(config.proxies) || !Array.isArray(config.proxyGroups) || !Array.isArray(config.rules)) throw new Error(`项目“${project.name}”配置无效，无法同步节点名称`);
+    const bindings = db.prepare("SELECT node_id, alias FROM project_nodes WHERE project_id = ?").all(project.id) as { node_id: string; alias: string }[];
+    const next = renameConfig(config, previousAlias, alias, `项目“${project.name}”`, bindings);
     const updatedAt = new Date(Math.max(Date.now(), new Date(project.updated_at).getTime() + 1 || 0)).toISOString();
-    const next: MihomoConfig = {
-      ...config,
-      proxies: config.proxies.map((node) => node.id === nodeId && node.name === previousName ? { ...node, name: nextName } : node),
-      proxyGroups: config.proxyGroups.map((group) => ({ ...group, proxies: group.proxies.map((member) => member === previousName ? nextName : member) })),
-      rules: config.rules.map((rule) => rule.target === previousName ? { ...rule, target: nextName } : rule),
-    };
-    updateAlias.run(nextName, updatedAt, project.id, nodeId, previousName);
+    updateAlias.run(alias, updatedAt, project.id, nodeId, previousAlias);
     updateProject.run(JSON.stringify(next), updatedAt, project.id, userId);
   }
   for (const profile of listProfiles(userId)) {
     const config = profile.config;
-    if (!config.proxies.some((node) => node.id === nodeId && node.name === previousName)) continue;
-    if (config.proxies.some((node) => node.id !== nodeId && node.name === nextName) || config.proxyGroups.some((group) => group.name === nextName)) continue;
-    const next = {
-      ...config,
-      proxies: config.proxies.map((node) => node.id === nodeId ? { ...node, name: nextName } : node),
-      proxyGroups: config.proxyGroups.map((group) => ({ ...group, proxies: group.proxies.map((member) => member === previousName ? nextName : member) })),
-      rules: config.rules.map((rule) => rule.target === previousName ? { ...rule, target: nextName } : rule),
-    };
+    const previousAlias = config.proxies.find((node) => node.id === nodeId)?.name;
+    if (previousAlias === undefined) continue;
+    const alias = nextAlias(previousAlias);
+    if (alias === previousAlias) continue;
+    const next = renameConfig(config, previousAlias, alias, `生成配置“${profile.name}”`);
     const updatedAt = new Date(Math.max(Date.now(), new Date(profile.updatedAt).getTime() + 1)).toISOString();
     db.prepare("UPDATE generation_profiles SET config_json = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(JSON.stringify(next), updatedAt, profile.id, userId);
   }
@@ -396,15 +412,18 @@ export function getManagedNode(userId: string, id: string) {
 export function updateManagedNode(userId: string, id: string, input: ManagedNodeInput) {
   const existing = db.prepare("SELECT * FROM managed_nodes WHERE id = ? AND user_id = ?").get(id, userId) as Record<string, unknown> | undefined;
   if (!existing) return undefined;
-  const stamp = now();
+  const stamp = new Date(Math.max(Date.now(), new Date(String(existing.updated_at)).getTime() + 1)).toISOString();
   const previousName = String(existing.name);
   const nextConfig = managedInputConfig(input, id);
   const configChanged = proxyConfigChanged(managedNodeConfig(existing), nextConfig);
   db.transaction(() => {
-    db.prepare(`UPDATE managed_nodes SET name = ?, type = ?, server = ?, port = ?, config_json = ?, raw_config_json = ?, enabled = ?, tags_json = ?, note = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
+    if (countryFlagForRename(previousName, input.name) && db.prepare("SELECT id FROM managed_nodes WHERE user_id = ? AND id <> ? AND name = ?").get(userId, id, input.name)) throw new Error(`节点库存在节点名称冲突：${input.name}，请先调整名称`);
+    const enabled = input.enabled === undefined ? Number(existing.enabled) : input.enabled ? 1 : 0;
+    const unchanged = previousName === input.name && !configChanged && enabled === Number(existing.enabled) && JSON.stringify(input.tags || []) === String(existing.tags_json) && (input.note || null) === existing.note;
+    if (!unchanged) db.prepare(`UPDATE managed_nodes SET name = ?, type = ?, server = ?, port = ?, config_json = ?, raw_config_json = ?, enabled = ?, tags_json = ?, note = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
       .run(input.name, input.type, input.server, input.port, JSON.stringify(nextConfig), JSON.stringify(input.extra || {}), input.enabled === undefined ? Number(existing.enabled) : input.enabled ? 1 : 0, JSON.stringify(input.tags || []), input.note || null, stamp, id, userId);
     if (previousName !== input.name) db.prepare("UPDATE managed_nodes SET name_override = 1, original_name = COALESCE(original_name, ?) WHERE id = ? AND user_id = ?").run(previousName, id, userId);
-    renameDefaultProjectAliases(userId, id, previousName, input.name);
+    renameNodeAliases(userId, id, previousName, input.name);
     if (configChanged) touchProjectsForNodes(userId, [id]);
   })();
   return listManagedNodes(userId).find(item => item.id === id);
@@ -445,7 +464,7 @@ export function batchUpdateManagedNodes(userId: string, ids: string[], input: { 
       const enabled = input.enabled === undefined ? Number(row.enabled) : input.enabled ? 1 : 0;
       update.run(name, JSON.stringify({ ...node, name }), enabled, JSON.stringify(tags), stamp, row.id, userId);
       if (node.name !== name) db.prepare("UPDATE managed_nodes SET name_override = 1, original_name = COALESCE(original_name, ?) WHERE id = ? AND user_id = ?").run(node.name, row.id, userId);
-      renameDefaultProjectAliases(userId, String(row.id), node.name, name);
+      renameNodeAliases(userId, String(row.id), node.name, name);
     }
   })();
   return listManagedNodes(userId);

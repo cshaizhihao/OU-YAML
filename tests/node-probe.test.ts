@@ -35,3 +35,21 @@ test("IP 归属地结果生成国旗", async () => {
   });
   assert.deepEqual(result, { ip: "1.1.1.1", countryCode: "AU", country: "Australia", flag: "🇦🇺" });
 });
+
+test("国旗改名幂等、保留自定义别名正文并限制名称长度", () => {
+  assert.equal(addCountryFlag("🇯🇵 · 专属线路", "🇸🇬"), "🇸🇬 专属线路");
+  assert.equal(addCountryFlag("🇸🇬 专属线路", "🇸🇬"), "🇸🇬 专属线路");
+  assert.equal(addCountryFlag("x".repeat(200), "🇺🇸").length, 160);
+  assert.throws(() => addCountryFlag("线路", "US"), /国旗无效/);
+});
+
+test("IP 归属地解析或查询失败时不会返回可应用的结果", async () => {
+  await assert.rejects(lookupNodeCountry("edge.example.com", {
+    lookup: async () => [],
+    fetcher: async () => { throw new Error("不应发起 HTTP 请求"); },
+  }), /没有解析到 IP/);
+  await assert.rejects(lookupNodeCountry("edge.example.com", {
+    lookup: async () => [{ address: "1.1.1.1", family: 4 }],
+    fetcher: async () => new Response(JSON.stringify({ success: false, message: "lookup failed" }), { status: 200 }),
+  }), /无法查询服务器 IP 归属地/);
+});

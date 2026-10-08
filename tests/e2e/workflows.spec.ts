@@ -90,7 +90,12 @@ test("演示不写数据、规则中文编辑、主要页面无横向溢出", as
   await page.getByRole("button", { name: "检查匹配结果", exact: true }).click();
   await expect(page.locator(".rule-scenario [role=status]")).toContainText("直接连接（DIRECT）");
   const projectId = await page.getByRole("combobox", { name: "当前配置" }).inputValue();
-  await expect.poll(async () => (await (await page.request.get(`/api/projects/${projectId}`)).json()).config.rules[0].value).toBe("example.com");
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/projects/${projectId}`);
+    if (!response.ok()) return "";
+    const project = await response.json();
+    return project.config?.rules?.[0]?.value || "";
+  }).toBe("example.com");
   const project = await (await page.request.get(`/api/projects/${projectId}`)).json();
   expect(project.config.rules[0].type).toBe("DOMAIN-SUFFIX");
   expect(project.config.rules.at(-1).type).toBe("MATCH");
@@ -150,8 +155,20 @@ test("已生成订阅可改名、再次编辑分组和分流，更新仍保留�
   const extraName = `新增订阅节点-${test.info().project.name}`;
   const extraNode = await page.request.post("/api/managed-nodes", { data: { name: extraName, type: "http", server: "example.com", port: 8443, enabled: true, tags: [], extra: {} } });
   expect(extraNode.ok(), await extraNode.text()).toBeTruthy();
+  await page.route("**/api/generated-subscriptions/*/editor", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "订阅详情暂不可用" }) }));
   await card.getByRole("button", { name: "编辑分组", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("订阅详情请求失败");
+  await expect(page.getByRole("alert")).toContainText("已有编辑草稿会保留");
+  await page.unroute("**/api/generated-subscriptions/*/editor");
+  await page.getByRole("button", { name: "重新载入", exact: true }).click();
   await expect(page.locator(".subscription-editor")).toBeVisible();
+  await page.route("**/api/managed-nodes", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "节点库暂不可用" }) }));
+  await page.getByRole("button", { name: "重新载入", exact: true }).click();
+  await expect(page.locator(".editor-feedback [role=alert]")).toContainText("节点库请求失败");
+  await expect(page.locator(".editor-feedback [role=alert]")).toContainText("已有编辑草稿会保留");
+  await page.unroute("**/api/managed-nodes");
+  await page.getByRole("button", { name: "重新载入", exact: true }).click();
+  await expect(page.locator(".editor-feedback [role=alert]")).toHaveCount(0);
   const layout = await page.locator(".subscription-editor").evaluate((element) => {
     const content = element.closest(".content-area")!;
     return { board: element.querySelector(".group-board")!.getBoundingClientRect().toJSON(), footer: element.querySelector(".editor-publish")!.getBoundingClientRect().toJSON(), viewport: window.innerHeight, contentHeight: content.clientHeight, scrollHeight: content.scrollHeight };
@@ -194,6 +211,10 @@ test("已生成订阅可改名、再次编辑分组和分流，更新仍保留�
   await page.getByRole("button", { name: "检查并更新原订阅", exact: true }).click();
   await page.getByRole("button", { name: "确认更新原订阅", exact: true }).click();
   await expect(page.locator('[data-guide-id="subscription-saved"]')).toContainText("已更新原订阅");
+  expect(await (await page.request.get(url)).text()).toContain("通勤线路");
+  await page.reload();
+  await expect(page.locator(".subscription-editor")).toBeVisible();
+  await expect(page.getByRole("button", { name: "编辑 通勤线路", exact: true })).toBeVisible();
   expect(await (await page.request.get(url)).text()).toContain("通勤线路");
   await page.getByRole("button", { name: "返回我的订阅", exact: true }).click();
   await page.getByRole("button", { name: /让某个网站走指定线路/ }).click();

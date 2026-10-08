@@ -17,8 +17,8 @@ select_update_target() {
     *) echo "更新渠道无效" >&2; return 1 ;;
   esac
   [[ "${UPDATE_TARGET}" =~ ^[0-9a-f]{40}$ ]] || return 1
-  current="$(sed -n 's/.*"version": "\([0-9.]*\)".*/\1/p' package.json | head -n 1)"
-  target="$(git show "${UPDATE_TARGET}:package.json" | sed -n 's/.*"version": "\([0-9.]*\)".*/\1/p' | head -n 1)"
+  current="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' package.json | head -n 1)"
+  target="$(git show "${UPDATE_TARGET}:package.json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' | head -n 1)"
   [[ "${target}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
   if [ "${OU_YAML_FRESH_INSTALL:-0}" != "1" ] && [ "$(printf '%s\n%s\n' "${current}" "${target}" | sort -V | tail -n 1)" != "${target}" ]; then echo "目标版本低于当前版本，已阻止自动降级" >&2; return 1; fi
   export UPDATE_TARGET

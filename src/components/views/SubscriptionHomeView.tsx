@@ -34,7 +34,7 @@ export function SubscriptionHomeView({ project, canPublish, onReload, onNavigate
       if (Number.isInteger(step) && step >= 0 && step <= 2) { setInitialStep(step); setMode("setup"); }
     };
     window.addEventListener("ou-yaml:quick-step", openStep);
-    const overview = () => setMode("overview");
+    const overview = () => { if (window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) setMode("overview"); };
     window.addEventListener("ou-yaml:home-overview", overview);
     return () => { cancelled = true; window.removeEventListener("ou-yaml:quick-step", openStep); window.removeEventListener("ou-yaml:home-overview", overview); };
   }, [load]);
@@ -70,6 +70,12 @@ export function SubscriptionHomeView({ project, canPublish, onReload, onNavigate
   }
 
   function openSetup(step: number) { setInitialStep(step); setMode("setup"); }
+  function returnToOverview() {
+    if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return;
+    setMode("overview");
+    window.history.replaceState({}, "", location.pathname);
+    void refresh();
+  }
 
   if (!data) return <section className="panel-card" aria-live="polite">{error ? <><p role="alert">订阅加载失败：{error}</p><button className="secondary-button" disabled={!!busy} onClick={() => void refresh()}>重新加载</button></> : <p><LoaderCircle className="spin" size={18} /> 正在读取已发布订阅…</p>}</section>;
   const profiles = new Map(data.profiles.map((profile) => [profile.id, profile]));
@@ -78,15 +84,15 @@ export function SubscriptionHomeView({ project, canPublish, onReload, onNavigate
 
   return <div className="subscription-home">
     <section className="home-tasks" aria-label="常用任务" data-guide-id={guideTargets.homeTasks}>
-      <button onClick={onCreate}><Plus size={18} /><span><strong>创建新订阅</strong><small>导入、编辑分组、确认发布</small></span><ArrowRight size={16} /></button>
+      <button onClick={onCreate}><Plus size={18} /><span><strong>创建新订阅</strong><small>导入 → 推荐或自定义 → 发布</small></span><ArrowRight size={16} /></button>
       <button onClick={() => onStartGuide("website")}><Settings2 size={18} /><span><strong>让某个网站走指定线路</strong><small>用中文设置并发布分流</small></span><ArrowRight size={16} /></button>
       <button onClick={() => onStartGuide("troubleshoot")}><CircleHelp size={18} /><span><strong>订阅不能用，怎么办？</strong><small>按顺序检查，不必重装</small></span><ArrowRight size={16} /></button>
     </section>
     {showSetup ? <>
-      {items.length > 0 && <button className="text-button" onClick={() => { setMode("overview"); window.history.replaceState({}, "", location.pathname); void refresh(); }}>返回我的订阅</button>}
-      <QuickSetupView project={project} initialStep={initialStep} canPublish={canPublish} onReload={onReload} onAdvanced={() => onNavigate("groups")} onStartGuide={() => onStartGuide("quickstart")} onDone={() => { setMode("overview"); window.history.replaceState({}, "", location.pathname); void refresh(); }} />
+      {items.length > 0 && <button className="text-button" onClick={returnToOverview}>返回我的订阅</button>}
+      <QuickSetupView project={project} initialStep={initialStep} canPublish={canPublish} onReload={onReload} onAdvanced={() => onNavigate("groups")} onStartGuide={() => onStartGuide("quickstart")} onDone={returnToOverview} />
     </> : <section className="home-subscriptions" data-guide-id={guideTargets.homeSubscriptions}>
-      <header className="home-subscriptions-heading"><div><span className="eyebrow">所有已生成订阅都在这里</span><h2>已生成的订阅</h2><p>直接在对应卡片上改名、编辑节点、分组或分流，再更新原地址。</p></div><button className="secondary-button" disabled={!!busy} onClick={() => void refresh()}><RefreshCw size={16} className={busy === "refresh" ? "spin" : ""} />刷新状态</button></header>
+      <header className="home-subscriptions-heading"><div><span className="eyebrow">所有已生成订阅都在这里</span><h2>已生成的订阅</h2><p>选择对应卡片编辑节点、分组或分流，确认后更新原地址；不用重新创建订阅。</p></div><button className="secondary-button" disabled={!!busy} onClick={() => void refresh()}><RefreshCw size={16} className={busy === "refresh" ? "spin" : ""} />刷新状态</button></header>
       <div className="home-subscription-grid">{items.map((item) => {
         const profile = profiles.get(item.profileId);
         const status = subscriptionStatus(item, profile, data.sources);

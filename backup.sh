@@ -4,11 +4,12 @@ umask 077
 INSTALL_DIR="${OU_YAML_INSTALL_DIR:-/opt/ou-yaml}"
 DATA_DIR="${OU_YAML_DATA_DIR:-${INSTALL_DIR}/data}"
 BACKUP_DIR="${OU_YAML_BACKUP_DIR:-${INSTALL_DIR}/backups}"
-LOCK_FILE="/run/ou-yaml-backup.lock"
+LOCK_FILE="${OU_YAML_BACKUP_LOCK:-/run/ou-yaml-backup.lock}"
 
 [ -d "${INSTALL_DIR}" ] || { echo "安装目录不存在：${INSTALL_DIR}" >&2; exit 1; }
 [ ! -L "${INSTALL_DIR}" ] || { echo "安装目录不能是符号链接" >&2; exit 1; }
 [ ! -L "${DATA_DIR}" ] || { echo "数据目录不能是符号链接" >&2; exit 1; }
+[ ! -L "${BACKUP_DIR}" ] || { echo "备份目录不能是符号链接" >&2; exit 1; }
 install -d -m 0700 "${BACKUP_DIR}"
 exec 9>"${LOCK_FILE}"
 flock -n 9 || { echo "已有备份任务正在运行" >&2; exit 1; }
@@ -16,11 +17,15 @@ cd "${INSTALL_DIR}"
 
 archive="${BACKUP_DIR}/ou-yaml-$(date -u +%Y%m%d-%H%M%S)-$$.tar.gz"
 staging="$(mktemp -d "${BACKUP_DIR}/.staging.XXXXXX")"
-cleanup() { rm -rf -- "${staging}"; }
+snapshot_name=""
+cleanup() {
+  rm -rf -- "${staging}"
+  if [ -n "${snapshot_name}" ]; then rm -f -- "${DATA_DIR}/${snapshot_name}"; fi
+}
 trap cleanup EXIT
 mkdir -p "${staging}/data"
 copy_data_state() {
-  find "${DATA_DIR}" -maxdepth 1 -type f ! -name 'ou-yaml.db*' -exec cp -p -- {} "${staging}/data/" \;
+  find "${DATA_DIR}" -mindepth 1 -maxdepth 1 ! -name 'ou-yaml.db*' ! -name 'web-update-*' ! -name '.update-*' ! -name '.ou-yaml-backup-*' -exec cp -a -t "${staging}/data/" -- {} +
 }
 
 if command -v sqlite3 >/dev/null 2>&1 && [ -f "${DATA_DIR}/ou-yaml.db" ]; then
@@ -28,8 +33,12 @@ if command -v sqlite3 >/dev/null 2>&1 && [ -f "${DATA_DIR}/ou-yaml.db" ]; then
   copy_data_state
 else
   compose_files=(-f docker-compose.yml -f docker-compose.ip.yml)
-  if grep -q '^DOMAIN=' "${INSTALL_DIR}/.env" 2>/dev/null; then compose_files=(-f docker-compose.yml -f docker-compose.caddy.yml); fi
-  if command -v docker >/dev/null 2>&1 && docker compose "${compose_files[@]}" ps --status running -q ou-yaml 2>/dev/null | grep -q .; then
+  if grep -q '^DOMAIN=.' "${INSTALL_DIR}/.env" 2>/dev/null; then compose_files=(-f docker-compose.yml -f docker-compose.caddy.yml); fi
+  running=""
+  if command -v docker >/dev/null 2>&1; then
+    running="$(docker compose "${compose_files[@]}" ps --status running -q ou-yaml)"
+  fi
+  if [ -n "${running}" ]; then
     snapshot_name=".ou-yaml-backup-$$.db"
     docker compose "${compose_files[@]}" exec -T -e "BACKUP_NAME=${snapshot_name}" ou-yaml node --input-type=module -e 'import Database from "better-sqlite3"; const db = new Database("/app/data/ou-yaml.db", { readonly: true }); await db.backup(`/app/data/${process.env.BACKUP_NAME}`); db.close();'
     cp -p "${DATA_DIR}/${snapshot_name}" "${staging}/data/ou-yaml.db"
@@ -38,6 +47,9 @@ else
   elif [ -f "${DATA_DIR}/ou-yaml.db" ]; then
     echo "OU-YAML 服务未运行，直接复制 SQLite 文件" >&2
     cp -p "${DATA_DIR}/ou-yaml.db" "${staging}/data/ou-yaml.db"
+    for suffix in -wal -shm; do
+      if [ -f "${DATA_DIR}/ou-yaml.db${suffix}" ]; then cp -p "${DATA_DIR}/ou-yaml.db${suffix}" "${staging}/data/"; fi
+    done
     copy_data_state
   else
     echo "数据库文件不存在：${DATA_DIR}/ou-yaml.db" >&2

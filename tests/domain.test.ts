@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { MihomoConfig } from "../src/shared/types";
+import { serializeShareLink } from "../src/shared/links";
+import { previewExport } from "../src/shared/exportConfig";
+import YAML from "yaml";
 import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -183,6 +186,82 @@ test("节点库默认名称更新会同步项目代理组和规则引用", () =>
   assert.equal(hydrated.config.proxies[0].name, "🇯🇵 东京节点");
   assert.deepEqual(hydrated.config.proxyGroups[0].proxies, ["🇯🇵 东京节点"]);
   assert.equal(hydrated.config.rules[0].target, "默认代理");
+});
+
+test("国旗改名同步默认和自定义别名到项目与生成配置，且不触发发布", () => {
+  const isolatedProjectId = randomUUID();
+  const node = domain.createManagedNode(userId, { name: "国旗测试东京", type: "vless", server: "flagged.example.com", port: 443, uuid: "flag-sync-node", extra: {} });
+  const customAlias = "专属 · 国旗测试东京线路";
+  const projectConfig: MihomoConfig = {
+    ...config,
+    proxies: [{ ...node, name: "国旗测试东京" }],
+    proxyGroups: [{ id: randomUUID(), name: "国旗测试选择", type: "select", proxies: ["国旗测试东京"], extra: {} }],
+    rules: [{ id: randomUUID(), type: "MATCH", value: "", target: "国旗测试选择", options: [], enabled: true }],
+  };
+  const createdAt = new Date().toISOString();
+  db.prepare("INSERT INTO projects (id,user_id,name,config_json,created_at,updated_at) VALUES (?,?,?,?,?,?)")
+    .run(isolatedProjectId, userId, "国旗名称同步", JSON.stringify(projectConfig), createdAt, createdAt);
+  domain.syncProjectNodes(userId, isolatedProjectId, projectConfig.proxies);
+  const profileConfig: MihomoConfig = {
+    ...projectConfig,
+    proxies: [{ ...node, name: customAlias }],
+    proxyGroups: [{ ...projectConfig.proxyGroups[0], proxies: [customAlias] }],
+  };
+  const profile = domain.createProfile(userId, { name: "国旗生成方案", targetFormat: "mihomo", config: profileConfig, nodeIds: [node.id] })!;
+  const published = domain.publishSubscription(userId, profile.id, "原订阅", "mihomo", "published before flag change", 1);
+
+  const updated = domain.updateManagedNode(userId, node.id, { ...node, name: "🇯🇵 国旗测试东京" })!;
+  const project = domain.hydrateProject(db.prepare("SELECT * FROM projects WHERE id = ?").get(isolatedProjectId) as Record<string, unknown>);
+  const savedProfile = domain.getProfile(userId, profile.id)!;
+  assert.deepEqual(project.config.proxies.map((item) => item.name), ["🇯🇵 国旗测试东京"]);
+  assert.deepEqual(project.config.proxyGroups[0].proxies, ["🇯🇵 国旗测试东京"]);
+  assert.deepEqual(savedProfile.config.proxies.map((item) => item.name), ["🇯🇵 专属 · 国旗测试东京线路"]);
+  assert.deepEqual(savedProfile.config.proxyGroups[0].proxies, ["🇯🇵 专属 · 国旗测试东京线路"]);
+
+  const mihomo = previewExport(savedProfile.config, "mihomo");
+  assert.equal(mihomo.issues.some((issue) => issue.level === "error"), false);
+  assert.deepEqual((YAML.parse(mihomo.content) as { proxies: { name: string }[] }).proxies.map((item) => item.name), ["🇯🇵 专属 · 国旗测试东京线路"]);
+  const singBox = previewExport(savedProfile.config, "sing-box");
+  assert.equal(singBox.issues.some((issue) => issue.level === "error"), false);
+  assert.deepEqual((JSON.parse(singBox.content) as { outbounds: { tag: string }[] }).outbounds[0].tag, "🇯🇵 专属 · 国旗测试东京线路");
+  assert.match(serializeShareLink({ ...updated, name: "🇯🇵 专属 · 国旗测试东京线路" })!, /%F0%9F%87%AF%F0%9F%87%B5/);
+
+  const timestamp = updated.updatedAt;
+  domain.updateManagedNode(userId, updated.id, updated);
+  assert.equal(domain.getManagedNode(userId, updated.id)?.updatedAt, timestamp);
+  assert.equal(domain.readPublicSubscription(published.token!)?.content, "published before flag change");
+  assert.equal(domain.listPublishedSubscriptions(userId).find((item) => item.id === published.id)?.version, 1);
+});
+
+test("国旗名称用于复制的协议分享链接", async () => {
+  const { parseShareLink } = await import("../src/shared/links");
+  const node = domain.createManagedNode(userId, { name: "🇯🇵 专属线路", type: "vless", server: "share.example.com", port: 443, uuid: "share-flag-id", extra: {} });
+  domain.updateManagedNode(userId, node.id, { ...node, name: "🇸🇬 专属线路" });
+  const link = serializeShareLink(domain.getManagedNode(userId, node.id)!)!;
+  assert.equal(parseShareLink(link).name, "🇸🇬 专属线路");
+});
+
+test("国旗别名冲突会拒绝并回滚节点、项目和生成配置", () => {
+  const isolatedProjectId = randomUUID();
+  const node = domain.createManagedNode(userId, { name: "国旗冲突测试", type: "vless", server: "collision.example.com", port: 443, uuid: "collision-node", extra: {} });
+  const other = domain.createManagedNode(userId, { name: "冲突目标邻居", type: "vless", server: "other.example.com", port: 443, uuid: "collision-other", extra: {} });
+  const conflictingAlias = "🇯🇵 国旗冲突测试";
+  const projectConfig: MihomoConfig = {
+    ...config,
+    proxies: [{ ...node, name: "国旗冲突测试" }, { ...other, name: conflictingAlias }],
+    proxyGroups: [{ id: randomUUID(), name: "冲突组", type: "select", proxies: ["国旗冲突测试", conflictingAlias], extra: {} }],
+    rules: [],
+  };
+  const createdAt = new Date().toISOString();
+  db.prepare("INSERT INTO projects (id,user_id,name,config_json,created_at,updated_at) VALUES (?,?,?,?,?,?)")
+    .run(isolatedProjectId, userId, "国旗别名冲突", JSON.stringify(projectConfig), createdAt, createdAt);
+  domain.syncProjectNodes(userId, isolatedProjectId, projectConfig.proxies);
+  const profile = domain.createProfile(userId, { name: "冲突方案", targetFormat: "mihomo", config: projectConfig, nodeIds: [node.id, other.id] })!;
+
+  assert.throws(() => domain.updateManagedNode(userId, node.id, { ...node, name: conflictingAlias }), /别名/);
+  assert.equal(domain.getManagedNode(userId, node.id)?.name, "国旗冲突测试");
+  assert.deepEqual(domain.readProjectNodes(userId, isolatedProjectId).map((item) => item.name), ["国旗冲突测试", conflictingAlias]);
+  assert.deepEqual(domain.getProfile(userId, profile.id)?.config.proxies.map((item) => item.name), ["国旗冲突测试", conflictingAlias]);
 });
 
 test("删除项目最后一个节点会同步清理引用且不会被旧配置重新迁回", () => {

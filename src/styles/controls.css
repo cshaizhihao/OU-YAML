@@ -1,0 +1,66 @@
+.form-error { border-left: 3px solid var(--danger); padding: 10px 12px; border-radius: 3px; }
+.primary-button, .secondary-button, .danger-button { min-height: 42px; border-radius: var(--radius); padding: 0 15px; border: 1px solid transparent; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 650; transition: background var(--ease), border-color var(--ease), color var(--ease); white-space: nowrap; }
+.text-button { min-height: 36px; padding: 0 4px; border: 0; background: transparent; display: inline-flex; align-items: center; gap: 6px; }
+.text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.danger-button:hover { background: #941d14; }
+.compact-button { min-height: 34px; padding: 0 10px; font-size: 13px; }
+.icon-button { width: 42px; height: 42px; padding: 0; border: 0; border-radius: var(--radius); display: inline-grid; place-items: center; background: transparent; transition: background var(--ease), color var(--ease); flex: 0 0 auto; }
+.icon-button.compact { width: 34px; height: 34px; }
+.search-field { width: min(320px, 40vw); position: relative; display: block; }
+.search-field svg { position: absolute; left: 11px; top: 13px; }
+.search-field input { padding-left: 36px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
+.span-2 { grid-column: span 2; }
+.toggle-row { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 0; font-weight: 500; }
+.toggle-row > span { display: grid; }
+.toggle-row strong { font-size: 14px; }
+.toggle-row small { font-weight: 400; }
+.toggle-row input[type="checkbox"], .table-check { appearance: none; width: 38px; height: 22px; min-height: 22px; padding: 2px; border-radius: 11px; background: #c9d1ce; border: 0; position: relative; transition: background var(--ease); flex: 0 0 auto; }
+.toggle-row input[type="checkbox"]::after, .table-check::after { content: ""; display: block; width: 18px; height: 18px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(0,0,0,.18); transition: transform var(--ease); }
+.toggle-row input[type="checkbox"]:checked, .table-check:checked { background: var(--accent); }
+.toggle-row input[type="checkbox"]:checked::after, .table-check:checked::after { transform: translateX(16px); }
+.compact-toggle { align-self: end; min-height: 42px; }
+.advanced-toggle { width: 100%; min-height: 42px; margin: 18px 0 4px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--accent); display: flex; align-items: flex-end; justify-content: center; gap: 7px; padding-top: 15px; font-weight: 650; }
+.advanced-fields { margin-top: 18px; }
+.segmented-control { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; border-radius: var(--radius); background: #f0e6dc; margin-bottom: 22px; }
+.segmented-control button { min-height: 40px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; gap: 7px; font-weight: 650; transition: background var(--ease), color var(--ease); }
+.segmented-control button:hover { color: var(--ink); }
+.segmented-control button.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(21, 32, 29, .12); }
+.table-check { width: 34px; height: 20px; min-height: 20px; padding: 2px; }
+.table-check::after { width: 16px; height: 16px; }
+.table-check:checked::after { transform: translateX(14px); }
+@media (max-width: 700px) {
+  .search-field { width: 100%; }
+  .segmented-control button { font-size: 12px; gap: 4px; }
+  .segmented-control button svg { display: none; }
+  .form-grid { grid-template-columns: 1fr; }
+  .span-2 { grid-column: span 1; }
+}
+.form-hint { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.primary-button:hover:not(:disabled) { box-shadow: 0 12px 22px -11px rgba(139, 41, 68, .85); }
+.primary-button:active:not(:disabled), .secondary-button:active:not(:disabled) { transform: translateY(0) scale(.985); }
+.secondary-button:hover:not(:disabled) { transform: translateY(-1px); }
+.text-button:hover { color: var(--accent-hover); }
+.search-field { border-color: var(--line-strong); background: rgba(39, 28, 59, .68); }
+.search-field svg { color: var(--accent); }
+.form-hint, .toggle-row small, .toggle-row { color: var(--ink-faint); }
+.toggle-row strong { color: var(--ink); }
+.primary-button { color: #1b1028; border-color: rgba(237, 218, 255, .35); background: linear-gradient(135deg, #d7c0ff, #ae82e7 62%, #d291dc); box-shadow: 0 12px 27px -17px rgba(188, 126, 244, .9), inset 0 1px rgba(255, 255, 255, .55); }
+.primary-button:hover:not(:disabled) { color: #160d24; border-color: rgba(255, 245, 255, .55); background: linear-gradient(135deg, #e5d5ff, #bd99f6 62%, #e2a4e9); transform: translateY(-1px); }
+.secondary-button { box-shadow: inset 0 1px rgba(255, 255, 255, .08); }
+.danger-button { color: #2b0b17; border-color: rgba(255, 177, 187, .36); background: linear-gradient(135deg, #ffb0bd, #e87895); }
+.icon-button:hover { color: #fff; background: rgba(181, 145, 246, .14); }
+.icon-button.danger:hover { color: var(--danger); background: var(--danger-soft); }
+.form-error { color: #ffc4c9; border-color: rgba(255, 143, 157, .28); background: var(--danger-soft); }
+.secondary-button:disabled, .icon-button:disabled { border-color: rgba(224, 209, 255, .26); background: rgba(255, 255, 255, .055); }
+.primary-button:disabled { color: #eee3fb; border-color: rgba(224, 204, 255, .35); background: linear-gradient(135deg, rgba(143, 113, 180, .9), rgba(111, 82, 149, .9)); }
+.danger-outline { color: #ffb5bf; border-color: rgba(255, 143, 157, .38); background: rgba(255, 122, 143, .1); }
+.danger-outline:hover:not(:disabled) { color: #ffdbe0; border-color: rgba(255, 171, 184, .68); background: rgba(255, 122, 143, .2); }
+.icon-button:hover:not(:disabled) { color: #fff; background: rgba(194, 162, 255, .2); }
+.secondary-button, .icon-button, .text-button { font-weight: 650; }
+.secondary-button { color: #fbf7ff; border-color: var(--line-strong); background: rgba(255, 255, 255, .105); }
+.secondary-button:hover:not(:disabled) { color: #fff; border-color: rgba(248, 237, 255, .86); background: rgba(197, 163, 255, .25); }
+.icon-button { color: #f1e8fb; }
+.text-button { color: #d9bfff; }
+.text-button:hover:not(:disabled) { color: #f1ddff; }
+.form-hint { color: var(--ink-soft); }

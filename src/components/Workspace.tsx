@@ -61,10 +61,10 @@ const secondaryNav: NavItem[] = [
 ];
 
 const viewMeta: Record<View, { eyebrow: string; title: string; description: string }> = {
-  home: { eyebrow: "订阅工作台", title: "我的订阅", description: "第一次用三步创建，之后在这里管理；不必每次重新配置。" },
+  home: { eyebrow: "订阅工作台", title: "我的订阅", description: "新建：导入 → 推荐或自定义 → 发布。已有订阅：选择卡片 → 编辑 → 更新原地址。" },
   sources: { eyebrow: "来源管理", title: "导入节点", description: "添加远程订阅、配置文件或节点分享链接。" },
   nodes: { eyebrow: "节点管理", title: "选择节点", description: "整理节点、检测连通性，再加入当前项目。" },
-  groups: { eyebrow: "高级配置", title: "代理分组", description: "通过拖拽设置节点选择、自动测速和链式代理。" },
+  groups: { eyebrow: "高级配置", title: "代理分组", description: "从全部分组选择当前组，再添加节点、调整成员和连接方式。" },
   rules: { eyebrow: "高级配置", title: "中文分流", description: "使用中文规则决定不同流量的连接方式。" },
   preview: { eyebrow: "高级工具", title: "预览校验", description: "检查最终配置源码并运行内核验证。" },
   history: { eyebrow: "安全保护", title: "历史版本", description: "创建快照，或回滚到可靠配置。" },
@@ -87,6 +87,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     return initial === "admin" && !user.isAdmin ? "settings" : initial;
   });
   const [status, setStatus] = useState<"saved" | "saving" | "dirty" | "error">("saved");
+  const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState("");
   const [showIssues, setShowIssues] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
@@ -98,22 +99,49 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   const editRevision = useRef(0);
   const saveInFlight = useRef<Promise<void> | null>(null);
   const savedVersion = useRef("");
+  const projectRef = useRef<Project | null>(null);
+  const statusRef = useRef(status);
+  const projectEpoch = useRef(0);
+  const projectRequest = useRef(0);
   const currentUrl = useRef(window.location.pathname + window.location.search);
   const [, setRouteRevision] = useState(0);
+  projectRef.current = project;
+  statusRef.current = status;
 
-  const loadProjects = useCallback(async () => {
-    const list = await api.listProjects();
-    setProjects(list);
-    const next = list.length ? await api.getProject(list[0].id) : await api.createProject("我的 OU-YAML 配置");
-    if (!list.length) setProjects([next]);
+  const replaceProject = useCallback((next: Project) => {
     window.clearTimeout(saveTimer.current);
     editRevision.current += 1;
+    projectEpoch.current += 1;
     savedVersion.current = next.updatedAt;
+    projectRef.current = next;
+    statusRef.current = "saved";
     setProject(next);
     setStatus("saved");
   }, []);
 
-  useEffect(() => { loadProjects().catch((error) => setMessage(error.message)); }, [loadProjects]);
+  const loadProjects = useCallback(async () => {
+    if (statusRef.current !== "saved" || saveInFlight.current) throw new Error("当前草稿尚未保存成功，已保留页面中的修改。");
+    setLoadError("");
+    const request = ++projectRequest.current;
+    const revision = editRevision.current;
+    const list = await api.listProjects();
+    const next = list.length ? await api.getProject(list[0].id) : await api.createProject("我的 OU-YAML 配置");
+    if (request !== projectRequest.current || revision !== editRevision.current) return;
+    setProjects(list.length ? list : [next]);
+    replaceProject(next);
+  }, [replaceProject]);
+
+  useEffect(() => { void loadProjects().catch((error) => setLoadError(error.message)); }, [loadProjects]);
+  useEffect(() => {
+    const protectDraft = (event: BeforeUnloadEvent) => {
+      if (status === "dirty" || status === "saving" || status === "error") {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", protectDraft);
+    return () => window.removeEventListener("beforeunload", protectDraft);
+  }, [status]);
   useEffect(() => {
     window.clearTimeout(messageTimer.current);
     if (!message) return;
@@ -140,11 +168,14 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   }, [user.isAdmin]);
 
   const navigate = useCallback((next: View, replace = false) => {
-    if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return;
+    if (window.location.pathname === routes[next] && !window.location.search) return true;
+    if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return false;
     setView(next);
     setMobileNav(false);
     window.history[replace ? "replaceState" : "pushState"]({}, "", routes[next]);
     currentUrl.current = routes[next];
+    setRouteRevision((value) => value + 1);
+    return true;
   }, []);
   const guide = useGuideController(user.username);
   function editSubscription(id: string, tab: SubscriptionEditorTab) {
@@ -154,14 +185,17 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     const address = `${routes.subscription}?id=${encodeURIComponent(id)}&tab=${tab}`;
     window.history.pushState({}, "", address);
     currentUrl.current = address;
+    setRouteRevision((value) => value + 1);
     if (tab === "rules") window.dispatchEvent(new CustomEvent("ou-yaml:guide-progress", { detail: "subscription-rules-opened" }));
   }
   function openQuickPublish() {
+    if (!navigate("home")) return;
     guide.pause();
-    navigate("home");
     const address = `${routes.home}?step=1`;
     window.history.replaceState({}, "", address);
     currentUrl.current = address;
+    setRouteRevision((value) => value + 1);
+    window.dispatchEvent(new CustomEvent("ou-yaml:quick-step", { detail: 1 }));
   }
 
   const issues = useMemo(() => project ? validateConfig(project.config) : [], [project]);
@@ -170,7 +204,13 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
 
   const updateProject = useCallback((updater: (current: Project) => Project) => {
     editRevision.current += 1;
-    setProject((current) => current ? updater(current) : current);
+    setProject((current) => {
+      if (!current) return current;
+      const next = updater(current);
+      projectRef.current = next;
+      return next;
+    });
+    statusRef.current = "dirty";
     setStatus("dirty");
   }, []);
 
@@ -179,66 +219,85 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     window.clearTimeout(saveTimer.current);
     const snapshot = project;
     const revision = editRevision.current;
+    const epoch = projectEpoch.current;
+    let cancelled = false;
     saveTimer.current = window.setTimeout(async () => {
       if (revision !== editRevision.current) return;
       if (saveInFlight.current) await saveInFlight.current.catch(() => undefined);
-      if (revision !== editRevision.current) return;
+      if (cancelled || revision !== editRevision.current || epoch !== projectEpoch.current) return;
+      statusRef.current = "saving";
       setStatus("saving");
       const operation = (async () => {
         const saved = await api.saveProject({ ...snapshot, updatedAt: savedVersion.current || snapshot.updatedAt });
+        if (epoch !== projectEpoch.current) return;
         savedVersion.current = saved.updatedAt;
         setProject((current) => current && current.id === snapshot.id ? { ...current, updatedAt: saved.updatedAt } : current);
         setProjects((current) => current.map((item) => item.id === snapshot.id ? saved : item));
-        if (revision === editRevision.current) setStatus("saved");
+        if (revision === editRevision.current) { statusRef.current = "saved"; setStatus("saved"); }
       })();
       saveInFlight.current = operation;
       try { await operation; }
       catch (error) {
-        if (revision === editRevision.current) {
+        if (epoch === projectEpoch.current && revision === editRevision.current) {
+          statusRef.current = "error";
           setStatus("error");
-          setMessage(error instanceof Error && (error as Error & { status?: number }).status === 409 ? "项目已在其他操作中更新，请刷新项目后再保存" : error instanceof Error ? error.message : "保存失败");
+          setMessage(error instanceof Error && (error as Error & { status?: number }).status === 409 ? "项目已在其他操作中更新，草稿已保留。请先导出当前草稿，再重新载入核对。" : `${error instanceof Error ? error.message : "保存失败"}；草稿已保留，可重试保存。`);
         }
       } finally { if (saveInFlight.current === operation) saveInFlight.current = null; }
     }, 700);
-    return () => window.clearTimeout(saveTimer.current);
+    return () => { cancelled = true; window.clearTimeout(saveTimer.current); };
   }, [project, status]);
 
   async function chooseProject(id: string) {
     if (id === project?.id) return;
-    if (status !== "saved") { setMessage("当前项目还有未完成的保存，请稍候再切换"); return; }
-    const selected = await api.getProject(id);
-    savedVersion.current = selected.updatedAt;
-    setProject(selected);
-    setStatus("saved");
+    if (statusRef.current !== "saved" || saveInFlight.current) { setMessage("当前项目还有未完成的保存，请稍候再切换"); return; }
+    if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return;
+    const request = ++projectRequest.current;
+    const revision = editRevision.current;
+    try {
+      const selected = await api.getProject(id);
+      if (request !== projectRequest.current) return;
+      if (revision !== editRevision.current) { setMessage("切换期间有新修改，已保留当前草稿，请保存后再切换。"); return; }
+      replaceProject(selected);
+    } catch (error) { if (request === projectRequest.current) setMessage(`切换失败，当前草稿已保留：${error instanceof Error ? error.message : "请稍后重试"}`); }
   }
 
   async function reloadCurrentProject() {
     const currentId = project?.id;
     if (!currentId) return;
-    window.clearTimeout(saveTimer.current);
-    editRevision.current += 1;
+    if (projectRef.current?.id !== currentId) throw new Error("当前配置已切换，请回到原配置核对操作结果。");
+    if (statusRef.current !== "saved" || saveInFlight.current) throw new Error("当前草稿尚未保存成功，已保留页面中的修改，请保存后再刷新。");
+    const request = ++projectRequest.current;
+    const revision = editRevision.current;
     const refreshed = await api.getProject(currentId);
-    savedVersion.current = refreshed.updatedAt;
-    setProject(refreshed);
+    if (request !== projectRequest.current || revision !== editRevision.current) throw new Error("刷新期间配置发生变化，当前草稿已保留，请核对后重试。");
+    replaceProject(refreshed);
     setProjects((current) => current.map((item) => item.id === refreshed.id ? { id: refreshed.id, name: refreshed.name, updatedAt: refreshed.updatedAt } : item));
-    setStatus("saved");
   }
 
   async function createProject() {
-    if (status !== "saved") { setMessage("请等待当前配置保存成功再新建"); return; }
-    const created = await api.createProject("我的新订阅");
-    savedVersion.current = created.updatedAt;
-    setProjects((current) => [created, ...current]);
-    setProject(created);
-    setStatus("saved");
-    navigate("home");
-    const address = `${routes.home}?step=0`;
-    window.history.replaceState({}, "", address);
-    currentUrl.current = address;
+    if (statusRef.current !== "saved" || saveInFlight.current) { setMessage("请等待当前配置保存成功再新建"); return false; }
+    if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return false;
+    const request = ++projectRequest.current;
+    const revision = editRevision.current;
+    try {
+      const created = await api.createProject("我的新订阅");
+      setProjects((current) => [created, ...current]);
+      if (request !== projectRequest.current || revision !== editRevision.current) { setMessage("新配置已创建，当前草稿已保留。保存后可从配置列表切换。"); return false; }
+      if (window.location.pathname !== routes.home && !navigate("home")) return false;
+      replaceProject(created);
+      const address = `${routes.home}?step=0`;
+      window.history.replaceState({}, "", address);
+      currentUrl.current = address;
+      setRouteRevision((value) => value + 1);
+      return true;
+    } catch (error) { setMessage(`创建失败：${error instanceof Error ? error.message : "请稍后重试"}`); return false; }
   }
 
   async function importContent(content: string, format: "auto" | "links" | TargetFormat, filename?: string) {
+    const revision = editRevision.current;
     const parsed = await api.parseContent(content, format);
+    if (revision !== editRevision.current) throw new Error("导入期间配置发生变化，当前草稿已保留，请重新导入。");
     if (parsed.config) {
       updateProject((current) => ({ ...current, name: filename ? filename.replace(/\.(ya?ml|json|txt)$/i, "") || current.name : current.name, config: parsed.config!, targetFormat: parsed.format as TargetFormat }));
       setMessage(`已导入 ${parsed.config.proxies.length} 个节点、${parsed.config.proxyGroups.length} 个策略组`);
@@ -279,7 +338,14 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     finally { setKernelBusy(false); }
   }
 
-  if (!project) return <div className="app-loading"><Gauge className="spin" size={24} /><span>正在打开工作台</span></div>;
+  async function logout() {
+    if (statusRef.current !== "saved" || saveInFlight.current) { setMessage("草稿尚未保存成功，请保存后再退出登录。"); return; }
+    if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return;
+    try { await api.logout(); onLogout(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "退出失败，请重试"); }
+  }
+
+  if (!project) return <div className="app-loading">{loadError ? <><p role="alert">工作台加载失败：{loadError}</p><button className="secondary-button" onClick={() => void loadProjects().catch((error) => setLoadError(error.message))}>重新加载</button></> : <><Gauge className="spin" size={24} /><span>正在打开工作台</span></>}</div>;
   const tabs = ["groups", "rules", "preview", "history"].includes(view) ? workspaceTabs : ["generator", "links"].includes(view) ? publishTabs : view === "settings" || view === "admin" ? [{ id: "settings" as View, label: "系统设置", icon: Settings }, ...(user.isAdmin ? [{ id: "admin" as View, label: "用户管理", icon: ShieldCheck }] : [])] : [];
 
   return <div className="workspace">
@@ -287,7 +353,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       <div className="sidebar-brand"><div className="brand-mark"><img src="/brand/ou-yaml-logo.png" alt="OU-YAML" /></div><div><strong>OU-YAML</strong><small>Configuration Studio</small></div><button className="icon-button mobile-only" onClick={() => setMobileNav(false)} aria-label="关闭导航"><XCircle size={20} /></button></div>
       <nav aria-label="主要导航" data-guide-id={guideTargets.mainNavigation}>{primaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)} aria-label={label} title={`${label}：${hint}`}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}</button>)}<span className="sidebar-section-label">更多工具</span>{secondaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)} aria-label={label} title={`${label}：${hint}`}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</nav>
       <button className="sidebar-help" data-guide-id={guideTargets.helpButton} aria-label="打开新手教程" onClick={guide.openCenter}><CircleHelp size={17} /><span><strong>新手教程</strong><small>从导入到发布，按步骤完成。</small></span></button>
-      <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={async () => { if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return; await api.logout(); onLogout(); }}><LogOut size={18} /></button></div>
+      <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={() => void logout()}><LogOut size={18} /></button></div>
     </aside>
     {mobileNav && <button className="mobile-nav-backdrop" onClick={() => setMobileNav(false)} aria-label="关闭导航菜单" />}
 
@@ -297,6 +363,7 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
         <div className="project-select-wrap" data-guide-id={guideTargets.projectSelector}><select aria-label="当前配置" title={project.name} value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
         <button className="icon-button new-project-action" onClick={() => void createProject()} title="新建配置" aria-label="新建配置"><FolderPlus size={18} /></button>
         <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />草稿保存中</> : status === "dirty" ? <><Save size={15} />等待保存</> : status === "error" ? <><XCircle size={15} />草稿保存失败</> : <><CheckCircle2 size={15} />草稿已保存</>}</div>
+        {status === "error" && <button className="text-button" onClick={() => { statusRef.current = "dirty"; setStatus("dirty"); }}>重试保存草稿</button>}
         <div className="top-actions">
           <button className="secondary-button top-import-action" onClick={() => setShowImport(true)} aria-label="导入配置" title="导入配置"><Upload size={17} /><span>导入配置</span></button>
           <select className="format-select" value={project.targetFormat} onChange={(event) => updateProject((current) => ({ ...current, targetFormat: event.target.value as TargetFormat }))} aria-label="导出格式"><option value="mihomo">YAML</option><option value="sing-box">JSON</option></select>
@@ -316,13 +383,13 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
       {showIssues && view !== "subscription" && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={() => void kernelValidate()}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
 
       <section className={`content-area${view === "groups" ? " groups-content" : view === "subscription" ? " subscription-content" : ""}`} key={view}>
-        {view === "home" && <><SubscriptionHomeView key={project.id} project={project} canPublish={status === "saved"} onReload={reloadCurrentProject} onNavigate={(next) => { guide.pause(); navigate(next); }} onStartGuide={guide.start} onEdit={editSubscription} onCreate={() => { if (status !== "saved") { setMessage("请等待当前配置保存成功"); return; } void createProject().then(() => guide.start("quickstart")).catch((error) => setMessage(error.message)); }} /><details className="advanced-dashboard"><summary>高级配置详情与历史流程</summary><QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} onStartGuide={() => guide.start("quickstart")} /></details></>}
+        {view === "home" && <><SubscriptionHomeView key={project.id} project={project} canPublish={status === "saved"} onReload={reloadCurrentProject} onNavigate={(next) => { if (navigate(next)) guide.pause(); }} onStartGuide={guide.start} onEdit={editSubscription} onCreate={() => { void createProject().then((created) => { if (created) guide.start("quickstart"); }); }} /><details className="advanced-dashboard"><summary>高级配置详情与历史流程</summary><QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} onStartGuide={() => guide.start("quickstart")} /></details></>}
         {view === "sources" && <SourceManagerView onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
         {view === "nodes" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onProjectReload={reloadCurrentProject} onMessage={setMessage} onOpenSources={() => navigate("sources")} />}
         {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} nextAction={<button className="secondary-button group-next-action" disabled={status !== "saved"} aria-label="下一步：生成订阅" onClick={openQuickPublish}>生成订阅</button>} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "preview" && <>{previewExport(project.config, project.targetFormat).issues.filter((issue) => issue.level === "error").map((issue, index) => <p role="alert" key={index}>{issue.message}</p>)}<SourceView config={project.config} format={project.targetFormat} source={previewExport(project.config, project.targetFormat).content} onApply={(config) => updateProject((current) => ({ ...current, config }))} /></>}
-        {view === "history" && <HistoryView project={project} onRestore={(restored) => { savedVersion.current = restored.updatedAt; setProject(restored); setStatus("saved"); }} onMessage={setMessage} />}
+        {view === "history" && <HistoryView key={project.id} project={project} onRestore={(restored) => { if (restored.id !== projectRef.current?.id) return; if (statusRef.current !== "saved" || saveInFlight.current) { setMessage("历史内容已恢复到服务器，当前未保存草稿已保留，请先导出草稿再核对。"); return; } replaceProject(restored); }} onMessage={setMessage} />}
         {view === "generator" && <GeneratorView project={project} onMessage={setMessage} onOpenNodes={() => navigate("nodes")} />}
         {view === "links" && <GeneratedSubscriptionsView onMessage={setMessage} onEdit={editSubscription} />}
         {view === "subscription" && <SubscriptionEditorView key={window.location.search} id={new URLSearchParams(window.location.search).get("id") || ""} initialTab={new URLSearchParams(window.location.search).get("tab") === "rules" ? "rules" : new URLSearchParams(window.location.search).get("tab") === "nodes" ? "nodes" : "groups"} onBack={() => navigate("home")} onMessage={setMessage} />}
