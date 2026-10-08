@@ -64,8 +64,8 @@ const viewMeta: Record<View, { eyebrow: string; title: string; description: stri
   home: { eyebrow: "订阅工作台", title: "我的订阅", description: "第一次用三步创建，之后在这里管理；不必每次重新配置。" },
   sources: { eyebrow: "来源管理", title: "导入节点", description: "添加远程订阅、配置文件或节点分享链接。" },
   nodes: { eyebrow: "节点管理", title: "选择节点", description: "整理节点、检测连通性，再加入当前项目。" },
-  groups: { eyebrow: "高级配置", title: "设置代理", description: "通过拖拽设置节点选择、自动测速和链式代理。" },
-  rules: { eyebrow: "高级配置", title: "设置分流", description: "使用中文规则决定不同流量的连接方式。" },
+  groups: { eyebrow: "高级配置", title: "代理分组", description: "通过拖拽设置节点选择、自动测速和链式代理。" },
+  rules: { eyebrow: "高级配置", title: "中文分流", description: "使用中文规则决定不同流量的连接方式。" },
   preview: { eyebrow: "高级工具", title: "预览校验", description: "检查最终配置源码并运行内核验证。" },
   history: { eyebrow: "安全保护", title: "历史版本", description: "创建快照，或回滚到可靠配置。" },
   generator: { eyebrow: "高级发布", title: "生成订阅", description: "跟随向导检查配置并发布稳定订阅链接。" },
@@ -285,44 +285,45 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   return <div className="workspace">
     <aside className={mobileNav ? "sidebar mobile-open" : "sidebar"}>
       <div className="sidebar-brand"><div className="brand-mark"><img src="/brand/ou-yaml-logo.png" alt="OU-YAML" /></div><div><strong>OU-YAML</strong><small>Configuration Studio</small></div><button className="icon-button mobile-only" onClick={() => setMobileNav(false)} aria-label="关闭导航"><XCircle size={20} /></button></div>
-      <nav aria-label="主要导航" data-guide-id={guideTargets.mainNavigation}>{primaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}</button>)}<span className="sidebar-section-label">更多工具</span>{secondaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</nav>
-      <button className="sidebar-help" onClick={guide.openCenter}><CircleHelp size={17} /><span><strong>不知道怎么操作？</strong><small>打开跳转式新手教程。</small></span></button>
+      <nav aria-label="主要导航" data-guide-id={guideTargets.mainNavigation}>{primaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)} aria-label={label} title={`${label}：${hint}`}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}</button>)}<span className="sidebar-section-label">更多工具</span>{secondaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)} aria-label={label} title={`${label}：${hint}`}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</nav>
+      <button className="sidebar-help" data-guide-id={guideTargets.helpButton} aria-label="打开新手教程" onClick={guide.openCenter}><CircleHelp size={17} /><span><strong>新手教程</strong><small>从导入到发布，按步骤完成。</small></span></button>
       <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={async () => { if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return; await api.logout(); onLogout(); }}><LogOut size={18} /></button></div>
     </aside>
     {mobileNav && <button className="mobile-nav-backdrop" onClick={() => setMobileNav(false)} aria-label="关闭导航菜单" />}
 
-    <main className="main-shell">
-      <header className="topbar">
+    <main className={`main-shell${view === "groups" ? " group-workspace" : view === "rules" ? " rules-workspace" : view === "subscription" ? " subscription-workspace" : ""}`}>
+      {view !== "subscription" && <header className="topbar">
         <button className="icon-button mobile-only" onClick={() => setMobileNav(true)} aria-label="打开导航"><Menu size={20} /></button>
-        {view !== "subscription" && <><div className="project-select-wrap" data-guide-id={guideTargets.projectSelector}><select aria-label="当前配置" title={project.name} value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
+        <div className="project-select-wrap" data-guide-id={guideTargets.projectSelector}><select aria-label="当前配置" title={project.name} value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
         <button className="icon-button new-project-action" onClick={() => void createProject()} title="新建配置" aria-label="新建配置"><FolderPlus size={18} /></button>
         <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />草稿保存中</> : status === "dirty" ? <><Save size={15} />等待保存</> : status === "error" ? <><XCircle size={15} />草稿保存失败</> : <><CheckCircle2 size={15} />草稿已保存</>}</div>
         <div className="top-actions">
-          <button className="secondary-button top-import-action" onClick={() => setShowImport(true)}><Upload size={17} /><span>导入配置</span></button>
+          <button className="secondary-button top-import-action" onClick={() => setShowImport(true)} aria-label="导入配置" title="导入配置"><Upload size={17} /><span>导入配置</span></button>
           <select className="format-select" value={project.targetFormat} onChange={(event) => updateProject((current) => ({ ...current, targetFormat: event.target.value as TargetFormat }))} aria-label="导出格式"><option value="mihomo">YAML</option><option value="sing-box">JSON</option></select>
-          <button className="primary-button" onClick={() => void download()} disabled={errors > 0}><Download size={17} /><span>导出</span></button>
-        </div></>}
-      </header>
+          <button className="primary-button" onClick={() => void download()} disabled={errors > 0} aria-label="导出" title="导出当前配置"><Download size={17} /><span>导出</span></button>
+        </div>
+      </header>}
       <div className={`mobile-guide-slot${view === "home" ? " mobile-guide-home" : ""}`}><GuideTrigger controller={guide} className="mobile-guide-trigger" /></div>
 
       <div className="page-heading">
+        {view === "subscription" && <button className="icon-button mobile-only" onClick={() => setMobileNav(true)} aria-label="打开导航"><Menu size={20} /></button>}
         <div><div className="eyebrow">{meta.eyebrow}</div><h1>{meta.title}</h1><p>{meta.description}</p></div>
         {view !== "subscription" && view !== "home" && <button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button>}
       </div>
 
       {tabs.length > 0 && <nav className="section-tabs" aria-label="当前模块">{tabs.map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "active" : ""} onClick={() => navigate(id)}><Icon size={16} />{label}</button>)}</nav>}
 
-      {showIssues && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={() => void kernelValidate()}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
+      {showIssues && view !== "subscription" && <section className="issues-panel" aria-label="配置检查"><header><strong>配置检查</strong><div className="panel-actions"><button className="secondary-button compact-button" disabled={kernelBusy} onClick={() => void kernelValidate()}>{kernelBusy ? <LoaderCircle className="spin" size={15} /> : <TerminalSquare size={15} />}内核实测</button><button className="icon-button compact" onClick={() => setShowIssues(false)} aria-label="关闭"><XCircle size={18} /></button></div></header>{issues.length ? issues.map((issue, index) => <div className={`issue-row ${issue.level}`} key={`${issue.message}-${index}`}>{issue.level === "error" ? <XCircle size={17} /> : <AlertTriangle size={17} />}<span>{issue.message}</span></div>) : <div className="issue-empty"><CheckCircle2 size={18} />未发现问题</div>}{kernelResult && <div className={`kernel-result ${!kernelResult.available ? "warning" : kernelResult.valid ? "success" : "error"}`}><div>{!kernelResult.available ? <AlertTriangle size={17} /> : kernelResult.valid ? <CheckCircle2 size={17} /> : <XCircle size={17} />}<strong>{!kernelResult.available ? "内核不可用" : kernelResult.valid ? "内核检查通过" : "内核检查失败"}</strong></div><pre>{kernelResult.output}</pre></div>}</section>}
 
-      <section className="content-area" key={view}>
+      <section className={`content-area${view === "groups" ? " groups-content" : view === "subscription" ? " subscription-content" : ""}`} key={view}>
         {view === "home" && <><SubscriptionHomeView key={project.id} project={project} canPublish={status === "saved"} onReload={reloadCurrentProject} onNavigate={(next) => { guide.pause(); navigate(next); }} onStartGuide={guide.start} onEdit={editSubscription} onCreate={() => { if (status !== "saved") { setMessage("请等待当前配置保存成功"); return; } void createProject().then(() => guide.start("quickstart")).catch((error) => setMessage(error.message)); }} /><details className="advanced-dashboard"><summary>高级配置详情与历史流程</summary><QuickStartView project={project} onNavigate={(target: GuideTarget) => navigate(target)} onDownload={download} onStartGuide={() => guide.start("quickstart")} /></details></>}
         {view === "sources" && <SourceManagerView onProjectReload={reloadCurrentProject} onMessage={setMessage} />}
         {view === "nodes" && <NodePoolView config={project.config} onConfig={(config) => updateProject((current) => ({ ...current, config }))} onProjectReload={reloadCurrentProject} onMessage={setMessage} onOpenSources={() => navigate("sources")} />}
-        {view === "groups" && <><div className="draft-flow"><span>导入节点 → 编辑分组 → 检查并生成订阅</span><button className="primary-button" disabled={status !== "saved"} onClick={openQuickPublish}>下一步：生成订阅</button></div><GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} /></>}
+        {view === "groups" && <GroupsView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} onMessage={setMessage} nextAction={<button className="secondary-button group-next-action" disabled={status !== "saved"} aria-label="下一步：生成订阅" onClick={openQuickPublish}>生成订阅</button>} />}
         {view === "rules" && <RulesView config={project.config} onChange={(config) => updateProject((current) => ({ ...current, config }))} />}
         {view === "preview" && <>{previewExport(project.config, project.targetFormat).issues.filter((issue) => issue.level === "error").map((issue, index) => <p role="alert" key={index}>{issue.message}</p>)}<SourceView config={project.config} format={project.targetFormat} source={previewExport(project.config, project.targetFormat).content} onApply={(config) => updateProject((current) => ({ ...current, config }))} /></>}
         {view === "history" && <HistoryView project={project} onRestore={(restored) => { savedVersion.current = restored.updatedAt; setProject(restored); setStatus("saved"); }} onMessage={setMessage} />}
-        {view === "generator" && <GeneratorView project={project} onMessage={setMessage} />}
+        {view === "generator" && <GeneratorView project={project} onMessage={setMessage} onOpenNodes={() => navigate("nodes")} />}
         {view === "links" && <GeneratedSubscriptionsView onMessage={setMessage} onEdit={editSubscription} />}
         {view === "subscription" && <SubscriptionEditorView key={window.location.search} id={new URLSearchParams(window.location.search).get("id") || ""} initialTab={new URLSearchParams(window.location.search).get("tab") === "rules" ? "rules" : new URLSearchParams(window.location.search).get("tab") === "nodes" ? "nodes" : "groups"} onBack={() => navigate("home")} onMessage={setMessage} />}
         {view === "templates" && <TemplatesView onMessage={setMessage} />}

@@ -23,7 +23,7 @@ export function SubscriptionActions({ item, onEdit, onRenamed }: { item: Generat
       <button className="secondary-button compact-button" disabled={item.revoked} onClick={() => onEdit(item.id, "nodes")}><Database size={16} />选择节点</button>
       <button className="text-button" onClick={() => { setName(item.name); setError(""); }}><Pencil size={15} />重命名</button>
     </div>
-    <Drawer title="重命名订阅" open={name !== null} onClose={() => { if (!busy) setName(null); }} footer={<><button className="secondary-button" disabled={busy} onClick={() => setName(null)}>取消</button><button className="primary-button" disabled={busy || !name?.trim()} onClick={() => void rename()}>{busy && <LoaderCircle size={16} className="spin" />}保存名称</button></>}>
+    <Drawer size="compact" title="重命名订阅" open={name !== null} onClose={() => { if (!busy) setName(null); }} footer={<><button className="secondary-button" disabled={busy} onClick={() => setName(null)}>取消</button><button className="primary-button" disabled={busy || !name?.trim()} onClick={() => void rename()}>{busy && <LoaderCircle size={16} className="spin" />}保存名称</button></>}>
       <label className="editor-name">订阅名称<input value={name || ""} maxLength={120} disabled={busy} onChange={(event) => setName(event.target.value)} /></label><p>只修改管理界面中的名称，原链接、公开配置和内容版本保持不变。</p>{error && <p role="alert">{error}</p>}
     </Drawer>
   </>;

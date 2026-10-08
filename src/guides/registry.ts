@@ -1,4 +1,4 @@
-export const GUIDE_VERSION = "1.8";
+export const GUIDE_VERSION = "1.9";
 
 export type GuideView = "home" | "sources" | "nodes" | "groups" | "rules" | "preview" | "history" | "generator" | "links" | "subscription" | "templates" | "settings" | "admin";
 
@@ -67,7 +67,7 @@ export const guideRegistry: readonly GuideDefinition[] = [
     id: "website", title: "让某个网站走指定线路", description: "添加中文网站规则，发布到原地址，再刷新客户端。", duration: "约 2 分钟",
     steps: [
       { id: "choose", view: "home", target: guideTargets.homeSubscriptions, advanceOn: "subscription-rules-opened", title: "先选中要修改的订阅", description: "在这份订阅的卡片上点击“编辑分流”，不是新建订阅。尚未生成过链接时，请先用三步教程创建。" },
-      { id: "rule", view: "subscription", target: guideTargets.subscriptionRules, advanceOn: "website-rule-added", title: "为网站选择连接方式", description: "填写域名，例如 example.com；选择直接连接或代理组，点击“添加网站规则”。这些修改尚未影响客户端。" },
+      { id: "rule", view: "subscription", target: guideTargets.ruleScenario, advanceOn: "website-rule-added", title: "为网站选择连接方式", description: "填写域名，选择连接方式，点击“添加网站规则”。默认包含子域名，发布前不会影响客户端。" },
       { id: "publish", view: "subscription", target: guideTargets.subscriptionSave, advanceOn: "subscription-updated", title: "把规则更新到原订阅", description: "点击“检查并更新原订阅”，确认名称、数量变化与原地址不变，再点击确认。成功后回到手机或电脑客户端刷新订阅，不用重新填写地址。" },
     ],
   },
@@ -129,10 +129,9 @@ export const guideRegistry: readonly GuideDefinition[] = [
     description: "不用记英文代码，也能理解规则顺序和兜底逻辑。",
     duration: "约 3 分钟",
     steps: [
-      { id: "rule-mode", view: "rules", target: guideTargets.ruleMode, title: "新手与高级模式", description: "新手模式使用自然语言；高级模式保留完整表格和原始参数。" },
-      { id: "rule-template", view: "rules", target: guideTargets.ruleTemplates, title: "一键应用模板", description: "模板会自动生成常用规则，并保证最终兜底规则位于末尾。" },
-      { id: "rule-scenario", view: "rules", target: guideTargets.ruleScenario, title: "像写中文句子一样分流", description: "填写网站域名，选择“含子域名”和目标策略，即可添加标准英文规则；高级自定义入口会展示对应示例和说明。" },
-      { id: "rule-list", view: "rules", target: guideTargets.ruleList, title: "检查顺序后再发布", description: "规则从上到下匹配，越具体的规则越应该放在前面。模板和自定义规则最终仍写入标准英文值，检查无误后再发布。" },
+      { id: "rule-scenario", view: "rules", target: guideTargets.ruleScenario, title: "为网站选择线路", description: "填写域名和连接方式，点击“添加网站规则”。不用自己写英文代码。" },
+      { id: "rule-template", view: "rules", target: guideTargets.ruleTemplates, title: "也可以用现成模板", description: "“基础分流”可生成常用规则。选择追加可保留已有设置。" },
+      { id: "rule-list", view: "rules", target: guideTargets.ruleList, title: "按顺序检查规则", description: "规则从上往下匹配，兜底放最后。点击“编辑”修改内容并查看英文格式，检查后再发布。" },
     ],
   },
   {

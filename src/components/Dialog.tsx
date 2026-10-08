@@ -34,13 +34,13 @@ function useModalFocus(open: boolean, onClose: () => void, dialogRef: React.RefO
   }, [open, dialogRef]);
 }
 
-export function Drawer({ title, open, onClose, children, footer }: { title: string; open: boolean; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+export function Drawer({ title, open, onClose, children, footer, size = "default", closeDisabled = false }: { title: string; open: boolean; onClose: () => void; children: ReactNode; footer?: ReactNode; size?: "default" | "compact"; closeDisabled?: boolean }) {
   const dialogRef = useRef<HTMLElement | null>(null);
-  useModalFocus(open, onClose, dialogRef);
+  useModalFocus(open, () => { if (!closeDisabled) onClose(); }, dialogRef);
   if (!open) return null;
-  return createPortal(<div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section ref={dialogRef} className="drawer" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
-      <header><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="关闭"><X size={20} /></button></header>
+  return createPortal(<div className={`overlay${size === "compact" ? " overlay-compact" : ""}`} role="presentation" onMouseDown={(event) => { if (!closeDisabled && event.target === event.currentTarget) onClose(); }}>
+    <section ref={dialogRef} className={`drawer${size === "compact" ? " drawer-compact" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
+      <header><h2>{title}</h2><button className="icon-button" disabled={closeDisabled} onClick={onClose} aria-label="关闭"><X size={20} /></button></header>
       <div className="drawer-body">{children}</div>
       {footer && <footer>{footer}</footer>}
     </section>

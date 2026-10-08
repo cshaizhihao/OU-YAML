@@ -9,7 +9,7 @@
     <a href="./CHANGELOG.md">更新记录</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.8.0-A33D57?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/version-1.9.0-A33D57?style=flat-square" alt="version" />
     <img src="https://img.shields.io/badge/UI-V1.0.0-AD8BF2?style=flat-square" alt="UI baseline" />
     <img src="https://img.shields.io/badge/Node.js-22%2B-247B78?style=flat-square" alt="Node.js" />
     <img src="https://img.shields.io/badge/Mihomo-supported-D5962A?style=flat-square" alt="Mihomo" />
@@ -31,7 +31,7 @@ OU-YAML 是一个自托管的代理配置工作台。它把订阅 URL、配置�
 
 无需反复手写 YAML，也无需为每次节点变化重新更换客户端订阅地址。
 
-### ✨ V1.0.0 体验基线
+### ✨ v1.9.0 · 更清晰、更紧凑的工作台
 
 - 💜 紫色 Liquid Glass 工作台：清晰的材质层级、克制的环境光和丝滑微动效。
 - 🧭 导入 → 节点 → 分组 → 规则 → 生成的主流程更明确，新手只需跟随三步向导。
@@ -39,6 +39,8 @@ OU-YAML 是一个自托管的代理配置工作台。它把订阅 URL、配置�
 - 🧪 TCP 探测结果紧邻节点按钮显示，按真实延迟呈现绿、黄、红三档状态。
 - 🧩 策略组支持节点拖入、组嵌套、循环引用拦截、排序和自动保存。
 - 🔁 已生成订阅可自定义名称、再次编辑分组/规则，并保持原订阅地址不变。
+- 📚 中文规则默认只展示摘要，点击「编辑」再展开参数与英文原文；删除前统一确认。
+- 👁️ 提升文字与控件对比度，移动端长规则自动换行；教程不会遮挡订阅发布按钮。
 
 已经发布过？回到「我的订阅」就能复制原链接、查看最近更新与异常；只有需要添加节点或修改配置时才重新进入向导。
 
@@ -185,11 +187,12 @@ http://服务器IP:8787
 
 ### 📚 中文分流规则与模板
 
-- 默认使用中文自然语言编辑器，例如「当域名后缀是 example.com 时，使用节点选择」。
+- 新手模式默认显示紧凑摘要；点击「编辑」展开匹配方式、目标策略、中文解释和英文原文。
 - `DOMAIN-SUFFIX`、`GEOIP`、`MATCH`、`DIRECT`、`REJECT` 等代码均提供中文名称、说明和输入示例。
 - 中文仅用于理解和编辑，保存与导出仍使用兼容 Mihomo / sing-box 的标准英文规则。
 - 支持切换高级表格，编辑匹配值、目标策略、附加参数、备注和英文原文。
 - 规则搜索、复制、排序、批量启用、停用与删除。
+- 单条与批量删除均需确认，规则提醒按需展开；手机端以单列展示。
 - 内置局域网直连、广告拦截、国内直连、开发服务和基础分流模板。
 - 支持创建、复制、编辑和删除个人规则模板。
 - 网站场景编辑：填写域名、选择含子域名或精确匹配、选择连接方式即可生成规则。

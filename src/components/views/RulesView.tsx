@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, BookOpenCheck, Check, CheckCircle2, Code2, Copy, Info, LayoutTemplate, ListChecks, Plus, Search, Sparkles, Square, Trash2, XCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, BookOpenCheck, Check, CheckCircle2, Code2, Copy, Info, LayoutTemplate, ListChecks, Pencil, Plus, Search, Sparkles, Square, Trash2, XCircle } from "lucide-react";
 import type { MihomoConfig, RuleItem } from "../../shared/types";
 import { applyRuleTemplate, ruleTemplates } from "../../shared/ruleTemplates";
 import { createId } from "../../shared/id";
 import { getRuleDefinition, ruleCatalog, ruleOptionLabel, ruleSentence, ruleSourcePreview, ruleTargetLabel, ruleTypeLabel } from "../../shared/ruleCatalog";
 import { guideTargets } from "../../guides/registry";
 import { duplicateRule, createScenarioRule, inspectRules, explainDomain } from "../../shared/ruleTools";
-import { Drawer } from "../Dialog";
+import { ConfirmDialog, Drawer } from "../Dialog";
 
 type EditorMode = "beginner" | "advanced";
 
@@ -28,6 +28,9 @@ export function RulesView({ config, onChange }: { config: MihomoConfig; onChange
   const [scenarioTarget, setScenarioTarget] = useState(config.proxyGroups[0]?.name || "DIRECT");
   const [explanation, setExplanation] = useState("");
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [deleting, setDeleting] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<EditorMode>(() => localStorage.getItem("ou-yaml:rule-editor-mode") === "advanced" ? "advanced" : "beginner");
   const targets = targetOptions(config);
@@ -36,8 +39,12 @@ export function RulesView({ config, onChange }: { config: MihomoConfig; onChange
   const allVisibleSelected = visible.length > 0 && visible.every((rule) => selected.has(rule.id));
   const matchRules = config.rules.filter((rule) => rule.enabled && rule.type === "MATCH");
   const matchReady = matchRules.length === 1 && config.rules.filter((rule) => rule.enabled).at(-1)?.id === matchRules[0]?.id;
+  const ruleIssues = useMemo(() => inspectRules(config.rules), [config.rules]);
 
   useEffect(() => { localStorage.setItem("ou-yaml:rule-editor-mode", mode); }, [mode]);
+  useEffect(() => {
+    if (!targetOptions(config).includes(scenarioTarget)) setScenarioTarget(config.proxyGroups[0]?.name || "DIRECT");
+  }, [config.proxyGroups, scenarioTarget]);
 
   const update = (id: string, values: Partial<RuleItem>) => onChange({ ...config, rules: config.rules.map((rule) => rule.id === id ? { ...rule, ...values } : rule) });
   const move = (id: string, direction: -1 | 1) => {
@@ -55,6 +62,9 @@ export function RulesView({ config, onChange }: { config: MihomoConfig; onChange
     if (matchIndex < 0) rules.push(rule);
     else rules.splice(matchIndex, 0, rule);
     onChange({ ...config, rules });
+    setQuery("");
+    setMode("beginner");
+    setEditingId(rule.id);
   };
   const changeType = (rule: RuleItem, type: string) => {
     const next = config.rules.map((item) => item.id === rule.id ? { ...item, type, value: type === "MATCH" ? "" : item.value } : item);
@@ -71,61 +81,55 @@ export function RulesView({ config, onChange }: { config: MihomoConfig; onChange
     return next;
   });
   const batchEnabled = (enabled: boolean) => onChange({ ...config, rules: config.rules.map((rule) => selected.has(rule.id) ? { ...rule, enabled } : rule) });
-  const deleteSelected = () => {
-    onChange({ ...config, rules: config.rules.filter((rule) => !selected.has(rule.id)) });
-    setSelected(new Set());
-  };
-
-  return <>
-    <section className="rule-scenario panel-card" data-guide-id={guideTargets.ruleScenario}>
-      <h2>这个网站应该怎么连接？</h2>
-      <div className="scenario-fields"><label>网站域名<input value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="例如 example.com" /></label><label>匹配范围<select value={includeSubdomains ? "suffix" : "exact"} onChange={(event) => setIncludeSubdomains(event.target.value === "suffix")}><option value="suffix">该网站及所有子域名</option><option value="exact">仅这个完整域名</option></select></label><label>连接方式<select value={scenarioTarget} onChange={(event) => setScenarioTarget(event.target.value)}>{targets.map((target) => <option key={target} value={target}>{ruleTargetLabel(target)}</option>)}</select></label>
-      <button className="primary-button" onClick={() => { try { const rule = createScenarioRule(domain, scenarioTarget, includeSubdomains); onChange({ ...config, rules: [rule, ...config.rules] }); setExplanation("已添加到最前面，草稿自动保存；检查并发布后，再到客户端刷新订阅。"); window.dispatchEvent(new CustomEvent("ou-yaml:guide-progress", { detail: "website-rule-added" })); } catch (error) { setExplanation((error as Error).message); } }}>添加网站规则</button>
-      <button className="secondary-button" onClick={() => { try { const result = explainDomain(config.rules, domain); setExplanation(`${result.uncertain.length ? `前面有 ${result.uncertain.join("、")} 规则，需要实际 IP、分类库或进程信息才能确定。仅按域名推演：` : "按域名匹配："}${result.rule ? `${ruleTypeLabel(result.rule.type)} → ${ruleTargetLabel(result.rule.target)}` : "没有匹配规则"}`); } catch (error) { setExplanation((error as Error).message); } }}>检查匹配结果</button></div>
+  return <div className="rules-editor">
+    <section className="rule-scenario" data-guide-id={guideTargets.ruleScenario}>
+      <header><h2>为网站指定线路</h2><button className="text-button" onClick={() => setHelpOpen(true)}><BookOpenCheck size={15} />规则说明</button></header>
+      <form className="scenario-fields" onSubmit={(event) => { event.preventDefault(); try { const rule = createScenarioRule(domain, scenarioTarget, includeSubdomains); onChange({ ...config, rules: [rule, ...config.rules] }); setQuery(""); setExplanation("已添加到最前面，检查并发布后生效。"); window.dispatchEvent(new CustomEvent("ou-yaml:guide-progress", { detail: "website-rule-added" })); } catch (error) { setExplanation((error as Error).message); } }}>
+        <label className="scenario-domain">网站域名<input value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="例如 example.com" /></label>
+        <label className="scenario-target">连接方式<select value={scenarioTarget} onChange={(event) => setScenarioTarget(event.target.value)}>{targets.map((target) => <option key={target} value={target}>{ruleTargetLabel(target)}</option>)}</select></label>
+        <button className="primary-button" type="submit">添加网站规则</button>
+        <div className="scenario-options"><label><input type="checkbox" checked={includeSubdomains} onChange={(event) => setIncludeSubdomains(event.target.checked)} />包含子域名</label><button className="text-button" type="button" onClick={() => { try { const result = explainDomain(config.rules, domain); setExplanation(`${result.uncertain.length ? `前面有 ${result.uncertain.join("、")} 规则，需要实际 IP、分类库或进程信息才能确定。仅按域名推演：` : "按域名匹配："}${result.rule ? `${ruleTypeLabel(result.rule.type)} → ${ruleTargetLabel(result.rule.target)}` : "没有匹配规则"}`); } catch (error) { setExplanation((error as Error).message); } }}>检查匹配结果</button></div>
+      </form>
       {explanation && <p role="status">{explanation}</p>}
-      {inspectRules(config.rules).slice(0, 5).map((message) => <p className="rule-inline-error" key={message}>{message}</p>)}
     </section>
-    <div className="rules-onboarding-note">
-      <span><BookOpenCheck size={20} /></span>
-      <div><strong>不用记英文规则</strong><p>新手模式会把规则翻译成中文句子；保存和导出时仍使用 Mihomo / sing-box 要求的标准英文代码。</p></div>
-    </div>
 
-    <div className="view-toolbar rules-toolbar">
-      <div className="rules-toolbar-main">
+    <div className="rules-toolbar">
         <div className="editor-mode-switch" data-guide-id={guideTargets.ruleMode} role="group" aria-label="规则编辑模式">
-          <button className={mode === "beginner" ? "active" : ""} onClick={() => setMode("beginner")}><ListChecks size={16} />新手模式</button>
-          <button className={mode === "advanced" ? "active" : ""} onClick={() => setMode("advanced")}><Code2 size={16} />高级模式</button>
+          <button className={mode === "beginner" ? "active" : ""} aria-pressed={mode === "beginner"} onClick={() => setMode("beginner")}><ListChecks size={16} />新手模式</button>
+          <button className={mode === "advanced" ? "active" : ""} aria-pressed={mode === "advanced"} onClick={() => setMode("advanced")}><Code2 size={16} />高级模式</button>
         </div>
         <label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索中文类型、匹配内容、策略或备注" aria-label="搜索规则" /></label>
-      </div>
       <div className="toolbar-actions"><button className="secondary-button" data-guide-id={guideTargets.ruleTemplates} onClick={() => setTemplatesOpen(true)}><LayoutTemplate size={17} />规则模板</button><button className="primary-button" data-guide-id={guideTargets.ruleAdd} onClick={addRule}><Plus size={17} />添加规则</button></div>
     </div>
 
-    <div className="rule-overview">
-      <span><strong>{config.rules.length}</strong> 条规则</span>
-      <span><strong>{config.rules.filter((rule) => rule.enabled).length}</strong> 条启用</span>
+    <div className="rule-overview" data-guide-id={guideTargets.ruleList}>
+      <span><strong>{config.rules.length}</strong> 条规则 · 从上往下匹配</span>
       <span className={matchReady ? "ready" : "warning"}>{matchReady ? <CheckCircle2 size={15} /> : <XCircle size={15} />}{matchReady ? "最终兜底规则正确" : matchRules.length > 1 ? "存在多条兜底规则" : matchRules.length ? "兜底规则需要放在最后" : "缺少最终兜底规则"}</span>
     </div>
 
-    {mode === "beginner" && <div className="rule-order-hint"><Info size={16} /><span><strong>规则从上到下依次匹配。</strong>越具体的规则越靠前，“最终兜底规则”必须放在最后。</span></div>}
+    {ruleIssues.length > 0 && <details className="rule-issues"><summary>{ruleIssues.length} 条规则提醒</summary>{ruleIssues.map((message) => <p key={message}>{message}</p>)}</details>}
 
-    {selected.size > 0 && <div className="rule-batch-bar"><span>已选择 <strong>{selectedRules.length}</strong> 条</span><button className="secondary-button compact-button" onClick={() => batchEnabled(true)}><CheckCircle2 size={14} />启用</button><button className="secondary-button compact-button" onClick={() => batchEnabled(false)}><Square size={14} />停用</button><button className="secondary-button compact-button danger-outline" onClick={deleteSelected}><Trash2 size={14} />删除</button><button className="text-button" onClick={() => setSelected(new Set())}>取消选择</button></div>}
+    {selectedRules.length > 0 && <div className="rule-batch-bar"><span>已选择 <strong>{selectedRules.length}</strong> 条</span><button className="secondary-button compact-button" onClick={() => batchEnabled(true)}><CheckCircle2 size={14} />启用</button><button className="secondary-button compact-button" onClick={() => batchEnabled(false)}><Square size={14} />停用</button><button className="secondary-button compact-button danger-outline" onClick={() => setDeleting(selectedRules.map((rule) => rule.id))}><Trash2 size={14} />删除</button><button className="text-button" onClick={() => setSelected(new Set())}>取消选择</button></div>}
 
-    <div data-guide-id={guideTargets.ruleList}>
+    <div>
       {mode === "beginner"
-        ? <BeginnerRuleList rules={visible} allRules={config.rules} targets={targets} selected={selected} onSelect={toggleSelected} onUpdate={update} onChangeType={changeType} onMove={move} onDuplicate={(rule) => onChange({ ...config, rules: duplicateRule(config.rules, rule) })} onDelete={(id) => onChange({ ...config, rules: config.rules.filter((item) => item.id !== id) })} />
-        : <AdvancedRuleTable visible={visible} config={config} targets={targets} selected={selected} allVisibleSelected={allVisibleSelected} onSelected={setSelected} onSelect={toggleSelected} onUpdate={update} onChangeType={changeType} onMove={move} onChange={onChange} />}
+        ? <BeginnerRuleList rules={visible} allRules={config.rules} targets={targets} selected={selected} editingId={editingId} onEdit={setEditingId} onSelect={toggleSelected} onUpdate={update} onChangeType={changeType} onMove={move} onDuplicate={(rule) => onChange({ ...config, rules: duplicateRule(config.rules, rule) })} onDelete={(id) => setDeleting([id])} />
+        : <AdvancedRuleTable visible={visible} config={config} targets={targets} selected={selected} allVisibleSelected={allVisibleSelected} onSelected={setSelected} onSelect={toggleSelected} onUpdate={update} onChangeType={changeType} onMove={move} onChange={onChange} onDelete={(id) => setDeleting([id])} />}
     </div>
 
     <TemplateDrawer open={templatesOpen} config={config} onClose={() => setTemplatesOpen(false)} onApply={(template, target, applyMode) => { onChange(applyRuleTemplate(config, template, target, applyMode)); setTemplatesOpen(false); }} />
-  </>;
+    <Drawer title="怎样编写分流规则" size="compact" open={helpOpen} onClose={() => setHelpOpen(false)}><div className="rules-help"><p>先填写网站，再选择连接方式。中文只帮助理解，实际配置仍使用标准英文。</p><ol><li>直接连接：不经过代理。</li><li>选择代理组：交给该组选择节点。</li><li>拒绝连接：拦截这个网站。</li></ol><p>规则从上往下匹配，越具体的越靠前；最终兜底放在最后。</p><code>DOMAIN-SUFFIX,example.com,DIRECT</code><p>这表示 example.com 及其子域名直接连接。点击规则的“编辑”，可查看用途、参数和实际英文格式。</p></div></Drawer>
+    <ConfirmDialog open={deleting.length > 0} title="删除规则" message={`确定删除这 ${deleting.length} 条规则吗？${config.rules.some((rule) => deleting.includes(rule.id) && rule.type === "MATCH") ? "其中包含最终兜底规则，删除后请重新指定未匹配流量的连接方式。" : "删除后不能在当前页面撤销。"}`} onClose={() => setDeleting([])} onConfirm={() => { onChange({ ...config, rules: config.rules.filter((rule) => !deleting.includes(rule.id)) }); setSelected((current) => new Set([...current].filter((id) => !deleting.includes(id)))); setDeleting([]); }} />
+  </div>;
 }
 
-function BeginnerRuleList({ rules, allRules, targets, selected, onSelect, onUpdate, onChangeType, onMove, onDuplicate, onDelete }: {
+function BeginnerRuleList({ rules, allRules, targets, selected, editingId, onEdit, onSelect, onUpdate, onChangeType, onMove, onDuplicate, onDelete }: {
   rules: RuleItem[];
   allRules: RuleItem[];
   targets: string[];
   selected: Set<string>;
+  editingId: string;
+  onEdit: (id: string) => void;
   onSelect: (id: string, checked: boolean) => void;
   onUpdate: (id: string, value: Partial<RuleItem>) => void;
   onChangeType: (rule: RuleItem, type: string) => void;
@@ -133,25 +137,30 @@ function BeginnerRuleList({ rules, allRules, targets, selected, onSelect, onUpda
   onDuplicate: (rule: RuleItem) => void;
   onDelete: (id: string) => void;
 }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    editorRef.current?.scrollIntoView({ block: "nearest" });
+    if (valueRef.current && !valueRef.current.value) valueRef.current.focus({ preventScroll: true });
+  }, [editingId]);
   if (!rules.length) return <div className="table-empty">没有匹配的规则</div>;
   return <div className="beginner-rule-list">{rules.map((rule) => {
     const definition = getRuleDefinition(rule.type);
     const index = allRules.findIndex((item) => item.id === rule.id);
     const missingValue = rule.type !== "MATCH" && !rule.value.trim();
-    return <article className={`beginner-rule-card${rule.enabled ? "" : " disabled"}${rule.type === "MATCH" ? " match-rule" : ""}`} key={rule.id}>
+    const expanded = editingId === rule.id;
+    return <article className={`beginner-rule-card${rule.enabled ? "" : " disabled"}${rule.type === "MATCH" ? " match-rule" : ""}${expanded ? " expanded" : ""}`} key={rule.id} aria-label={`规则 ${index + 1}：${rule.value || definition.label}`}>
       <header>
         <label className="rule-select-check"><input type="checkbox" checked={selected.has(rule.id)} onChange={(event) => onSelect(rule.id, event.target.checked)} /><span className="sr-only">选择规则</span></label>
         <span className="rule-order">{index + 1}</span>
-        <div><strong>{definition.label}</strong><small>{rule.type}</small></div>
-        <label className="rule-enabled-toggle"><span>{rule.enabled ? "已启用" : "已停用"}</span><input type="checkbox" checked={rule.enabled} onChange={(event) => onUpdate(rule.id, { enabled: event.target.checked })} /></label>
-        <div className="row-actions"><button className="icon-button compact" disabled={index === 0} onClick={() => onMove(rule.id, -1)} aria-label="上移规则"><ArrowUp size={16} /></button><button className="icon-button compact" disabled={index === allRules.length - 1} onClick={() => onMove(rule.id, 1)} aria-label="下移规则"><ArrowDown size={16} /></button></div>
+        <div className="rule-summary"><strong title={rule.value || definition.label}>{rule.type === "MATCH" ? "其余全部流量" : rule.value || `待填写${definition.valueLabel}`}</strong><small title={ruleSentence(rule)}>{definition.label} → {ruleTargetLabel(rule.target, false)}{!rule.enabled && <em> · 已停用</em>}</small></div>
+        <button className="text-button rule-edit-toggle" aria-expanded={expanded} onClick={() => onEdit(expanded ? "" : rule.id)}><Pencil size={14} />{expanded ? "收起" : "编辑"}</button>
       </header>
+      {expanded && <div className="rule-inline-editor" ref={editorRef}>
       <div className="rule-sentence-builder">
-        <span>当</span>
-        <label><span className="sr-only">匹配方式</span><select value={rule.type} onChange={(event) => onChangeType(rule, event.target.value)}>{!ruleCatalog.some((item) => item.type === rule.type) && <option value={rule.type}>{ruleTypeLabel(rule.type)}</option>}{ruleCatalog.map((item) => <option value={item.type} key={item.type}>{item.label}（{item.type}）</option>)}</select></label>
-        {rule.type !== "MATCH" && <><span>是</span><label className={missingValue ? "has-error" : ""}><span className="sr-only">{definition.valueLabel}</span><input value={rule.value} onChange={(event) => onUpdate(rule.id, { value: event.target.value })} placeholder={definition.placeholder} /></label></>}
-        <span>时，使用</span>
-        <label><span className="sr-only">目标策略</span><select value={rule.target} onChange={(event) => onUpdate(rule.id, { target: event.target.value })}>{targets.map((target) => <option value={target} key={target}>{ruleTargetLabel(target)}</option>)}</select></label>
+        <label>匹配方式<select value={rule.type} onChange={(event) => onChangeType(rule, event.target.value)}>{!ruleCatalog.some((item) => item.type === rule.type) && <option value={rule.type}>{ruleTypeLabel(rule.type)}</option>}{ruleCatalog.map((item) => <option value={item.type} key={item.type}>{item.label}（{item.type}）</option>)}</select></label>
+        {rule.type !== "MATCH" && <label className={missingValue ? "has-error" : ""}>{definition.valueLabel}<input ref={valueRef} value={rule.value} onChange={(event) => onUpdate(rule.id, { value: event.target.value })} placeholder={definition.placeholder} /></label>}
+        <label>目标策略<select value={rule.target} onChange={(event) => onUpdate(rule.id, { target: event.target.value })}>{targets.map((target) => <option value={target} key={target}>{ruleTargetLabel(target)}</option>)}</select></label>
       </div>
       <div className="rule-explanation"><Info size={15} /><span><strong>{ruleSentence(rule)}</strong><small>{definition.description}{definition.example ? ` 示例：${definition.example}` : ""}</small></span></div>
       {missingValue && <div className="rule-inline-error">请填写{definition.valueLabel}</div>}
@@ -163,12 +172,13 @@ function BeginnerRuleList({ rules, allRules, targets, selected, onSelect, onUpda
           <code>{ruleSourcePreview(rule)}</code>
         </div>
       </details>
-      <footer>{rule.type !== "MATCH" && <button className="text-button" onClick={() => onDuplicate(rule)}><Copy size={14} />复制</button>}<button className="text-button danger-text" onClick={() => onDelete(rule.id)}><Trash2 size={14} />删除</button></footer>
+      <footer><label className="rule-enabled-toggle"><input type="checkbox" checked={rule.enabled} onChange={(event) => onUpdate(rule.id, { enabled: event.target.checked })} /><span>启用规则</span></label><div className="row-actions"><button className="icon-button compact" disabled={index === 0} onClick={() => onMove(rule.id, -1)} aria-label="上移规则"><ArrowUp size={16} /></button><button className="icon-button compact" disabled={index === allRules.length - 1} onClick={() => onMove(rule.id, 1)} aria-label="下移规则"><ArrowDown size={16} /></button>{rule.type !== "MATCH" && <button className="icon-button compact" onClick={() => onDuplicate(rule)} aria-label="复制规则"><Copy size={15} /></button>}<button className="icon-button compact danger" onClick={() => onDelete(rule.id)} aria-label="删除规则"><Trash2 size={15} /></button></div></footer>
+      </div>}
     </article>;
   })}</div>;
 }
 
-function AdvancedRuleTable({ visible, config, targets, selected, allVisibleSelected, onSelected, onSelect, onUpdate, onChangeType, onMove, onChange }: {
+function AdvancedRuleTable({ visible, config, targets, selected, allVisibleSelected, onSelected, onSelect, onUpdate, onChangeType, onMove, onChange, onDelete }: {
   visible: RuleItem[];
   config: MihomoConfig;
   targets: string[];
@@ -180,6 +190,7 @@ function AdvancedRuleTable({ visible, config, targets, selected, allVisibleSelec
   onChangeType: (rule: RuleItem, type: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   onChange: (config: MihomoConfig) => void;
+  onDelete: (id: string) => void;
 }) {
   return <div className="data-table-wrap rules-table-wrap">
     <table className="data-table rules-table">
@@ -194,7 +205,7 @@ function AdvancedRuleTable({ visible, config, targets, selected, allVisibleSelec
           <td data-label="目标策略"><select value={rule.target} onChange={(event) => onUpdate(rule.id, { target: event.target.value })}>{targets.map((target) => <option value={target} key={target}>{ruleTargetLabel(target)}</option>)}</select></td>
           <td data-label="附加参数"><input value={rule.options.join(",")} onChange={(event) => onUpdate(rule.id, { options: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} placeholder="不解析 DNS（no-resolve）" /></td>
           <td data-label="备注"><input value={rule.comment || ""} onChange={(event) => onUpdate(rule.id, { comment: event.target.value })} placeholder="可选" /></td>
-          <td data-label="操作"><div className="row-actions"><button className="icon-button compact" disabled={config.rules[0]?.id === rule.id} onClick={() => onMove(rule.id, -1)} aria-label="上移规则"><ArrowUp size={16} /></button><button className="icon-button compact" disabled={config.rules.at(-1)?.id === rule.id} onClick={() => onMove(rule.id, 1)} aria-label="下移规则"><ArrowDown size={16} /></button><button className="icon-button compact" disabled={rule.type === "MATCH"} onClick={() => onChange({ ...config, rules: duplicateRule(config.rules, rule) })} aria-label="复制规则"><Copy size={16} /></button><button className="icon-button compact danger" onClick={() => onChange({ ...config, rules: config.rules.filter((item) => item.id !== rule.id) })} aria-label="删除规则"><Trash2 size={16} /></button></div></td>
+          <td data-label="操作"><div className="row-actions"><button className="icon-button compact" disabled={config.rules[0]?.id === rule.id} onClick={() => onMove(rule.id, -1)} aria-label="上移规则"><ArrowUp size={16} /></button><button className="icon-button compact" disabled={config.rules.at(-1)?.id === rule.id} onClick={() => onMove(rule.id, 1)} aria-label="下移规则"><ArrowDown size={16} /></button><button className="icon-button compact" disabled={rule.type === "MATCH"} onClick={() => onChange({ ...config, rules: duplicateRule(config.rules, rule) })} aria-label="复制规则"><Copy size={16} /></button><button className="icon-button compact danger" onClick={() => onDelete(rule.id)} aria-label="删除规则"><Trash2 size={16} /></button></div></td>
         </tr>;
       })}</tbody>
     </table>

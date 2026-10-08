@@ -1,15 +1,7 @@
 .subscription-home { display: grid; gap: 20px; min-width: 0; }
 .subscription-edit-actions { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); grid-column: 1 / -1; }
 .subscription-edit-actions button { min-height: 42px; }
-.subscription-editor { display: grid; gap: 20px; min-width: 0; }
-.editor-heading, .draft-flow { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.editor-heading > span { color: var(--ink-soft); }
-.editor-name { display: grid; gap: 8px; font-weight: 650; }
-.editor-name input { width: 100%; min-width: 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); color: var(--ink); font-size: 16px; }
-.editor-identity p { color: var(--ink-soft); overflow-wrap: anywhere; }
-.editor-publish { scroll-margin: 24px; }
-.editor-publish h2 { margin-top: 0; font-size: 20px; }
-.editor-publish p { line-height: 1.8; }
+.draft-flow { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .draft-flow { padding: 16px; margin-bottom: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--accent-soft); }
 .home-tasks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .home-tasks > button { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); text-align: left; color: var(--accent); transition: background var(--ease), border-color var(--ease); }
@@ -60,8 +52,6 @@
 }
 @media (max-width: 620px) {
   .subscription-edit-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .editor-heading .secondary-button, .editor-publish > .primary-button { min-height: 44px; }
-  .subscription-editor > .section-tabs { flex-wrap: wrap; }
   .home-subscription-card, .publish-workflow, .publish-review { padding: 18px; }
   .home-subscription-actions { flex-direction: column; }
   .home-subscription-actions button { width: 100%; min-height: 44px; }

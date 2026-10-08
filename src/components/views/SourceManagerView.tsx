@@ -173,7 +173,7 @@ export function SourceManagerView({ onProjectReload, onMessage }: { onProjectRel
       <article className={`source-card${item.lastError ? " has-error" : ""}`} key={item.id}>
         <header>
           <span className="source-card-icon">{item.kind === "remote-url" ? <Globe2 size={20} /> : item.kind === "file" ? <FileUp size={20} /> : <Link2 size={20} />}</span>
-          <div><h2>{item.name}</h2><span>{sourceTypeLabel(item.kind)} · {item.format === "auto" ? "自动识别" : item.format}</span></div>
+          <div><h2 title={item.name}>{item.name}</h2><span>{sourceTypeLabel(item.kind)} · {item.format === "auto" ? "自动识别" : item.format}</span></div>
           <span className={item.enabled ? "status-dot active" : "status-dot"}>{item.enabled ? "运行中" : "已停用"}</span>
         </header>
         <div className="source-card-address" title={item.url || "本地导入来源"}>{item.url || "本地导入来源"}</div>

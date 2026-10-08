@@ -126,8 +126,18 @@ type TargetRect = { top: number; left: number; width: number; height: number };
 function GuidedPopover({ controller, currentView, navigate }: { controller: GuideController; currentView: GuideView; navigate: (view: GuideView) => void }) {
   const popoverRef = useRef<HTMLElement>(null);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const activeGuide = controller.active ? findGuide(controller.active.guideId) : undefined;
   const step = activeGuide && controller.active ? activeGuide.steps[controller.active.stepIndex] : undefined;
+
+  useEffect(() => {
+    if (!step) return;
+    const update = () => setModalOpen(Boolean(document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]')));
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-modal"] });
+    update();
+    return () => observer.disconnect();
+  }, [step]);
 
   useEffect(() => {
     const popover = popoverRef.current;
@@ -137,7 +147,7 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
     observer.observe(popover);
     measure();
     return () => { observer.disconnect(); document.documentElement.style.removeProperty("--guide-dock-height"); };
-  }, [step]);
+  }, [step, modalOpen]);
 
   useEffect(() => {
     if (!step || step.view === currentView) return;
@@ -146,7 +156,7 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
 
   useEffect(() => {
     setTargetRect(null);
-    if (!step || step.view !== currentView) {
+    if (!step || modalOpen || step.view !== currentView) {
       return;
     }
     let cancelled = false;
@@ -183,7 +193,7 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
       window.removeEventListener("resize", readRect);
       window.removeEventListener("scroll", readRect, true);
     };
-  }, [currentView, step]);
+  }, [currentView, step, modalOpen]);
 
   useEffect(() => {
     if (!step?.advanceOn) return;
@@ -195,16 +205,16 @@ function GuidedPopover({ controller, currentView, navigate }: { controller: Guid
   useEffect(() => {
     if (!step) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement)?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (modalOpen || (event.target as HTMLElement)?.closest("input, textarea, select, [contenteditable='true']")) return;
       if (event.key === "Escape") controller.pause();
       if (event.key === "ArrowRight") controller.next();
       if (event.key === "ArrowLeft") controller.previous();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [controller, step]);
+  }, [controller, step, modalOpen]);
 
-  if (!activeGuide || !step || !controller.active) return null;
+  if (!activeGuide || !step || !controller.active || modalOpen) return null;
   const margin = 8;
   const popoverWidth = Math.min(390, Math.max(280, window.innerWidth - 24));
   const estimatedHeight = 250;
@@ -276,7 +286,6 @@ export function GuideTrigger({ controller, className = "" }: { controller: Guide
 export function GuideExperience({ controller, username, currentView, navigate }: { controller: GuideController; username: string; currentView: GuideView; navigate: (view: GuideView) => void }) {
   const visibleGuides = guideRegistry.filter((guide) => ["quickstart", "nodes", "groups", "rules", "publish"].includes(guide.id));
   return <>
-    <GuideTrigger controller={controller} />
     <WelcomeGuide controller={controller} username={username} />
     <GuidedPopover controller={controller} currentView={currentView} navigate={navigate} />
     <Drawer title="新手教程与帮助" open={controller.centerOpen} onClose={controller.closeCenter}>

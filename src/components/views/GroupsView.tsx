@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Gauge, GitBranch, GripVertical, Group, Maximize2, Minimize2, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, CircleHelp, Gauge, GitBranch, GripVertical, Group, Maximize2, Minimize2, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { createId } from "../../shared/id";
 import { guideTargets } from "../../guides/registry";
 import { addGroupMembers, canAddGroupMember, hasGroupCycle, moveGroupMember, removeGroupMember, reorderGroupMember, reorderGroups } from "../../shared/grouping";
@@ -51,7 +51,7 @@ const boardCollisionDetection: CollisionDetection = (args) => {
   return active?.kind === "group" && groupTarget ? [groupTarget] : collisions;
 };
 
-export function GroupsView({ config, onChange, onMessage }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void; onMessage?: (message: string) => void }) {
+export function GroupsView({ config, onChange, onMessage, nextAction }: { config: MihomoConfig; onChange: (config: MihomoConfig) => void; onMessage?: (message: string) => void; nextAction?: ReactNode }) {
   const [editing, setEditing] = useState<ProxyGroup | null>(null);
   const [deleting, setDeleting] = useState<ProxyGroup | null>(null);
   const [query, setQuery] = useState("");
@@ -60,6 +60,7 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   const [activeName, setActiveName] = useState("");
   const [activeKind, setActiveKind] = useState<DragPayload["kind"] | "">("");
   const [focusMode, setFocusMode] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"pool" | "canvas" | "inspector">("canvas");
   const focusShellRef = useRef<HTMLDivElement | null>(null);
   const sensors = useSensors(
@@ -117,6 +118,7 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
     if (hasGroupCycle(nextGroups)) { onMessage?.("不能保存：策略组会形成循环引用"); return; }
     onChange({ ...config, proxyGroups: nextGroups, rules: previous && previous.name !== normalized.name ? config.rules.map((rule) => rule.target === previous.name ? { ...rule, target: normalized.name } : rule) : config.rules });
     if (!exists) setSelectedGroupId(group.id);
+    setMobilePanel("canvas");
     setEditing(null);
   }
   function addMembers(targetGroupId: string, names: string[], before?: string) {
@@ -193,14 +195,21 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
   }
 
   return <>
-    <div className="view-toolbar group-board-toolbar"><div className="summary-inline"><span><strong>{config.proxies.length}</strong> 个节点</span><i /><span><strong>{config.proxyGroups.length}</strong> 个策略组</span><i /><span><strong>{config.proxyGroups.reduce((sum, item) => sum + item.proxies.length, 0)}</strong> 个引用</span></div><div className="toolbar-actions"><button className="secondary-button" onClick={() => setFocusMode(true)} aria-label="全屏编辑代理分组"><Maximize2 size={16} />全屏编辑</button><button className="primary-button" data-guide-id={guideTargets.groupCreate} onClick={() => setEditing(blankGroup())}><Plus size={17} />添加策略组</button></div></div>
-    <div className="group-board-hint" role="note"><GripVertical size={15} />拖动节点到成员列表；拖动策略组可建立嵌套；链式代理请选择对应类型并按入口到出口放入具体节点</div>
     <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => { setActiveName(""); setActiveKind(""); }}>
       <div ref={focusShellRef} className={`group-focus-shell${focusMode ? " open" : ""}`} role={focusMode ? "dialog" : undefined} aria-modal={focusMode ? "true" : undefined} aria-labelledby={focusMode ? "group-focus-title" : undefined} tabIndex={focusMode ? -1 : undefined}>
-        {focusMode && <header className="group-focus-toolbar"><div><strong id="group-focus-title">代理分组编辑</strong><span>拖动节点或策略组到成员区，实时预览嵌套关系</span></div><button className="secondary-button" onClick={() => setFocusMode(false)}><Minimize2 size={16} />退出全屏</button></header>}
+        <header className="group-workbench-toolbar">
+          <div className="group-workbench-title"><strong id="group-focus-title">分组工作台</strong><span>{config.proxies.length} 节点 · {config.proxyGroups.length} 策略组</span></div>
+          <div className="group-workbench-actions">
+            <button className="icon-button" aria-label="分组操作说明" aria-expanded={showHelp} onClick={() => setShowHelp(!showHelp)}><CircleHelp size={17} /></button>
+            <button className="secondary-button group-fullscreen-button" onClick={() => setFocusMode(!focusMode)} aria-label={focusMode ? "退出全屏" : "全屏编辑代理分组"}>{focusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}<span>{focusMode ? "退出全屏" : "全屏编辑"}</span></button>
+            <button className="primary-button" data-guide-id={guideTargets.groupCreate} onClick={() => setEditing(blankGroup())}><Plus size={16} />添加策略组</button>
+            {nextAction}
+          </div>
+        </header>
+        {showHelp && <div className="group-workbench-help" role="note">拖动节点到组内；把策略组拖到另一个组的成员区即可嵌套。不方便拖动时，用「添加节点」或「嵌套与属性」。链式代理只能按入口到出口加入具体节点。</div>}
       <div className="group-workbench-controls">
-        {!!config.proxyGroups.length && <label className="mobile-group-switcher">当前编辑组<select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>}
-        <div className="group-mobile-tabs" role="tablist" aria-label="分组工作台区域"><button className={mobilePanel === "pool" ? "active" : ""} onClick={() => setMobilePanel("pool")} role="tab" aria-selected={mobilePanel === "pool"}><Network size={15} />节点池</button><button className={mobilePanel === "canvas" ? "active" : ""} onClick={() => setMobilePanel("canvas")} role="tab" aria-selected={mobilePanel === "canvas"}><Group size={15} />策略组</button><button className={mobilePanel === "inspector" ? "active" : ""} onClick={() => setMobilePanel("inspector")} role="tab" aria-selected={mobilePanel === "inspector"}><GitBranch size={15} />当前组</button></div>
+        {!!config.proxyGroups.length && <label className="mobile-group-switcher"><span>正在编辑</span><select value={selectedGroup?.id || ""} onChange={(event) => setSelectedGroupId(event.target.value)}>{config.proxyGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>}
+        <nav className="group-mobile-tabs" aria-label="分组工作台区域"><button className={mobilePanel === "canvas" ? "active" : ""} onClick={() => setMobilePanel("canvas")} aria-pressed={mobilePanel === "canvas"}><Group size={15} />组内成员</button><button className={mobilePanel === "pool" ? "active" : ""} onClick={() => setMobilePanel("pool")} aria-pressed={mobilePanel === "pool"}><Network size={15} />添加节点</button><button className={mobilePanel === "inspector" ? "active" : ""} onClick={() => setMobilePanel("inspector")} aria-pressed={mobilePanel === "inspector"}><GitBranch size={15} />嵌套与属性</button></nav>
       </div>
       <div className={`group-board${activeName ? " is-dragging" : ""}${focusMode ? " focus-mode" : ""} mobile-panel-${mobilePanel}`} data-guide-id={guideTargets.groupBoard}>
         <aside className="node-pool" data-guide-id={guideTargets.groupNodePool} aria-label="当前配置节点">
@@ -219,10 +228,10 @@ export function GroupsView({ config, onChange, onMessage }: { config: MihomoConf
 
         <aside className="group-inspector" aria-label="策略组属性">
           {selectedGroup ? <>
-            <header><span className="group-icon"><Group size={18} /></span><div><small>已选策略组</small><strong title={selectedGroup.name}>{selectedGroup.name}</strong></div><button className="icon-button compact" onClick={() => setEditing(structuredClone(selectedGroup))} aria-label="编辑当前策略组"><Pencil size={15} /></button></header>
+            <header><span className="group-icon"><Group size={18} /></span><div><small>正在编辑</small><strong title={selectedGroup.name}>{selectedGroup.name}</strong></div><button className="icon-button compact" onClick={() => setEditing(structuredClone(selectedGroup))} aria-label="编辑当前策略组"><Pencil size={15} /></button></header>
             <div className="inspector-stats"><span>类型<strong>{groupTypes.find((item) => item.value === selectedGroup.type)?.label}</strong></span><span>成员<strong>{selectedGroup.proxies.length}</strong></span><span>嵌套组<strong>{selectedGroup.proxies.filter((name) => config.proxyGroups.some((group) => group.name === name)).length}</strong></span></div>
-            <section><div className="inspector-title"><GitBranch size={15} /><strong>正在编辑：{selectedGroup.name}</strong></div><p>可点击其他策略组快速嵌套，也可以把策略组拖到当前组成员区。</p><div className="nest-group-list">{config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => { const included = selectedGroup.proxies.includes(group.name); const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name, nodeNames); return <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}><span><Group size={14} />{group.name}</span>{included ? <Check size={14} /> : <Plus size={14} />}</button>; })}{config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立嵌套策略。</small>}</div></section>
-            <section><div className="inspector-title"><GripVertical size={15} /><strong>触摸排序</strong></div><p>手机或平板无法精准拖动时，使用按钮调整组顺序。</p><div className="inspector-actions"><button className="secondary-button compact-button" disabled={config.proxyGroups[0]?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, -1)}><ArrowUp size={14} />上移</button><button className="secondary-button compact-button" disabled={config.proxyGroups.at(-1)?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, 1)}><ArrowDown size={14} />下移</button></div></section>
+            <section><div className="inspector-title"><GitBranch size={15} /><strong>嵌套其他组</strong></div><p>点击加入当前组，已加入或会形成循环的组不可选。</p><div className="nest-group-list">{config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => { const included = selectedGroup.proxies.includes(group.name); const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name, nodeNames); return <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}><span><Group size={14} />{group.name}</span>{included ? <Check size={14} /> : <Plus size={14} />}</button>; })}{config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立嵌套策略。</small>}</div></section>
+            <section><div className="inspector-title"><GripVertical size={15} /><strong>调整组顺序</strong></div><div className="inspector-actions"><button className="secondary-button compact-button" disabled={config.proxyGroups[0]?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, -1)}><ArrowUp size={14} />上移</button><button className="secondary-button compact-button" disabled={config.proxyGroups.at(-1)?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, 1)}><ArrowDown size={14} />下移</button></div></section>
           </> : <div className="inspector-empty"><Group size={21} /><span>选择一个策略组查看属性</span></div>}
         </aside>
       </div>
