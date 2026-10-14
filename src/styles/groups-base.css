@@ -242,14 +242,28 @@
 .group-overview-item {
   position: relative;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 24px;
+  grid-template-columns: 26px minmax(0, 1fr) 26px;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: rgba(14, 18, 28, 0.5);
-  padding: 6px 8px;
+  background: rgba(14, 18, 28, 0.55);
+  padding: 6px 10px;
   transition: all var(--duration-fast) var(--ease-silk);
+}
+
+.group-overview-drop-target {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--radius-md);
+  z-index: 1;
+}
+
+.group-overview-drop-target.active {
+  border: 1.5px dashed var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 16px -2px rgba(6, 182, 212, 0.4);
 }
 
 .group-overview-item:hover {
