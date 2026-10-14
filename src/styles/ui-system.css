@@ -11,11 +11,15 @@ html,
 
 body {
   color: var(--ink);
-  background:
-    radial-gradient(1100px circle at 15% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
+  background-color: #08090e;
+  background-image:
+    radial-gradient(1200px circle at 15% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
     radial-gradient(900px circle at 85% 115%, rgba(6, 182, 212, 0.12), transparent 55%),
-    radial-gradient(750px circle at 50% 40%, rgba(139, 92, 246, 0.08), transparent 70%),
-    var(--canvas);
+    radial-gradient(800px circle at 50% 45%, rgba(139, 92, 246, 0.08), transparent 65%),
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+  background-attachment: fixed;
   min-height: 100dvh;
 }
 
@@ -337,3 +341,99 @@ textarea:disabled {
     border-color var(--duration-base) ease,
     box-shadow var(--duration-base) var(--ease-silk);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   空状态系统 (Empty State Experience)
+   ═══════════════════════════════════════════════════════════════ */
+.empty-state,
+.empty-state-card {
+  min-height: 260px;
+  padding: 44px 28px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-xl);
+  background: radial-gradient(circle at center, rgba(99, 102, 241, 0.05) 0%, rgba(14, 18, 30, 0.55) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+  backdrop-filter: var(--glass-blur);
+  transition: all var(--duration-base) var(--ease-silk);
+}
+
+.empty-state:hover,
+.empty-state-card:hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: radial-gradient(circle at center, rgba(99, 102, 241, 0.09) 0%, rgba(18, 24, 40, 0.65) 100%);
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.6);
+}
+
+.empty-state-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(6, 182, 212, 0.16) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 24px -2px rgba(99, 102, 241, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  display: grid;
+  place-items: center;
+  color: var(--accent-cyan);
+}
+
+.empty-state h3,
+.empty-state strong {
+  font-size: 16px;
+  font-weight: 750;
+  color: #ffffff;
+  margin: 0;
+}
+
+.empty-state p {
+  max-width: 440px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   微指标卡片与协议霓虹徽章 (Micro Metrics & Protocol Badges)
+   ═══════════════════════════════════════════════════════════════ */
+.metric-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  backdrop-filter: blur(8px);
+}
+
+.metric-pill strong {
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+.protocol-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  font: 750 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.protocol-badge.ss { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); }
+.protocol-badge.vmess { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+.protocol-badge.vless { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.35); }
+.protocol-badge.trojan { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.35); }
+.protocol-badge.hysteria2 { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+.protocol-badge.tuic { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+

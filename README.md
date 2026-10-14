@@ -9,8 +9,8 @@
     <a href="./CHANGELOG.md">更新记录</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-2.0.1-6366F1?style=flat-square" alt="version" />
-    <img src="https://img.shields.io/badge/UI-V2.0.1-06B6D4?style=flat-square" alt="UI baseline" />
+    <img src="https://img.shields.io/badge/version-2.1.0-6366F1?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/UI-V2.1.0-06B6D4?style=flat-square" alt="UI baseline" />
     <img src="https://img.shields.io/badge/Node.js-22%2B-247B78?style=flat-square" alt="Node.js" />
     <img src="https://img.shields.io/badge/Mihomo-supported-D5962A?style=flat-square" alt="Mihomo" />
     <img src="https://img.shields.io/badge/sing--box-supported-76547D?style=flat-square" alt="sing-box" />

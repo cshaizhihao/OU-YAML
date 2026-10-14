@@ -205,7 +205,7 @@
   box-shadow: 0 12px 30px -4px rgba(99, 102, 241, 0.7);
 }
 
-/* 欢迎弹窗：彻底清除 #fffaf6 浅色大白框 */
+/* 欢迎弹窗：通透高斯模糊与极光聚焦流光 */
 .guide-welcome-overlay {
   position: fixed;
   inset: 0;
@@ -214,72 +214,95 @@
   display: grid;
   place-items: center;
   overflow-y: auto;
-  background: rgba(4, 6, 12, 0.75);
-  backdrop-filter: blur(16px);
+  background: radial-gradient(circle at center, rgba(14, 18, 32, 0.65) 0%, rgba(4, 5, 10, 0.82) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   animation: overlay-fade-in 240ms ease-out both;
 }
 
 .guide-welcome {
   position: relative;
-  width: min(650px, 100%);
+  width: min(680px, 100%);
   overflow: hidden;
-  padding: 38px 36px;
-  border: 1px solid var(--line-strong);
+  padding: 40px 38px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-xl);
   color: var(--ink);
-  background: linear-gradient(135deg, rgba(20, 26, 44, 0.95) 0%, rgba(12, 16, 26, 0.98) 100%);
-  box-shadow: var(--shadow-dialog);
+  background: linear-gradient(145deg, rgba(18, 23, 40, 0.94) 0%, rgba(10, 13, 22, 0.97) 100%);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(99, 102, 241, 0.25), 0 0 40px -8px rgba(99, 102, 241, 0.2);
   animation: dialog-pop-in 340ms var(--ease-spring) both;
 }
 
+.guide-welcome::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #6366f1, #06b6d4, transparent);
+}
+
 .guide-welcome h1 {
-  margin: 12px 0 8px;
-  font-size: clamp(28px, 4vw, 36px);
-  line-height: 1.2;
+  margin: 14px 0 8px;
+  font-size: clamp(26px, 3.6vw, 34px);
+  line-height: 1.25;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #ffffff;
 }
 
 .guide-welcome > p {
-  max-width: 520px;
+  max-width: 560px;
   margin: 0;
-  font-size: 14.5px;
-  line-height: 1.65;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--ink-soft);
 }
 
+/* 步骤导轨 (Stepper Flow) */
 .guide-welcome-features {
   margin: 28px 0 32px;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
+  position: relative;
 }
 
 .guide-welcome-features > span {
   min-width: 0;
   padding: 16px 14px;
-  display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.03);
+  position: relative;
+  transition: all var(--duration-fast) var(--ease-silk);
+}
+
+.guide-welcome-features > span:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4);
 }
 
 .guide-welcome-features svg {
-  grid-row: 1 / 3;
-  color: var(--accent-hover);
-  margin-top: 2px;
+  color: var(--accent-cyan);
+  filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.5));
+  margin-bottom: 2px;
 }
 
 .guide-welcome-features strong {
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 700;
   color: #ffffff;
 }
 
 .guide-welcome-features small {
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -288,7 +311,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 14px;
 }
 
 /* 聚焦高亮脉冲光圈 */
