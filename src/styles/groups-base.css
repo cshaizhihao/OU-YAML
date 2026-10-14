@@ -134,7 +134,7 @@
 
 @media (max-width: 1400px) {
   .group-board {
-    grid-template-columns: 220px minmax(320px, 1fr) 280px;
+    grid-template-columns: 230px minmax(320px, 1fr) 280px;
   }
   .group-inspector {
     display: none !important;
@@ -242,25 +242,25 @@
 .group-overview-item {
   position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  grid-template-columns: 24px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: rgba(14, 18, 28, 0.45);
-  padding: 4px;
+  background: rgba(14, 18, 28, 0.5);
+  padding: 6px 8px;
   transition: all var(--duration-fast) var(--ease-silk);
 }
 
 .group-overview-item:hover {
   border-color: rgba(99, 102, 241, 0.35);
-  background: rgba(22, 28, 44, 0.65);
+  background: rgba(22, 28, 44, 0.7);
   transform: translateY(-1px);
 }
 
 .group-overview-item.selected {
   border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(99, 102, 241, 0.16);
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 8px 20px -4px rgba(99, 102, 241, 0.25);
 }
 
@@ -287,14 +287,13 @@
 
 .group-reorder-handle,
 .group-nest-handle {
-  width: 26px;
-  height: 38px;
+  width: 24px;
+  height: 36px;
   border: 0;
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--ink-faint);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: grab;
@@ -326,7 +325,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 6px;
+  padding: 0;
   cursor: pointer;
   text-align: left;
   min-width: 0;
@@ -341,7 +340,7 @@
 
 .group-overview-select strong {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -349,7 +348,7 @@
 }
 
 .group-overview-select small {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ink-faint);
 }
 
