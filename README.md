@@ -2,15 +2,15 @@
   <img src="https://raw.githubusercontent.com/cshaizhihao/OU-YAML/main/public/brand/ou-yaml-logo.png" alt="OU-YAML Logo" width="176" />
   <h1>OU-YAML</h1>
   <p><strong>把零散节点，整理成清晰、可靠、可持续更新的配置订阅</strong></p>
-  <p>紫色液态玻璃风格的可视化节点、策略组、规则与订阅发布工作台</p>
+  <p>Cyber Obsidian Glassmorphism 现代科技美学的可视化节点、策略组、规则与订阅发布工作台</p>
   <p>
     <a href="https://github.com/cshaizhihao/OU-YAML">项目主页</a> ·
     <a href="https://github.com/cshaizhihao/OU-YAML/releases">版本发布</a> ·
     <a href="./CHANGELOG.md">更新记录</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-2.0.0-A33D57?style=flat-square" alt="version" />
-    <img src="https://img.shields.io/badge/UI-V1.0.0-AD8BF2?style=flat-square" alt="UI baseline" />
+    <img src="https://img.shields.io/badge/version-2.0.1-6366F1?style=flat-square" alt="version" />
+    <img src="https://img.shields.io/badge/UI-V2.0.1-06B6D4?style=flat-square" alt="UI baseline" />
     <img src="https://img.shields.io/badge/Node.js-22%2B-247B78?style=flat-square" alt="Node.js" />
     <img src="https://img.shields.io/badge/Mihomo-supported-D5962A?style=flat-square" alt="Mihomo" />
     <img src="https://img.shields.io/badge/sing--box-supported-76547D?style=flat-square" alt="sing-box" />
@@ -31,7 +31,13 @@ OU-YAML 是一个自托管的代理配置工作台。它把订阅 URL、配置�
 
 无需反复手写 YAML，也无需为每次节点变化重新更换客户端订阅地址。
 
-### ✨ v2.0.0 · 更清晰可靠的编辑与分组工作台
+### 💎 v2.0.1 · 全新 UI 重构与视觉交互体验大升级
+
+- 🌌 **Cyber Obsidian Glassmorphism 科技暗夜美学**：彻底消除陈旧紫泥色与刺眼白色色块，重构为深曜石黑底、电光紫蓝与赛博天青渐变，透光毛玻璃与纳米级内发光边框。
+- ⚡ **丝滑物理反馈**：按钮引入 Apple/Linear 级按压物理缩放反馈（`scale(0.975)`）与悬停微浮（Hover Lift）。
+- ✨ **动态光晕与微交互**：侧边栏选中胶囊带流光边框与发光指示条；订阅健康状态带呼吸脉冲灯；操作栏一键复制带动态高光反馈。
+- 🧩 **看板与拖拽丝滑响应**：策略组泳道看板采用赛博青蓝脉冲环，消除拖拽闪烁与白色断层；抽屉与弹窗支持弹性进场。
+- 📱 **暗夜科技登录与向导**：全屏科技代码背景登录页，高质感深空黑曜石向导弹窗与发光光圈。
 
 - 💜 紫色 Liquid Glass 工作台：清晰的材质层级、克制的环境光和丝滑微动效。
 - 🧭 导入 → 节点 → 分组 → 规则 → 生成的主流程更明确，新手只需跟随三步向导。
