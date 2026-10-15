@@ -222,6 +222,32 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
   return res.json({ username: user.username, isAdmin: !!user.is_admin } satisfies SessionUser);
 });
 
+const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "注册请求过于频繁，请稍后重试" } });
+
+app.post("/api/auth/register", registerLimiter, async (req, res) => {
+  const parsed = z.object({
+    username: z.string().trim().regex(/^[a-zA-Z0-9._-]{3,64}$/, "账号需为 3-64 位字母、数字或 ._-"),
+    password: z.string().min(10, "密码至少需要 10 位").max(256),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || "注册信息无效" });
+
+  const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(parsed.data.username);
+  if (existing) return res.status(409).json({ error: "该账号名称已被占用，请换一个" });
+
+  const now = new Date().toISOString();
+  const id = randomUUID();
+  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+
+  db.prepare("INSERT INTO users (id, username, password_hash, is_admin, is_disabled, created_at) VALUES (?, ?, ?, 0, 0, ?)")
+    .run(id, parsed.data.username, passwordHash, now);
+
+  const token = randomBytes(32).toString("base64url");
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)").run(hashToken(token), id, expires.toISOString());
+  res.cookie("ou_session", token, { httpOnly: true, sameSite: "strict", secure: process.env.COOKIE_SECURE === "true" || req.secure, expires, path: "/" });
+  return res.status(201).json({ username: parsed.data.username, isAdmin: false } satisfies SessionUser);
+});
+
 function authenticatedUser(req: Request) {
   const token = req.cookies.ou_session;
   if (!token) return undefined;

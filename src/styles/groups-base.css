@@ -127,25 +127,42 @@
 .group-board {
   min-width: 0;
   display: grid;
-  grid-template-columns: 240px minmax(360px, 1.25fr) 300px 280px;
+  grid-template-columns: var(--col-overview, 240px) var(--col-pool, 320px) minmax(360px, 1.3fr) var(--col-inspector, 280px);
   align-items: start;
   gap: 16px;
+  transition: all var(--duration-base) var(--ease-silk);
+}
+
+.group-board.collapsed-overview {
+  --col-overview: 48px;
+}
+
+.group-board.collapsed-pool {
+  --col-pool: 48px;
+}
+
+.group-board.collapsed-inspector {
+  --col-inspector: 48px;
+}
+
+.group-board.wide-pool {
+  --col-pool: 520px;
 }
 
 @media (max-width: 1400px) {
-  .group-board {
-    grid-template-columns: 230px minmax(320px, 1fr) 280px;
+  .group-board:not(.force-inspector) {
+    grid-template-columns: var(--col-overview, 220px) var(--col-pool, 300px) minmax(320px, 1fr) var(--col-inspector, 0px);
   }
-  .group-inspector {
+  .group-board:not(.force-inspector) .group-inspector {
     display: none !important;
   }
 }
 
 @media (max-width: 1100px) {
-  .group-board {
-    grid-template-columns: 220px minmax(300px, 1fr);
+  .group-board:not(.force-pool) {
+    grid-template-columns: var(--col-overview, 200px) minmax(300px, 1fr);
   }
-  .node-pool {
+  .group-board:not(.force-pool) .node-pool {
     display: none !important;
   }
 }
@@ -845,6 +862,130 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 节点池多模式网格与密集徽章支持 */
+.node-pool-list.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px;
+  padding: 8px;
+}
+
+.node-pool-list.mode-grid .pool-node {
+  min-height: 48px;
+  background: rgba(18, 22, 36, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.node-pool-list.mode-dense {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 10px;
+}
+
+.dense-node-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+  user-select: none;
+}
+
+.dense-node-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.dense-node-pill.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+}
+
+.pool-mode-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+}
+
+.pool-mode-btn {
+  width: 24px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-faint);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--duration-fast) ease;
+}
+
+.pool-mode-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pool-mode-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* 折叠卡片紧凑侧边条 */
+.sidebar-collapsed-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 4px;
+  height: 100%;
+  min-height: 380px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.015);
+  transition: all var(--duration-fast) ease;
+}
+
+.sidebar-collapsed-strip:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.sidebar-collapsed-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  color: var(--ink-soft);
+}
+
+.sidebar-collapsed-count {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  color: #ffffff;
 }
 
 /* 7. 策略组属性检查器 (Group Inspector) */

@@ -103,7 +103,15 @@ export function SubscriptionHomeView({ project, canPublish, onReload, onNavigate
           <dl className="subscription-timeline"><div><dt>公开内容最近更新</dt><dd>{dateLabel(item.updatedAt)}</dd></div><div><dt>节点同步最近成功</dt><dd>{dateLabel(profile?.lastSyncAt)}</dd></div><div><dt>跟随已导入节点</dt><dd>{profile?.autoUpdate ? "自动更新已开启" : "手动更新"}</dd></div></dl>
           {(sourceErrors.length > 0 || profile?.lastSyncError) && <div className="home-recovery" role="status"><strong>下一步：{sourceErrors.length ? "检查来源连接" : "检查配置与节点"}</strong><p>{sourceErrors.length ? `${sourceErrors.map((source) => source.name).join("、")} 拉取失败；已发布内容不会因此被清空。` : profile?.lastSyncError}</p><button className="secondary-button compact-button" onClick={() => onNavigate(sourceErrors.length ? "sources" : "preview")}>{sourceErrors.length ? "去诊断来源" : "去预览校验"}<ArrowRight size={14} /></button></div>}
           <div className="home-subscription-actions"><button className="primary-button" disabled={!!busy || !status.available} onClick={() => void copy(item)}><Copy size={16} />复制订阅链接</button>{profile && <button className="secondary-button" disabled={!!busy || !status.available} onClick={() => void sync(profile)}><RefreshCw size={16} className={busy === profile.id ? "spin" : ""} />同步已导入节点</button>}</div>
-          <SubscriptionActions item={item} onEdit={onEdit} onRenamed={(renamed) => setData((current) => current ? { ...current, subscriptions: current.subscriptions.map((value) => value.id === renamed.id ? renamed : value) } : current)} />
+          <SubscriptionActions
+            item={item}
+            onEdit={onEdit}
+            onRenamed={(renamed) => setData((current) => current ? { ...current, subscriptions: current.subscriptions.map((value) => value.id === renamed.id ? renamed : value) } : current)}
+            onDeleted={(deletedId) => {
+              setData((current) => current ? { ...current, subscriptions: current.subscriptions.filter((value) => value.id !== deletedId) } : current);
+              setMessage("订阅已成功删除");
+            }}
+          />
         </article>;
       })}</div>
       {!items.length && <p>当前配置还没有发布链接。<button className="text-button" onClick={() => openSetup(0)}>开始三步配置</button></p>}

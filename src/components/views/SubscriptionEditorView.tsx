@@ -8,6 +8,7 @@ import { previewExport } from "../../shared/exportConfig";
 import { refreshProfileConfig } from "../../shared/publication";
 import { guideTargets } from "../../guides/registry";
 import { Drawer } from "../Dialog";
+import { FormattedNodeName } from "../CountryFlag";
 import { GroupsView } from "./GroupsView";
 import { RulesView } from "./RulesView";
 
@@ -110,7 +111,7 @@ export function SubscriptionEditorView({ id, initialTab, onBack, onMessage }: { 
     </header>
     <nav className="section-tabs" aria-label="订阅编辑步骤">{([{ id: "nodes", name: "1. 选择节点" }, { id: "groups", name: "2. 编辑分组" }, { id: "rules", name: "3. 编辑分流" }] as const).map((item) => <button key={item.id} disabled={busy} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.name}</button>)}</nav>
     <div className={`subscription-editor-body${tab === "groups" ? " editing-groups" : ""}`} inert={busy}>
-      {tab === "nodes" && <section className="editor-node-selection"><header><h2>选择这份订阅的节点</h2><span>已选 {selected.size} 个</span></header><p>勾选后点击底部应用；新增节点默认加入第一个代理组。</p><input aria-label="筛选订阅节点" placeholder="搜索节点名称或服务器" value={query} onChange={(event) => { setQuery(event.target.value); setNodeLimit(100); }} /><div className="editor-node-list">{available.slice(0, nodeLimit).map((node) => <label key={node.id}><input type="checkbox" checked={selected.has(node.id)} onChange={(event) => { setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(node.id) : next.delete(node.id); return next; }); setReview(false); setSuccess(""); }} /><span><strong>{node.name}</strong><small>{node.type.toUpperCase()} · {node.server}:{node.port}</small></span></label>)}</div>{!available.length && <p className="editor-node-empty">{query ? "没有匹配的节点，试试其他名称或地址。" : "暂无可选节点，请先到「订阅来源」导入。"}</p>}{available.length > nodeLimit && <button className="text-button" onClick={() => setNodeLimit(nodeLimit + 100)}>再显示 100 个节点</button>}</section>}
+      {tab === "nodes" && <section className="editor-node-selection"><header><h2>选择这份订阅的节点</h2><span>已选 {selected.size} 个</span></header><p>勾选后点击底部应用；新增节点默认加入第一个代理组。</p><input aria-label="筛选订阅节点" placeholder="搜索节点名称或服务器" value={query} onChange={(event) => { setQuery(event.target.value); setNodeLimit(100); }} /><div className="editor-node-list">{available.slice(0, nodeLimit).map((node) => <label key={node.id}><input type="checkbox" checked={selected.has(node.id)} onChange={(event) => { setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(node.id) : next.delete(node.id); return next; }); setReview(false); setSuccess(""); }} /><span><strong style={{ display: "inline-flex", alignItems: "center" }}><FormattedNodeName name={node.name} /></strong><small>{node.type.toUpperCase()} · {node.server}:{node.port}</small></span></label>)}</div>{!available.length && <p className="editor-node-empty">{query ? "没有匹配的节点，试试其他名称或地址。" : "暂无可选节点，请先到「订阅来源」导入。"}</p>}{available.length > nodeLimit && <button className="text-button" onClick={() => setNodeLimit(nodeLimit + 100)}>再显示 100 个节点</button>}</section>}
       {tab === "groups" && <GroupsView config={config} onChange={change} onMessage={onMessage} />}
       {tab === "rules" && <section data-guide-id={guideTargets.subscriptionRules}><RulesView config={config} onChange={change} /></section>}
     </div>

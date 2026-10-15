@@ -13,6 +13,7 @@ import { copyText } from "../../shared/clipboard";
 import { serializeShareLink } from "../../shared/links";
 import { guideTargets } from "../../guides/registry";
 import { Drawer, ConfirmDialog } from "../Dialog";
+import { FormattedNodeName } from "../CountryFlag";
 
 type NodeDraft = {
   id?: string;
@@ -531,7 +532,9 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
     <span className="node-row-name">
       <span className="entity-icon"><Server size={15} /></span>
       <span className="node-name-stack">
-        <strong title={node.name}>{node.name}</strong>
+        <strong title={node.name} style={{ display: "inline-flex", alignItems: "center", maxWidth: "100%" }}>
+          <FormattedNodeName name={node.name} />
+        </strong>
         {inProject && <small className="node-in-project-badge"><CheckCircle2 size={11} /> 当前项目</small>}
         {diagnostic && (diagnostic.exitIp || diagnostic.country) && <small className="node-diagnostic location" title={diagnostic.countryIp || diagnostic.resolvedAddress || undefined}><MapPin size={11} />{diagnostic.country ? `${diagnostic.country}${diagnostic.countryIp ? ` · ${diagnostic.countryIp}` : ""}` : `出口 ${diagnostic.exitIp}`}</small>}
         {node.note && <small className="node-note" title={node.note}>{node.note}</small>}
