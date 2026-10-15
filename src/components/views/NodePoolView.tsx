@@ -8,11 +8,10 @@ import { api, type TcpPingResult } from "../../api";
 import { latencyLevel } from "../../shared/diagnostics";
 import type { ManagedNode, NodeSource } from "../../shared/domain";
 import type { MihomoConfig, ProxyNode } from "../../shared/types";
-import { createId } from "../../shared/id";
 import { copyText } from "../../shared/clipboard";
 import { serializeShareLink } from "../../shared/links";
 import { guideTargets } from "../../guides/registry";
-import { Modal, ConfirmDialog } from "../Dialog";
+import { Modal, Drawer, ConfirmDialog } from "../Dialog";
 import { CountryFlag, FormattedNodeName, COMMON_FLAG_LIST, replaceNodeCountry } from "../CountryFlag";
 
 type NodeDraft = {
