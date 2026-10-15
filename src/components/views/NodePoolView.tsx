@@ -522,16 +522,57 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
   onCopyLink: () => void;
   onDelete: () => void;
 }) {
-  const [actionsOpen, setActionsOpen] = useState(false);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: `node:${node.id}`, data: { kind: "managed-node", nodeId: node.id } });
   return <div ref={setNodeRef} className={`node-row${isDragging ? " dragging" : ""}${node.enabled ? "" : " is-disabled"}`} style={{ transform: CSS.Transform.toString(transform), transition }} role="row">
-    <span className="node-row-check"><button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动节点 ${node.name}`}><GripVertical size={16} /></button><input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} aria-label={`选择 ${node.name}`} /></span>
-    <span className="node-row-name"><span className="entity-icon"><Server size={16} /></span><span className="node-name-stack"><strong title={node.name}>{node.name}</strong>{inProject && <small><CheckCircle2 size={12} />当前项目</small>}{diagnostic && (diagnostic.exitIp || diagnostic.country) && <small className="node-diagnostic location" title={diagnostic.countryIp || diagnostic.resolvedAddress || undefined}><MapPin size={11} />{diagnostic.country ? `${diagnostic.country}${diagnostic.countryIp ? ` · ${diagnostic.countryIp}` : ""}` : `出口 ${diagnostic.exitIp}`}</small>}{node.note && <small title={node.note}>{node.note}</small>}</span></span>
+    <span className="node-row-check">
+      <button ref={setActivatorNodeRef} className="drag-handle" {...listeners} {...attributes} aria-label={`拖动节点 ${node.name}`} title="拖拽排序"><GripVertical size={15} /></button>
+      <input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} aria-label={`选择 ${node.name}`} />
+    </span>
+    <span className="node-row-name">
+      <span className="entity-icon"><Server size={15} /></span>
+      <span className="node-name-stack">
+        <strong title={node.name}>{node.name}</strong>
+        {inProject && <small className="node-in-project-badge"><CheckCircle2 size={11} /> 当前项目</small>}
+        {diagnostic && (diagnostic.exitIp || diagnostic.country) && <small className="node-diagnostic location" title={diagnostic.countryIp || diagnostic.resolvedAddress || undefined}><MapPin size={11} />{diagnostic.country ? `${diagnostic.country}${diagnostic.countryIp ? ` · ${diagnostic.countryIp}` : ""}` : `出口 ${diagnostic.exitIp}`}</small>}
+        {node.note && <small className="node-note" title={node.note}>{node.note}</small>}
+      </span>
+    </span>
     <span className="node-row-type"><span className="type-badge">{node.type.toUpperCase()}</span></span>
     <span className="node-row-server mono" title={`${node.server}:${node.port}`}>{node.server}:{node.port}</span>
     <span className="node-row-source" title={sourceName || "手动添加"}>{sourceName || "手动添加"}</span>
-    <span className="node-row-tags" title={node.tags.join("、")}>{node.tags.length ? node.tags.map((tag) => <b key={tag}>{tag}</b>) : "-"}</span>
-    <span className="node-row-status"><button className={node.enabled ? "status-toggle active" : "status-toggle"} onClick={onToggle}>{node.enabled ? <CheckCircle2 size={14} /> : <Ban size={14} />}{node.enabled ? "已启用" : "已停用"}</button></span>
-    <span className="node-row-actions" role="group" aria-label={`${node.name} 的节点操作`}><span className="node-probe-cluster"><button className="secondary-button compact-button diagnostic-action" disabled={probeBusy} onClick={onProbe} title="运行上方选择的连通性检查，结果显示在按钮旁" aria-label={`检测节点 ${node.name}`}>{probeBusy ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}<span className="node-action-label">测速</span></button>{!probeBusy && diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined && <span className={`tcp-latency ${latencyLevel(diagnostic.latencyMs)}`} role="status" title={`${diagnostic.mode === "proxy" ? "代理实测" : "TCP 端口"} · ${diagnostic.checkedAt ? new Date(diagnostic.checkedAt).toLocaleTimeString("zh-CN") : ""}`}>{diagnostic.latencyMs}ms</span>}{!probeBusy && diagnostic?.reachable === false && diagnostic.probeStatus === "result" && <span className="tcp-latency bad" role="status" aria-label={diagnostic.error || "连接失败"} title={diagnostic.error || "连接失败"}><CircleX size={13} />失败</span>}{!probeBusy && diagnostic?.probeStatus === "unsupported" && <span className="tcp-latency" role="status" title={diagnostic.error}>不适用</span>}{!probeBusy && diagnostic?.probeStatus === "error" && <span className="tcp-latency" role="status" title={diagnostic.error}>检查错误</span>}</span><button className="secondary-button compact-button diagnostic-action flag-action" disabled={flagBusy} onClick={onFlag} title="按上方选择的 IP 依据给节点名称添加国旗" aria-label={`为 ${node.name} 添加国家国旗`}>{flagBusy ? <LoaderCircle className="spin" size={15} /> : <Flag size={15} />}<span className="node-action-label">国旗</span></button><button className="secondary-button compact-button node-copy-button copy-action" onClick={onCopyLink} aria-label={`复制 ${node.name} 的协议链接`} title={`复制此 ${node.type.toUpperCase()} 节点的协议链接`}><Copy size={15} /><span className="node-copy-label">复制节点链接</span></button><span className={`node-extra-actions${actionsOpen ? " open" : ""}`}><button className="node-more-button" aria-expanded={actionsOpen} aria-label={`更多操作 ${node.name}`} onClick={() => setActionsOpen(!actionsOpen)}><span className="node-more-label">更多</span><span className="node-more-dots" aria-hidden="true">•••</span></button><button className="icon-button compact" onClick={onEdit} aria-label={`编辑 ${node.name}`} title="编辑节点"><Pencil size={16} /></button><button className="icon-button compact danger" onClick={onDelete} aria-label={`删除 ${node.name}`} title="删除节点"><Trash2 size={16} /></button></span></span>
+    <span className="node-row-tags" title={node.tags.join("、")}>
+      {node.tags.length ? node.tags.map((tag) => <span key={tag} className="node-tag-pill">{tag}</span>) : <span className="empty-dash">-</span>}
+    </span>
+    <span className="node-row-status">
+      <button className={node.enabled ? "status-toggle active" : "status-toggle"} onClick={onToggle} title={node.enabled ? "点击停用" : "点击启用"}>
+        {node.enabled ? <CheckCircle2 size={13} /> : <Ban size={13} />}
+        <span>{node.enabled ? "已启用" : "已停用"}</span>
+      </button>
+    </span>
+    <span className="node-row-actions" role="group" aria-label={`${node.name} 的节点操作`}>
+      <button className="node-tool-btn" disabled={probeBusy} onClick={onProbe} title="连通性测速" aria-label={`检测节点 ${node.name}`}>
+        {probeBusy ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />}
+        {diagnostic?.reachable === true && diagnostic.latencyMs !== null && diagnostic.latencyMs !== undefined ? (
+          <span className={`tcp-latency-badge ${latencyLevel(diagnostic.latencyMs)}`}>{diagnostic.latencyMs}ms</span>
+        ) : diagnostic?.reachable === false && diagnostic.probeStatus === "result" ? (
+          <span className="tcp-latency-badge bad">超时</span>
+        ) : (
+          <span className="node-btn-text">测速</span>
+        )}
+      </button>
+      <button className="node-tool-btn" disabled={flagBusy} onClick={onFlag} title="根据 IP 自动匹配国旗" aria-label={`为 ${node.name} 添加国家国旗`}>
+        {flagBusy ? <LoaderCircle className="spin" size={14} /> : <Flag size={14} />}
+        <span className="node-btn-text">国旗</span>
+      </button>
+      <button className="node-icon-action-btn" onClick={onCopyLink} title="复制节点链接" aria-label={`复制 ${node.name} 的协议链接`}>
+        <Copy size={14} />
+      </button>
+      <button className="node-icon-action-btn" onClick={onEdit} title="编辑节点" aria-label={`编辑 ${node.name}`}>
+        <Pencil size={14} />
+      </button>
+      <button className="node-icon-action-btn danger" onClick={onDelete} title="删除节点" aria-label={`删除 ${node.name}`}>
+        <Trash2 size={14} />
+      </button>
+    </span>
   </div>;
 }

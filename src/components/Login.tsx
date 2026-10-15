@@ -23,7 +23,7 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <h1>OU-YAML</h1>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(99, 102, 241, 0.2)", border: "1px solid rgba(99, 102, 241, 0.4)", color: "#a5b4fc" }}>V2.1.0</span>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(99, 102, 241, 0.2)", border: "1px solid rgba(99, 102, 241, 0.4)", color: "#a5b4fc" }}>V2.1.1</span>
         </div>
         <p>Mihomo / Clash Meta 可视化配置工作室</p>
       </div>
