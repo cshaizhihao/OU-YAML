@@ -25,15 +25,16 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* 现代高级科技暗夜背景：深曜石 + 双极光柔和漫反射 */
+  /* 现代高奢液态玻璃暗夜背景：深邃曜石 + 流动晶体三色极光漫反射 */
   background:
-    radial-gradient(1100px circle at 15% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
-    radial-gradient(900px circle at 85% 115%, rgba(6, 182, 212, 0.12), transparent 55%),
-    radial-gradient(750px circle at 50% 40%, rgba(139, 92, 246, 0.08), transparent 70%),
+    radial-gradient(1200px circle at 15% -8%, rgba(99, 102, 241, 0.22), transparent 55%),
+    radial-gradient(1000px circle at 88% 112%, rgba(6, 182, 212, 0.18), transparent 50%),
+    radial-gradient(850px circle at 50% 35%, rgba(168, 85, 247, 0.12), transparent 65%),
+    radial-gradient(700px circle at 70% 20%, rgba(59, 130, 246, 0.15), transparent 60%),
     var(--canvas);
 }
 
-/* 细腻的高科技网格底纹 */
+/* 细腻的高科技晶体网格底纹 */
 body::before {
   content: "";
   position: fixed;
@@ -41,26 +42,27 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 25%, black 40%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 25%, black 40%, transparent 100%);
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(ellipse 85% 65% at 50% 25%, black 45%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 65% at 50% 25%, black 45%, transparent 100%);
 }
 
-/* 极光呼吸微光层 */
+/* 液态微光流动层 */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.75;
   background:
-    radial-gradient(450px circle at 20% 30%, rgba(99, 102, 241, 0.06), transparent 70%),
-    radial-gradient(520px circle at 80% 70%, rgba(6, 182, 212, 0.05), transparent 70%);
-  filter: blur(40px);
-  animation: aurora-float 20s ease-in-out infinite alternate;
+    radial-gradient(550px circle at 18% 25%, rgba(99, 102, 241, 0.1), transparent 70%),
+    radial-gradient(650px circle at 82% 75%, rgba(6, 182, 212, 0.08), transparent 70%),
+    radial-gradient(400px circle at 50% 85%, rgba(168, 85, 247, 0.07), transparent 70%);
+  filter: blur(50px);
+  animation: aurora-float 22s ease-in-out infinite alternate;
 }
 
 @keyframes aurora-float {

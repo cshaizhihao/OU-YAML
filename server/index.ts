@@ -626,10 +626,13 @@ app.post("/api/managed-nodes/:id/country-flag", requireAuth, nodeProbeLimiter, a
   }
 });
 app.put("/api/managed-nodes/:id", requireAuth, (req, res) => {
-  const parsed = managedNodeSchema.omit({ sourceId: true }).safeParse(req.body);
+  const existing = getManagedNode(req.user!.id, String(req.params.id));
+  if (!existing) return res.status(404).json({ error: "节点不存在" });
+  const merged = { ...existing, ...req.body };
+  const parsed = managedNodeSchema.omit({ sourceId: true }).safeParse(merged);
   if (!parsed.success) return res.status(400).json({ error: "节点参数无效" });
   const updated = updateManagedNode(req.user!.id, String(req.params.id), { ...parsed.data, id: String(req.params.id) });
-  if (!updated) return res.status(404).json({ error: "节点不存在" });
+  if (!updated) return res.status(404).json({ error: "节点更新失败" });
   res.json(updated);
 });
 app.delete("/api/managed-nodes/:id", requireAuth, (req, res) => { const deleted = deleteManagedNode(req.user!.id, String(req.params.id)); recordAudit(req.user!.id, "delete", "managed-node", String(req.params.id)); res.json({ deleted }); });

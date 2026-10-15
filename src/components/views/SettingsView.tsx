@@ -432,8 +432,8 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
             </div>
 
             <div className="update-safety">
-              <HardDrive size={16} />
-              <span>更新前安全机制：磁盘空间、Docker Compose、Git 工作区和数据快照均由主机守护代理自动验证确认。</span>
+              <ShieldCheck size={16} />
+              <span>更新前环境已就绪 · 支持故障自动回滚与数据快照保护</span>
             </div>
 
             {updateInfo?.hasUpdate ? (

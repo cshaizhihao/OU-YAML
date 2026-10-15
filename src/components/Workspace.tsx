@@ -61,19 +61,19 @@ const secondaryNav: NavItem[] = [
 ];
 
 const viewMeta: Record<View, { eyebrow: string; title: string; description: string }> = {
-  home: { eyebrow: "订阅工作台", title: "我的订阅", description: "新建：导入 → 推荐或自定义 → 发布。已有订阅：选择卡片 → 编辑 → 更新原地址。" },
-  sources: { eyebrow: "来源管理", title: "导入节点", description: "添加远程订阅、配置文件或节点分享链接。" },
-  nodes: { eyebrow: "节点管理", title: "选择节点", description: "整理节点、检测连通性，再加入当前项目。" },
-  groups: { eyebrow: "高级配置", title: "代理分组", description: "从全部分组选择当前组，再添加节点、调整成员和连接方式。" },
-  rules: { eyebrow: "高级配置", title: "中文分流", description: "使用中文规则决定不同流量的连接方式。" },
-  preview: { eyebrow: "高级工具", title: "预览校验", description: "检查最终配置源码并运行内核验证。" },
-  history: { eyebrow: "安全保护", title: "历史版本", description: "创建快照，或回滚到可靠配置。" },
-  generator: { eyebrow: "高级发布", title: "生成订阅", description: "跟随向导检查配置并发布稳定订阅链接。" },
-  links: { eyebrow: "订阅管理", title: "发布链接", description: "管理公开地址、版本、过期时间与撤销状态。" },
-  subscription: { eyebrow: "订阅编辑", title: "编辑已生成的订阅", description: "修改节点、分组或规则，确认后更新原地址，不用从头生成。" },
-  templates: { eyebrow: "高级工具", title: "模板资源", description: "创建和复用规则模板。" },
-  settings: { eyebrow: "系统管理", title: "系统设置", description: "管理项目参数、账号、备份与网页更新。" },
-  admin: { eyebrow: "系统管理", title: "用户管理", description: "管理用户、权限和账号状态。" },
+  home: { eyebrow: "工作台", title: "我的订阅", description: "云端订阅编排中心" },
+  sources: { eyebrow: "资产管理", title: "订阅来源", description: "管理远程订阅、节点分享与本地配置" },
+  nodes: { eyebrow: "资产中心", title: "节点资产库", description: "全局节点健康探测与分组编排" },
+  groups: { eyebrow: "流控编排", title: "代理分组", description: "可视化策略组拓扑与分流构建" },
+  rules: { eyebrow: "规则引擎", title: "中文分流", description: "智能中文规则意图与流量路由" },
+  preview: { eyebrow: "实时仿真", title: "配置预览", description: "配置代码高亮与内核语法沙箱检验" },
+  history: { eyebrow: "版本控制", title: "历史版本", description: "配置时光机与安全快照还原" },
+  generator: { eyebrow: "交付中心", title: "发布订阅", description: "高性能公开发布与客户端直连" },
+  links: { eyebrow: "交付中心", title: "发布链接", description: "安全访问凭证与订阅热更新" },
+  subscription: { eyebrow: "热重载", title: "编辑订阅", description: "原地无感差量热更新" },
+  templates: { eyebrow: "资产复用", title: "模板资源", description: "经典分流规则集与编排模板" },
+  settings: { eyebrow: "控制台", title: "系统设置", description: "项目运行参数、数据备份与在线升级" },
+  admin: { eyebrow: "控制台", title: "用户管理", description: "多用户权限控制与租户隔离" },
 };
 
 const workspaceTabs = [{ id: "groups" as View, label: "代理分组", icon: Group }, { id: "rules" as View, label: "分流规则", icon: ScrollText }, { id: "preview" as View, label: "预览校验", icon: FileCode2 }, { id: "history" as View, label: "历史版本", icon: History }];

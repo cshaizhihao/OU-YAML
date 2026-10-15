@@ -10,17 +10,21 @@
   --ink-muted: #475569;
 
   /* 背景与空间基底：真正的黑曜石深空黑灰，无杂质、无脏紫泥 */
-  --canvas: #08090e;
-  --canvas-elevated: #0e111a;
-  --canvas-subtle: #121624;
+  --canvas: #06080d;
+  --canvas-elevated: #0b0e18;
+  --canvas-subtle: #0f1422;
 
-  /* 表面层级（Obsidian Glassmorphism） */
-  --surface: rgba(16, 20, 31, 0.72);
-  --surface-solid: #111420;
-  --surface-soft: rgba(26, 32, 50, 0.65);
-  --surface-raised: rgba(36, 45, 70, 0.75);
-  --surface-hover: rgba(46, 58, 90, 0.45);
-  --surface-active: rgba(60, 75, 115, 0.55);
+  /* 液态玻璃核心表面层级 (Liquid Glass Surfaces) */
+  --surface: rgba(14, 18, 29, 0.68);
+  --surface-solid: #0d111c;
+  --surface-soft: rgba(22, 28, 46, 0.58);
+  --surface-raised: rgba(30, 40, 66, 0.72);
+  --surface-hover: rgba(45, 58, 92, 0.45);
+  --surface-active: rgba(60, 78, 122, 0.55);
+  --surface-liquid: linear-gradient(135deg, rgba(22, 30, 50, 0.62) 0%, rgba(10, 14, 24, 0.76) 100%);
+  --surface-liquid-raised: linear-gradient(145deg, rgba(32, 44, 72, 0.68) 0%, rgba(16, 22, 38, 0.82) 100%);
+  --liquid-refraction: inset 0 1px 1px 0 rgba(255, 255, 255, 0.16), 0 16px 44px -8px rgba(0, 0, 0, 0.65);
+  --liquid-refraction-hover: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.28), 0 20px 52px -10px rgba(99, 102, 241, 0.35);
 
   /* 边框体系：精准纳米级微光，告别刺眼白粗线 */
   --line: rgba(255, 255, 255, 0.08);

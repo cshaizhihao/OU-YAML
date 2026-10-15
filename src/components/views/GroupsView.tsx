@@ -656,44 +656,44 @@ export function GroupsView({
                         </button>
                       </div>
                     </header>
-                    <div className="inspector-stats">
-                      <span>类型<strong>{groupTypes.find((item) => item.value === selectedGroup.type)?.label}</strong></span>
-                      <span>成员<strong>{selectedGroup.proxies.length}</strong></span>
-                      <span>嵌套组<strong>{selectedGroup.proxies.filter((name) => config.proxyGroups.some((group) => group.name === name)).length}</strong></span>
+                    <div className="inspector-body">
+                      <div className="inspector-stats">
+                        <span>类型<strong>{groupTypes.find((item) => item.value === selectedGroup.type)?.label}</strong></span>
+                        <span>成员<strong>{selectedGroup.proxies.length}</strong></span>
+                        <span>嵌套组<strong>{selectedGroup.proxies.filter((name) => config.proxyGroups.some((group) => group.name === name)).length}</strong></span>
+                      </div>
+                      <div className="group-context" style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: "11px", color: "var(--ink-faint)" }}>
+                          引用: <strong>{config.proxyGroups.filter((group) => group.proxies.includes(selectedGroup.name)).length}</strong> 组 · 规则: <strong>{config.rules.filter((rule) => rule.target === selectedGroup.name).length}</strong> 条
+                        </span>
+                      </div>
+                      <section>
+                        <div className="inspector-title"><GitBranch size={14} /><strong>嵌套策略组</strong></div>
+                        <div className="nest-group-list">
+                          {config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => {
+                            const included = selectedGroup.proxies.includes(group.name);
+                            const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name, nodeNames);
+                            return (
+                              <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])} title={included ? "已加入" : allowed ? "点击加入此组" : "不可选（防止循环）"}>
+                                <span><Group size={13} />{group.name}</span>
+                                {included ? <Check size={13} /> : <Plus size={13} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                      <section>
+                        <div className="inspector-title"><GripVertical size={14} /><strong>分组排序</strong></div>
+                        <div className="inspector-actions">
+                          <button className="secondary-button compact-button" disabled={config.proxyGroups[0]?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, -1)}>
+                            <ArrowUp size={14} />上移
+                          </button>
+                          <button className="secondary-button compact-button" disabled={config.proxyGroups.at(-1)?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, 1)}>
+                            <ArrowDown size={14} />下移
+                          </button>
+                        </div>
+                      </section>
                     </div>
-                    <p className="group-context">
-                      {selectedGroup.type === "relay"
-                        ? "链式代理按成员顺序从入口到出口连接，仅接受具体节点。"
-                        : `被 ${config.proxyGroups.filter((group) => group.proxies.includes(selectedGroup.name)).length} 个组引用 · ${config.rules.filter((rule) => rule.target === selectedGroup.name).length} 条规则使用`}
-                    </p>
-                    <section>
-                      <div className="inspector-title"><GitBranch size={15} /><strong>嵌套其他组</strong></div>
-                      <p>点击加入当前组，已加入或会形成循环的组不可选。</p>
-                      <div className="nest-group-list">
-                        {config.proxyGroups.filter((group) => group.id !== selectedGroup.id).map((group) => {
-                          const included = selectedGroup.proxies.includes(group.name);
-                          const allowed = canAddGroupMember(config.proxyGroups, selectedGroup.id, group.name, nodeNames);
-                          return (
-                            <button key={group.id} disabled={included || !allowed} onClick={() => addMembers(selectedGroup.id, [group.name])}>
-                              <span><Group size={14} />{group.name}</span>
-                              {included ? <Check size={14} /> : <Plus size={14} />}
-                            </button>
-                          );
-                        })}
-                        {config.proxyGroups.length < 2 && <small>创建第二个策略组后，可在这里建立嵌套策略。</small>}
-                      </div>
-                    </section>
-                    <section>
-                      <div className="inspector-title"><GripVertical size={15} /><strong>调整组顺序</strong></div>
-                      <div className="inspector-actions">
-                        <button className="secondary-button compact-button" disabled={config.proxyGroups[0]?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, -1)}>
-                          <ArrowUp size={14} />上移
-                        </button>
-                        <button className="secondary-button compact-button" disabled={config.proxyGroups.at(-1)?.id === selectedGroup.id} onClick={() => moveGroup(selectedGroup.id, 1)}>
-                          <ArrowDown size={14} />下移
-                        </button>
-                      </div>
-                    </section>
                   </>
                 ) : (
                   <div className="inspector-empty">

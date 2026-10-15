@@ -205,9 +205,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: min(820px, calc(100dvh - 120px));
-  position: sticky;
-  top: 84px;
+  height: calc(100dvh - 175px);
+  min-height: 520px;
+  max-height: 840px;
 }
 
 .group-overview > header {
@@ -408,6 +408,11 @@
 
 .group-column {
   min-width: 0;
+  height: calc(100dvh - 175px);
+  min-height: 520px;
+  max-height: 840px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background: var(--surface);
@@ -428,6 +433,7 @@
 }
 
 .group-column-header {
+  flex-shrink: 0;
   min-height: 56px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
@@ -486,11 +492,16 @@
 }
 
 .group-member-list {
-  min-height: 140px;
+  flex: 1;
+  min-height: 0;
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 .group-member {
@@ -720,9 +731,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: min(820px, calc(100dvh - 120px));
-  position: sticky;
-  top: 84px;
+  height: calc(100dvh - 175px);
+  min-height: 520px;
+  max-height: 840px;
 }
 
 .node-pool > header {
@@ -1000,9 +1011,20 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: min(820px, calc(100dvh - 120px));
-  position: sticky;
-  top: 84px;
+  height: calc(100dvh - 175px);
+  min-height: 520px;
+  max-height: 840px;
+}
+
+.inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 .group-inspector > header {

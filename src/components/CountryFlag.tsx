@@ -128,29 +128,86 @@ export function emojiToCountryCode(emoji: string): string | null {
   return null;
 }
 
+// 彻底剥离任何历史前置 Emoji、方括号代码、中括号代码、国家前缀与残留符号
+export function extractCleanNodeName(name: string): string {
+  if (!name) return "";
+  let str = name.trim();
+
+  // 1. 循环剥除前置国旗 Emoji
+  while (true) {
+    const chars = [...str];
+    if (chars.length >= 2) {
+      const code = emojiToCountryCode(chars.slice(0, 2).join(""));
+      if (code) {
+        str = chars.slice(2).join("").trim();
+        continue;
+      }
+    }
+    break;
+  }
+
+  // 2. 循环剥除前置标签、代码前缀与连接符
+  let matched = true;
+  while (matched) {
+    matched = false;
+    // 剥除前置连接符号
+    str = str.replace(/^[\s·|｜\-—:：/_]+/, "").trim();
+
+    // 剥除方括号/中括号/圆括号包裹的内容，例如 [DE], 【HK】, (JP), [US-01], 【香港】
+    const bracketMatch = str.match(/^[\[【\(〔]([A-Za-z0-9\s_\-\.]{1,12}|[\u4e00-\u9fa5]{1,8})[\]】\)〕]/);
+    if (bracketMatch) {
+      str = str.slice(bracketMatch[0].length).trim();
+      matched = true;
+      continue;
+    }
+
+    // 剥除裸代码前缀（如 "HK ", "DE - ", "CN | "）
+    const bareCodeMatch = str.match(/^([A-Za-z]{2})[\s·|｜\-—:：/_]+/);
+    if (bareCodeMatch && bareCodeMatch[1].toUpperCase() in flagSvgs) {
+      str = str.slice(bareCodeMatch[0].length).trim();
+      matched = true;
+      continue;
+    }
+
+    // 剥除前置中文地名（如 "香港 - ", "台湾 | ", "日本·", "美国 "）
+    const cnRegionMatch = str.match(/^(?:中国香港|中国台湾|中国大陆|香港|台湾|台北|日本|东京|大阪|新加坡|狮城|美国|韩国|首尔|德国|法兰克福|英国|伦敦|法国|巴黎|俄罗斯|莫斯科|加拿大|澳大利亚|澳洲|印度|中国|大陆)[\s·|｜\-—:：/_]+/);
+    if (cnRegionMatch) {
+      str = str.slice(cnRegionMatch[0].length).trim();
+      matched = true;
+      continue;
+    }
+  }
+
+  // 最终剥除残留的前置连接符号
+  str = str.replace(/^[\s·|｜\-—:：/_]+/, "").trim();
+
+  return str || name.trim();
+}
+
 // 从节点名称中解析出国家代码与干净名称
 export function parseNodeCountry(name: string): { countryCode: string | null; cleanName: string } {
   if (!name) return { countryCode: null, cleanName: "" };
-  let str = name.trim();
+  const cleanName = extractCleanNodeName(name);
+  const str = name.trim();
 
   // 1. 尝试匹配前缀的 Emoji 国旗
   const chars = [...str];
   if (chars.length >= 2) {
     const code = emojiToCountryCode(chars.slice(0, 2).join(""));
-    if (code) {
-      str = chars.slice(2).join("").replace(/^[\s·|｜\-—]+/, "").trim();
-      return { countryCode: code, cleanName: str || name };
-    }
+    if (code) return { countryCode: code, cleanName };
   }
 
-  // 2. 尝试匹配显式文本国家代码前缀，例如 "CN [HK] ...", "HK 【HK】...", "[JP] ..."
-  const textMatch = str.match(/^([A-Z]{2})[\s·|｜\-—]+/i) || str.match(/^[【\[]([A-Z]{2})[】\]][\s·|｜\-—]*/i);
-  if (textMatch && textMatch[1]) {
-    const code = textMatch[1].toUpperCase();
-    if (code in flagSvgs) {
-      const clean = str.slice(textMatch[0].length).trim();
-      return { countryCode: code, cleanName: clean || str };
-    }
+  // 2. 尝试匹配显式文本国家代码前缀，例如 "[HK]", "【HK】", "HK", "CN"
+  const bracketCode = str.match(/^[\[【\(〔]([A-Za-z]{2})[\]】\)〕]/i);
+  if (bracketCode && bracketCode[1]) {
+    const code = bracketCode[1].toUpperCase();
+    if (code in flagSvgs) return { countryCode: code, cleanName };
+  }
+
+  const bareMatch = str.match(/^([A-Za-z]{2})[\s·|｜\-—:：/_]+/i);
+  if (bareMatch && bareMatch[1]) {
+    const code = bareMatch[1].toUpperCase();
+    if (code in flagSvgs) return { countryCode: code, cleanName };
   }
 
   // 3. 常见中文地名或地标关键词推导
@@ -168,16 +225,16 @@ export function parseNodeCountry(name: string): { countryCode: string | null; cl
     { pattern: /(?:加拿大|CA|Canada)/i, code: "CA" },
     { pattern: /(?:澳大利亚|澳洲|悉尼|AU|Australia)/i, code: "AU" },
     { pattern: /(?:印度|IN|India)/i, code: "IN" },
-    { pattern: /(?:中国|大陆|CN|China)/i, code: "CN" }
+    { pattern: /(?:中国大陆|中国|大陆|CN|China)/i, code: "CN" }
   ];
 
   for (const item of regionMap) {
     if (item.pattern.test(str)) {
-      return { countryCode: item.code, cleanName: str };
+      return { countryCode: item.code, cleanName };
     }
   }
 
-  return { countryCode: null, cleanName: str };
+  return { countryCode: null, cleanName };
 }
 
 // 统一高质感彩色国旗组件
@@ -227,9 +284,9 @@ export const COMMON_FLAG_LIST: Array<{ code: string; name: string; emoji: string
 ];
 
 export function replaceNodeCountry(oldName: string, newCode: string | null): string {
-  const { cleanName } = parseNodeCountry(oldName);
+  const cleanName = extractCleanNodeName(oldName);
   if (!newCode) return cleanName;
-  return `[${newCode.toUpperCase()}] · ${cleanName}`;
+  return `[${newCode.toUpperCase()}] | ${cleanName}`;
 }
 
 // 智能格式化节点名称，消除 Windows 黑框并渲染真实 SVG 国旗

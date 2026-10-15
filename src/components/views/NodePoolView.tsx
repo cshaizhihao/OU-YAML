@@ -295,12 +295,13 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   async function saveRename() {
     if (!renamingNode || !renamingNode.name.trim()) return;
     try {
-      await api.updateManagedNode(renamingNode.id, { name: renamingNode.name.trim() });
+      await api.updateManagedNode(renamingNode.id, { ...renamingNode, name: renamingNode.name.trim() });
       await onProjectReload();
       setRenamingNode(null);
       await load(true);
       onMessage("节点名称已更新");
     } catch (err) {
+      setRenamingNode(null);
       onMessage(err instanceof Error ? err.message : "重命名节点失败");
     }
   }
@@ -448,7 +449,15 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
       {orderBusy && <><i /><span className="status-ok"><RefreshCw className="spin" size={14} />保存排序中</span></>}
     </div>
 
-    <div className="node-detection-controls" data-guide-id={guideTargets.nodeDiagnostics}><label>连通性检测模式<select value={probeMode} onChange={(event) => setProbeMode(event.target.value as "tcp" | "proxy")} disabled={probeBusy.size > 0}><option value="tcp">TCP 端口握手检测</option><option value="proxy">代理实测与真实出口 IP</option></select></label><p>点击节点列表左侧的国旗可随时更换地区或按 IP 自动识别；点击编辑图标可快速重命名节点。</p></div>
+    <div className="node-detection-controls" data-guide-id={guideTargets.nodeDiagnostics}>
+      <label>
+        连通性检测模式
+        <select value={probeMode} onChange={(event) => setProbeMode(event.target.value as "tcp" | "proxy")} disabled={probeBusy.size > 0}>
+          <option value="tcp">TCP 端口握手检测</option>
+          <option value="proxy">代理实测与真实出口 IP</option>
+        </select>
+      </label>
+    </div>
     {selected.size > 0 && <div className="node-selection-actions">
       <span className="selection-count">已选择 <strong>{selected.size}</strong> 个</span>
       <button className="primary-button compact-button" onClick={addSelectedToProject} disabled={orderBusy}><Plus size={15} />加入当前项目</button>
