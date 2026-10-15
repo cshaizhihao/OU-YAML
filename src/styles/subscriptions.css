@@ -35,14 +35,14 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 100% 100%, rgba(99, 102, 241, 0.12), transparent 60%);
+  background: radial-gradient(circle at 100% 100%, rgba(56, 189, 248, 0.1), transparent 60%);
   opacity: 0;
   transition: opacity var(--duration-base) ease;
 }
 
 .home-tasks > button:hover {
-  background: rgba(24, 30, 48, 0.75);
-  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(22, 27, 40, 0.85);
+  border-color: rgba(56, 189, 248, 0.4);
   transform: translateY(-2.5px);
   box-shadow: var(--shadow-hover);
 }
@@ -56,16 +56,16 @@
   width: 42px;
   height: 42px;
   border-radius: var(--radius);
-  color: var(--accent-hover);
+  color: var(--accent);
   background: var(--accent-soft);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.25);
   flex-shrink: 0;
   transition: transform var(--duration-fast) var(--ease-spring);
 }
 
 .home-tasks > button:hover > svg:first-child {
   transform: scale(1.08);
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
 }
 
 .home-tasks span {
@@ -75,16 +75,16 @@
 
 .home-tasks strong {
   display: block;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   color: #ffffff;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 .home-tasks small {
   display: block;
   margin-top: 4px;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -116,10 +116,10 @@
 
 .home-subscriptions-heading h2 {
   margin: 4px 0 0;
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 750;
   color: #ffffff;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
 .home-subscriptions-heading p {
@@ -160,12 +160,12 @@
   right: 0;
   height: 2px;
   background: var(--accent-gradient);
-  opacity: 0.6;
+  opacity: 0.85;
 }
 
 .home-subscription-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(99, 102, 241, 0.4);
+  border-color: rgba(56, 189, 248, 0.4);
   box-shadow: var(--shadow-hover);
 }
 
@@ -181,8 +181,8 @@
   height: 44px;
   border-radius: var(--radius);
   background: var(--accent-soft);
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  color: var(--accent-hover);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: var(--accent);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -203,7 +203,7 @@
 }
 
 .home-subscription-card small {
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-size: 12px;
 }
 
@@ -378,7 +378,7 @@
 
 .rich-list .subscription-row:hover {
   transform: translateY(-2px);
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: rgba(56, 189, 248, 0.35);
   box-shadow: var(--shadow-hover);
 }
 

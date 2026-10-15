@@ -5,7 +5,7 @@
   border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 4px 16px -4px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 16px -4px rgba(56, 189, 248, 0.4);
   display: grid;
   place-items: center;
   flex: 0 0 auto;
@@ -15,7 +15,7 @@
 
 .brand-mark:hover {
   transform: scale(1.06);
-  box-shadow: 0 6px 20px -3px rgba(99, 102, 241, 0.6);
+  box-shadow: 0 6px 20px -3px rgba(56, 189, 248, 0.6);
 }
 
 .brand-mark img {
@@ -179,7 +179,7 @@
 }
 
 .panel-card:hover {
-  border-color: rgba(99, 102, 241, 0.3);
+  border-color: rgba(56, 189, 248, 0.3);
   box-shadow: var(--shadow-hover);
 }
 
@@ -301,7 +301,7 @@
 }
 
 .data-table tbody tr:hover td {
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(56, 189, 248, 0.08);
   color: var(--ink);
 }
 
@@ -333,7 +333,7 @@
   flex: 0 0 auto;
   color: var(--accent-hover);
   background: var(--accent-soft);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
 .type-badge {
@@ -558,9 +558,9 @@
 /* 文件拖拽区 */
 .file-drop {
   min-height: 260px;
-  border: 1.5px dashed rgba(99, 102, 241, 0.4);
+  border: 1.5px dashed rgba(56, 189, 248, 0.4);
   border-radius: var(--radius-lg);
-  background: rgba(99, 102, 241, 0.04);
+  background: rgba(56, 189, 248, 0.04);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -572,7 +572,7 @@
 
 .file-drop:hover {
   border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.09);
+  background: rgba(56, 189, 248, 0.09);
   transform: scale(1.008);
 }
 
@@ -629,10 +629,10 @@
   gap: 12px;
   padding: 8px 10px 8px 16px;
   border-radius: var(--radius);
-  border: 1px solid rgba(99, 102, 241, 0.4);
+  border: 1px solid rgba(56, 189, 248, 0.4);
   background: rgba(18, 23, 38, 0.95);
   color: var(--ink);
-  box-shadow: var(--shadow-dialog), 0 0 20px -5px rgba(99, 102, 241, 0.4);
+  box-shadow: var(--shadow-dialog), 0 0 20px -5px rgba(56, 189, 248, 0.4);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   animation: toast-slide-in var(--duration-base) var(--ease-spring) both;

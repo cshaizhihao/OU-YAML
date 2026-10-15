@@ -72,9 +72,9 @@
 .group-workbench-help {
   padding: 10px 14px;
   border-radius: var(--radius-md);
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  color: #c7d2fe;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  color: #bae6fd;
   font-size: 12.5px;
   line-height: 1.5;
   animation: fadeIn var(--duration-fast) var(--ease-silk);
@@ -120,7 +120,7 @@
 .group-mobile-tabs button.active {
   background: var(--accent-soft);
   color: #ffffff;
-  border: 1px solid rgba(99, 102, 241, 0.4);
+  border: 1px solid rgba(56, 189, 248, 0.4);
 }
 
 /* 3. 核心四列看板棋盘 (Kanban Board) */
@@ -285,15 +285,15 @@
 }
 
 .group-overview-item:hover {
-  border-color: rgba(99, 102, 241, 0.35);
-  background: rgba(22, 28, 44, 0.7);
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(255, 255, 255, 0.05);
   transform: translateY(-1px);
 }
 
 .group-overview-item.selected {
   border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.16);
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 8px 20px -4px rgba(99, 102, 241, 0.25);
+  background: rgba(56, 189, 248, 0.12);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35), 0 8px 20px -4px rgba(56, 189, 248, 0.2);
 }
 
 .group-overview-item.selected::before {
@@ -518,8 +518,8 @@
 }
 
 .group-member:hover {
-  border-color: rgba(99, 102, 241, 0.4);
-  background: rgba(26, 32, 50, 0.75);
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(255, 255, 255, 0.05);
   transform: translateX(2px);
 }
 
@@ -545,8 +545,8 @@
 
 .member-kind.group {
   background: var(--accent-soft);
-  color: var(--accent-hover);
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--accent);
+  border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
 .member-kind.builtin {
@@ -662,14 +662,14 @@
 .group-nest-drop {
   min-height: 38px;
   margin-top: 6px;
-  border: 1px dashed rgba(99, 102, 241, 0.4);
+  border: 1px dashed rgba(56, 189, 248, 0.4);
   border-radius: var(--radius-md);
-  background: rgba(99, 102, 241, 0.05);
+  background: rgba(56, 189, 248, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #c7d2fe;
+  color: #bae6fd;
   font-size: 12px;
   font-weight: 500;
   transition: all var(--duration-fast) var(--ease-silk);
@@ -677,9 +677,9 @@
 
 .group-nest-drop.active {
   border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.18);
+  background: rgba(56, 189, 248, 0.16);
   color: #ffffff;
-  box-shadow: 0 0 16px -2px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 16px -2px rgba(56, 189, 248, 0.35);
 }
 
 .group-quick-add {
@@ -924,7 +924,7 @@
   background: var(--accent-soft);
   border-color: var(--accent);
   color: #ffffff;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
 }
 
 .pool-mode-switcher {
@@ -1192,8 +1192,8 @@
   min-height: 44px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-md);
-  background: rgba(18, 23, 38, 0.96);
-  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.8), 0 0 20px -2px rgba(99, 102, 241, 0.5);
+  background: rgba(14, 18, 28, 0.96);
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.8), 0 0 20px -2px rgba(56, 189, 248, 0.45);
   display: flex;
   align-items: center;
   gap: 8px;

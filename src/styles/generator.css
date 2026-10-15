@@ -69,15 +69,15 @@
 
 .wizard-step.active {
   color: #ffffff;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(6, 182, 212, 0.12) 100%);
-  border-color: rgba(99, 102, 241, 0.45);
-  box-shadow: 0 4px 16px -2px rgba(99, 102, 241, 0.25);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(6, 182, 212, 0.12) 100%);
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 4px 16px -2px rgba(56, 189, 248, 0.25);
 }
 
 .wizard-step.active span {
   background: var(--accent);
   color: #ffffff;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
 }
 
 /* 向导内容两栏布局 */
@@ -120,8 +120,8 @@
 
 .choice-card.selected {
   border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.12);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25), 0 8px 24px -4px rgba(0, 0, 0, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25), 0 8px 24px -4px rgba(0, 0, 0, 0.5);
 }
 
 .choice-card strong {

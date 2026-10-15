@@ -20,7 +20,7 @@
   padding: 12px 18px;
   margin-bottom: 16px;
   border-radius: var(--radius-lg);
-  background: rgba(18, 23, 38, 0.7);
+  background: var(--surface);
   border: 1px solid var(--line);
   backdrop-filter: var(--glass-blur);
   font-size: 13px;
@@ -73,12 +73,12 @@
 .node-list-header {
   min-height: 44px;
   padding: 0 16px;
-  background: rgba(15, 20, 32, 0.9);
+  background: rgba(12, 14, 20, 0.92);
   border-bottom: 1px solid var(--line);
   color: var(--ink-faint);
   font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -105,7 +105,8 @@
 }
 
 .node-row:hover {
-  background: rgba(99, 102, 241, 0.06);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .node-row.is-disabled {
@@ -210,14 +211,15 @@
 }
 
 .node-row-type .type-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10.5px;
   padding: 2px 7px;
   border-radius: 4px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.28);
 }
 
 /* 服务器与端口、来源 */
@@ -314,7 +316,7 @@
   border-radius: 6px;
   font-size: 11.5px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--line);
   color: var(--ink-soft);
   cursor: pointer;
@@ -323,8 +325,8 @@
 }
 
 .node-tool-btn:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
   color: #ffffff;
   transform: translateY(-1px);
 }
@@ -384,10 +386,10 @@
   z-index: 12;
   min-height: 48px;
   padding: 8px 14px;
-  border: 1px solid rgba(99, 102, 241, 0.4);
+  border: 1px solid rgba(56, 189, 248, 0.4);
   border-radius: var(--radius-lg);
   background: rgba(18, 23, 38, 0.95);
-  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.7), 0 0 16px -2px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.7), 0 0 16px -2px rgba(56, 189, 248, 0.3);
   backdrop-filter: var(--glass-blur);
   display: flex;
   align-items: center;
@@ -419,7 +421,7 @@
   border-radius: var(--radius);
   background: rgba(18, 23, 38, 0.96);
   color: #ffffff;
-  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.8), 0 0 20px -2px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.8), 0 0 20px -2px rgba(56, 189, 248, 0.5);
   backdrop-filter: var(--glass-blur);
   transform: rotate(2deg) scale(1.02);
 }

@@ -300,7 +300,7 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
               <p>修改当前登录账户的访问密码（最少 10 位）</p>
             </div>
           </div>
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: isAdmin ? "rgba(99,102,241,0.2)" : "rgba(16,185,129,0.15)", border: `1px solid ${isAdmin ? "rgba(99,102,241,0.4)" : "rgba(16,185,129,0.3)"}`, color: isAdmin ? "#a5b4fc" : "#6ee7b7" }}>
+          <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: isAdmin ? "rgba(56,189,248,0.15)" : "rgba(16,185,129,0.15)", border: `1px solid ${isAdmin ? "rgba(56,189,248,0.35)" : "rgba(16,185,129,0.3)"}`, color: isAdmin ? "#38bdf8" : "#6ee7b7" }}>
             {isAdmin ? "超级管理员" : "标准用户"}
           </span>
         </header>
@@ -396,7 +396,7 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
                 <p>一键自动备份、拉取 GitHub 官方稳定或测试构建并在失败时自动回滚</p>
               </div>
             </div>
-            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.4)", color: "#a5b4fc" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: "rgba(56,189,248,0.15)", border: "1px solid rgba(56,189,248,0.35)", color: "#38bdf8" }}>
               管理员专属
             </span>
           </header>
