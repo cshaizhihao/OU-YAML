@@ -34,22 +34,92 @@ function useModalFocus(open: boolean, onClose: () => void, dialogRef: React.RefO
   }, [open, dialogRef]);
 }
 
-export function Drawer({ title, open, onClose, children, footer, size = "default", closeDisabled = false }: { title: string; open: boolean; onClose: () => void; children: ReactNode; footer?: ReactNode; size?: "default" | "compact"; closeDisabled?: boolean }) {
+export function Modal({
+  title,
+  open,
+  onClose,
+  children,
+  footer,
+  size = "default",
+  closeDisabled = false,
+}: {
+  title: string;
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: "default" | "compact" | "large";
+  closeDisabled?: boolean;
+}) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useModalFocus(open, () => { if (!closeDisabled) onClose(); }, dialogRef);
   if (!open) return null;
-  return createPortal(<div className={`overlay${size === "compact" ? " overlay-compact" : ""}`} role="presentation" onMouseDown={(event) => { if (!closeDisabled && event.target === event.currentTarget) onClose(); }}>
-    <section ref={dialogRef} className={`drawer${size === "compact" ? " drawer-compact" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
-      <header><h2>{title}</h2><button className="icon-button" disabled={closeDisabled} onClick={onClose} aria-label="关闭"><X size={20} /></button></header>
-      <div className="drawer-body">{children}</div>
-      {footer && <footer>{footer}</footer>}
-    </section>
-  </div>, document.body);
+  return createPortal(
+    <div
+      className={`overlay modal-overlay${size ? ` overlay-${size}` : ""}`}
+      role="presentation"
+      onMouseDown={(event) => { if (!closeDisabled && event.target === event.currentTarget) onClose(); }}
+    >
+      <section
+        ref={dialogRef}
+        className={`modal-dialog drawer${size === "compact" ? " modal-compact drawer-compact" : size === "large" ? " modal-large drawer-large" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+      >
+        <header>
+          <h2>{title}</h2>
+          <button className="icon-button" disabled={closeDisabled} onClick={onClose} aria-label="关闭">
+            <X size={20} />
+          </button>
+        </header>
+        <div className="modal-dialog-body drawer-body">{children}</div>
+        {footer && <footer>{footer}</footer>}
+      </section>
+    </div>,
+    document.body
+  );
 }
 
-export function ConfirmDialog({ open, title, message, confirmText = "删除", onConfirm, onClose }: { open: boolean; title: string; message: string; confirmText?: string; onConfirm: () => void; onClose: () => void }) {
+export const Drawer = Modal;
+
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmText = "删除",
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmText?: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useModalFocus(open, onClose, dialogRef);
   if (!open) return null;
-  return createPortal(<div className="overlay centered" role="presentation"><section ref={dialogRef} className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" tabIndex={-1}><h2 id="confirm-title">{title}</h2><p>{message}</p><div><button className="secondary-button" onClick={onClose}>取消</button><button className="danger-button" onClick={onConfirm}>{confirmText}</button></div></section></div>, document.body);
+  return createPortal(
+    <div className="overlay centered modal-overlay" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section
+        ref={dialogRef}
+        className="confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        tabIndex={-1}
+      >
+        <h2 id="confirm-title">{title}</h2>
+        <p>{message}</p>
+        <div>
+          <button className="secondary-button" onClick={onClose}>取消</button>
+          <button className="danger-button" onClick={onConfirm}>{confirmText}</button>
+        </div>
+      </section>
+    </div>,
+    document.body
+  );
 }

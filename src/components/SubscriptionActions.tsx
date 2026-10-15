@@ -3,7 +3,7 @@ import { Boxes, Database, LoaderCircle, Pencil, ScrollText, Trash2 } from "lucid
 import { api } from "../api";
 import type { GeneratedSubscription } from "../shared/domain";
 import type { SubscriptionEditorTab } from "../shared/subscriptionEditor";
-import { Drawer, ConfirmDialog } from "./Dialog";
+import { Modal, ConfirmDialog } from "./Dialog";
 
 export function SubscriptionActions({
   item,
@@ -72,7 +72,7 @@ export function SubscriptionActions({
         </button>
       </div>
 
-      <Drawer
+      <Modal
         size="compact"
         title="重命名订阅"
         open={name !== null}
@@ -86,13 +86,24 @@ export function SubscriptionActions({
           </>
         }
       >
-        <label className="editor-name">
-          订阅名称
-          <input value={name || ""} maxLength={120} disabled={busy} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <p>只修改管理界面中的名称，原链接、公开配置和内容版本保持不变。</p>
-        {error && <p role="alert">{error}</p>}
-      </Drawer>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <label className="editor-name">
+            订阅名称
+            <input
+              value={name || ""}
+              autoFocus
+              maxLength={120}
+              disabled={busy}
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") void rename(); }}
+            />
+          </label>
+          <p style={{ margin: 0, fontSize: "12.5px", color: "var(--ink-faint)" }}>
+            只修改管理界面中的名称，原链接、公开配置和内容版本保持不变。
+          </p>
+          {error && <p role="alert" style={{ margin: 0, color: "var(--danger)" }}>{error}</p>}
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={deleting}

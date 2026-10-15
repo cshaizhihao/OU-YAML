@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Activity, Ban, CheckCircle2, CircleX, Copy, Database, FilePlus2, Flag, GripVertical, Link2, LoaderCircle, MapPin, Pencil, Plus, RefreshCw, Search, Server, Tags, Trash2, Unlink, WandSparkles } from "lucide-react";
+import { Activity, Ban, CheckCircle2, CircleX, Copy, Database, FilePlus2, Flag, GripVertical, Link2, LoaderCircle, MapPin, Pencil, Plus, RefreshCw, Search, Server, Sparkles, Tags, Trash2, Unlink, WandSparkles } from "lucide-react";
 import { api, type TcpPingResult } from "../../api";
 import { latencyLevel } from "../../shared/diagnostics";
 import type { ManagedNode, NodeSource } from "../../shared/domain";
@@ -12,8 +12,8 @@ import { createId } from "../../shared/id";
 import { copyText } from "../../shared/clipboard";
 import { serializeShareLink } from "../../shared/links";
 import { guideTargets } from "../../guides/registry";
-import { Drawer, ConfirmDialog } from "../Dialog";
-import { FormattedNodeName } from "../CountryFlag";
+import { Modal, ConfirmDialog } from "../Dialog";
+import { CountryFlag, FormattedNodeName, COMMON_FLAG_LIST, replaceNodeCountry } from "../CountryFlag";
 
 type NodeDraft = {
   id?: string;
@@ -102,6 +102,8 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   const [sourceId, setSourceId] = useState("");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<NodeDraft | null>(null);
+  const [renamingNode, setRenamingNode] = useState<{ id: string; name: string } | null>(null);
+  const [flagPickerNode, setFlagPickerNode] = useState<ManagedNode | null>(null);
   const [deleting, setDeleting] = useState<ManagedNode | null>(null);
   const [batchDeleting, setBatchDeleting] = useState<ManagedNode[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -114,7 +116,6 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   const [linkBusy, setLinkBusy] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
   const [probeMode, setProbeMode] = useState<"tcp" | "proxy">("tcp");
-  const [flagBasis, setFlagBasis] = useState<"entry" | "exit">("entry");
   const [page, setPage] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [probeBusy, setProbeBusy] = useState<Set<string>>(new Set());
@@ -292,32 +293,58 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
     onMessage(`节点检测完成：${completed ? `${reachable}/${completed} 个可连接` : "无可用检测结果"}${errors ? `，${errors} 个检查错误` : ""}${unsupported.length ? `，${unsupported.length} 个不适用` : ""}${selectedNodes.length > 100 ? "，单次最多检测 100 个" : ""}`);
   }
 
+  async function saveRename() {
+    if (!renamingNode || !renamingNode.name.trim()) return;
+    try {
+      await api.updateManagedNode(renamingNode.id, { name: renamingNode.name.trim() });
+      await onProjectReload();
+      setRenamingNode(null);
+      await load(true);
+      onMessage("节点名称已更新");
+    } catch (err) {
+      onMessage(err instanceof Error ? err.message : "重命名节点失败");
+    }
+  }
+
+  async function selectManualFlag(node: ManagedNode, code: string | null) {
+    const newName = replaceNodeCountry(node.name, code);
+    try {
+      await api.updateManagedNode(node.id, { name: newName });
+      await onProjectReload();
+      setFlagPickerNode(null);
+      await load(true);
+      onMessage(code ? `已将节点地区更新为 [${code}]` : "已清除节点地区国旗");
+    } catch (err) {
+      onMessage(err instanceof Error ? err.message : "更新地区失败");
+    }
+  }
+
   async function applyCountryFlag(node: ManagedNode, announce = true) {
     setBusy(setFlagBusy, node.id, true);
     try {
-      const result = await api.applyManagedNodeCountryFlag(node.id, flagBasis);
+      const basis = (probeMode === "proxy" && diagnostics[node.id]?.exitIp) ? "exit" : "entry";
+      const result = await api.applyManagedNodeCountryFlag(node.id, basis);
       setNodes((current) => current.map((item) => item.id === node.id ? result.node : item));
       setDiagnostics((current) => ({ ...current, [node.id]: { ...current[node.id], countryIp: result.location.ip, country: result.location.country, countryCode: result.location.countryCode } }));
       if (announce) {
         await onProjectReload();
-        onMessage(`已根据${flagBasis === "exit" ? "代理出口" : "服务器入口"} IP ${result.location.ip} 添加 ${result.location.country || result.location.countryCode} 国旗（替换原国旗，不重复叠加）`);
+        onMessage(`已根据 IP ${result.location.ip} 自动识别为 [${result.location.countryCode}] 国旗`);
       }
       return true;
     } catch (error) {
-      if (announce) onMessage(error instanceof Error ? error.message : "添加节点国旗失败");
+      if (announce) onMessage(error instanceof Error ? error.message : "国旗识别失败");
       return false;
     } finally {
       setBusy(setFlagBusy, node.id, false);
     }
   }
 
-  async function applySelectedCountryFlags() {
-    const targets = selectedNodes.slice(0, 30);
-    if (!targets.length) return;
-    let completed = 0;
-    await runLimited(targets, 2, async (node) => { if (await applyCountryFlag(node, false)) completed += 1; });
-    if (completed) await onProjectReload().catch((error) => onMessage(error.message));
-    onMessage(`国旗识别完成：成功 ${completed}/${targets.length} 个${selectedNodes.length > 30 ? "，单次最多处理 30 个" : ""}`);
+  async function autoDetectFlag(node: ManagedNode) {
+    const success = await applyCountryFlag(node, true);
+    if (success) {
+      setFlagPickerNode(null);
+      await load(true);
+    }
   }
 
   async function previewLinks() {
@@ -421,7 +448,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
       {orderBusy && <><i /><span className="status-ok"><RefreshCw className="spin" size={14} />保存排序中</span></>}
     </div>
 
-    <div className="node-detection-controls" data-guide-id={guideTargets.nodeDiagnostics}><label>连通性检查<select value={probeMode} onChange={(event) => setProbeMode(event.target.value as "tcp" | "proxy")} disabled={probeBusy.size > 0}><option value="tcp">TCP 端口检测</option><option value="proxy">代理实测与出口 IP</option></select></label><label>国旗依据<select value={flagBasis} onChange={(event) => setFlagBasis(event.target.value as "entry" | "exit")} disabled={flagBusy.size > 0}><option value="entry">服务器入口 IP</option><option value="exit">真实代理出口 IP</option></select></label><p>TCP 只验证端口；代理实测验证鉴权与 HTTPS 转发。出口国旗需要运行代理实测，失败时保留原名称。</p></div>
+    <div className="node-detection-controls" data-guide-id={guideTargets.nodeDiagnostics}><label>连通性检测模式<select value={probeMode} onChange={(event) => setProbeMode(event.target.value as "tcp" | "proxy")} disabled={probeBusy.size > 0}><option value="tcp">TCP 端口握手检测</option><option value="proxy">代理实测与真实出口 IP</option></select></label><p>点击节点列表左侧的国旗可随时更换地区或按 IP 自动识别；点击编辑图标可快速重命名节点。</p></div>
     {selected.size > 0 && <div className="node-selection-actions">
       <span className="selection-count">已选择 <strong>{selected.size}</strong> 个</span>
       <button className="primary-button compact-button" onClick={addSelectedToProject} disabled={orderBusy}><Plus size={15} />加入当前项目</button>
@@ -429,7 +456,6 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
       <button className="secondary-button compact-button" onClick={() => void updateBatch({ ids: [...selected], enabled: true }, `已启用 ${selected.size} 个节点`)}><CheckCircle2 size={15} />启用</button>
       <button className="secondary-button compact-button" onClick={() => void updateBatch({ ids: [...selected], enabled: false }, `已停用 ${selected.size} 个节点`)}><Ban size={15} />停用</button>
       <button className="secondary-button compact-button" disabled={probeBusy.size > 0} onClick={() => void probeSelectedNodes()}>{probeBusy.size ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}{probeMode === "proxy" ? "代理实测" : "TCP 检测"}</button>
-      <button className="secondary-button compact-button" disabled={flagBusy.size > 0} onClick={() => void applySelectedCountryFlags()}>{flagBusy.size ? <LoaderCircle className="spin" size={15} /> : <Flag size={15} />}添加国旗</button>
       <button className="secondary-button compact-button" onClick={() => setBatchDraft(emptyBatch())}><WandSparkles size={15} />整理</button>
       <button className="secondary-button compact-button danger-outline" onClick={() => setBatchDeleting(selectedNodes)} disabled={orderBusy}><Trash2 size={15} />删除</button>
     </div>}
@@ -438,14 +464,118 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
       <SortableContext items={visibleIds.map((id) => `node:${id}`)} strategy={verticalListSortingStrategy}>
         <div className="node-list" data-guide-id={guideTargets.nodeList} role="table" aria-label="节点库">
           <div className="node-list-header" role="row"><span><input type="checkbox" checked={allVisibleSelected} onChange={(event) => setSelected(event.target.checked ? new Set([...selected, ...visibleIds]) : new Set([...selected].filter((id) => !visibleIds.includes(id))))} aria-label="选择当前节点" /></span><span>节点</span><span>协议</span><span>服务器</span><span>来源</span><span>标签</span><span>状态</span><span>操作</span></div>
-          {filtered.map((node) => <SortableNodeRow key={node.id} node={node} sourceName={node.sourceId ? sourceNames.get(node.sourceId) : undefined} selected={selected.has(node.id)} inProject={projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))} diagnostic={diagnostics[node.id]} probeBusy={probeBusy.has(node.id)} flagBusy={flagBusy.has(node.id)} onSelect={(checked) => toggleSelected(node.id, checked)} onToggle={() => void toggleEnabled(node)} onProbe={() => void probeNode(node)} onFlag={() => void applyCountryFlag(node)} onEdit={() => setEditing(nodeDraft(node))} onCopyLink={() => void copyNodeLink(node, onMessage)} onDelete={() => setDeleting(node)} />)}
+          {filtered.map((node) => <SortableNodeRow key={node.id} node={node} sourceName={node.sourceId ? sourceNames.get(node.sourceId) : undefined} selected={selected.has(node.id)} inProject={projectNodeIds.has(node.id) || projectFingerprints.has(nodeFingerprint(node))} diagnostic={diagnostics[node.id]} probeBusy={probeBusy.has(node.id)} onSelect={(checked) => toggleSelected(node.id, checked)} onToggle={() => void toggleEnabled(node)} onProbe={() => void probeNode(node)} onFlagClick={() => setFlagPickerNode(node)} onRename={() => setRenamingNode({ id: node.id, name: node.name })} onCopyLink={() => void copyNodeLink(node, onMessage)} onDelete={() => setDeleting(node)} />)}
         </div>
       </SortableContext>
       {createPortal(<DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(.16,1,.3,1)" }}>{activeId ? <div className="node-drag-overlay"><GripVertical size={16} /><strong>{nodes.find((node) => node.id === activeId)?.name || "节点"}</strong></div> : null}</DragOverlay>, document.body)}
     </DndContext> : <div className="empty-state" data-guide-id={guideTargets.nodeList}><div className="empty-state-icon"><Database size={24} /></div><h2>{query ? "没有匹配的节点" : "节点库还是空的"}</h2><p>{query ? "换个关键词或来源筛选试试。" : "从订阅、节点链接或手动添加第一个节点。"}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => setLinkOpen(true)}><Link2 size={16} />导入链接</button><button className="secondary-button" onClick={() => setEditing({ ...blank })}><Plus size={17} />手动添加</button></div>}</div>}
 
     {pageCount > 1 && <div className="pagination-controls"><button className="secondary-button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {pageCount} · {matchingNodes.length} 个节点</span><button className="secondary-button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</button></div>}
-    <Drawer open={!!editing} onClose={() => setEditing(null)} title={editing?.id ? "编辑节点" : "添加节点"} footer={<><button className="secondary-button" onClick={() => setEditing(null)}>取消</button><button className="primary-button" disabled={!editing || !editing.name.trim() || !editing.server.trim() || !Number.isInteger(editing.port) || editing.port < 1 || editing.port > 65535} onClick={() => void save()}>保存节点</button></>}>
+    {/* 精致居中动效弹窗：重命名节点 */}
+    <Modal
+      size="compact"
+      open={!!renamingNode}
+      onClose={() => setRenamingNode(null)}
+      title="重命名节点"
+      footer={
+        <>
+          <button className="secondary-button" onClick={() => setRenamingNode(null)}>取消</button>
+          <button className="primary-button" disabled={!renamingNode?.name.trim()} onClick={() => void saveRename()}>保存名称</button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <label className="editor-name">
+          节点名称
+          <input
+            value={renamingNode?.name || ""}
+            autoFocus
+            maxLength={120}
+            onChange={(event) => setRenamingNode(renamingNode ? { ...renamingNode, name: event.target.value } : null)}
+            onKeyDown={(event) => { if (event.key === "Enter") void saveRename(); }}
+          />
+        </label>
+        <p style={{ margin: 0, fontSize: "12.5px", color: "var(--ink-faint)" }}>
+          仅修改节点在管理界面及导出配置中的显示名称，底层服务器、协议与密钥参数保持不变。
+        </p>
+      </div>
+    </Modal>
+
+    {/* 精致居中动效弹窗：国家与地区国旗选择 */}
+    <Modal
+      size="compact"
+      open={!!flagPickerNode}
+      onClose={() => setFlagPickerNode(null)}
+      title={`选择地区国旗 · ${flagPickerNode?.name || ""}`}
+      footer={
+        <button className="secondary-button" onClick={() => setFlagPickerNode(null)}>关闭</button>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: "var(--radius-md)", background: "rgba(99, 102, 241, 0.08)", border: "1px solid rgba(99, 102, 241, 0.2)" }}>
+          <div>
+            <strong style={{ fontSize: "13px", color: "#ffffff", display: "block" }}>依据 IP 自动识别</strong>
+            <small style={{ color: "var(--ink-faint)", fontSize: "11.5px" }}>从节点 IP 查询地理库并自动附加国旗</small>
+          </div>
+          <button
+            className="primary-button compact-button"
+            disabled={flagBusy.has(flagPickerNode?.id || "")}
+            onClick={() => flagPickerNode && void autoDetectFlag(flagPickerNode)}
+          >
+            {flagBusy.has(flagPickerNode?.id || "") ? <LoaderCircle size={14} className="spin" /> : <Sparkles size={14} />}
+            自动识别
+          </button>
+        </div>
+
+        <div>
+          <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "8px" }}>
+            手动选择国家 / 地区
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
+            {COMMON_FLAG_LIST.map((item) => (
+              <button
+                key={item.code}
+                type="button"
+                className="flag-select-btn"
+                onClick={() => flagPickerNode && void selectManualFlag(flagPickerNode, item.code)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--line)",
+                  background: "rgba(22, 28, 44, 0.6)",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  fontSize: "12.5px",
+                  textAlign: "left",
+                  transition: "all var(--duration-fast) ease",
+                }}
+              >
+                <CountryFlag code={item.code} />
+                <span>{item.name}</span>
+                <small style={{ marginLeft: "auto", color: "var(--ink-faint)", fontFamily: "var(--font-mono)", fontSize: "11px" }}>{item.code}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: "1px solid var(--line)" }}>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => flagPickerNode && void selectManualFlag(flagPickerNode, null)}
+            style={{ color: "var(--danger)", fontSize: "12px" }}
+          >
+            清除地区国旗
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    {/* 手动添加新节点弹窗 */}
+    <Modal open={!!editing && !editing.id} onClose={() => setEditing(null)} title="手动添加节点" footer={<><button className="secondary-button" onClick={() => setEditing(null)}>取消</button><button className="primary-button" disabled={!editing || !editing.name.trim() || !editing.server.trim() || !Number.isInteger(editing.port) || editing.port < 1 || editing.port > 65535} onClick={() => void save()}>保存节点</button></>}>
       <div className="form-grid">
         <label className="span-2">节点名称<input value={editing?.name || ""} onChange={(event) => updateEditing("name", event.target.value)} /></label>
         <label>协议<select value={editing?.type || "ss"} onChange={(event) => updateEditing("type", event.target.value)}>{["ss", "ssr", "vmess", "vless", "trojan", "hysteria2", "tuic", "snell", "wireguard", "socks5", "http"].map((type) => <option key={type}>{type}</option>)}</select></label>
@@ -467,7 +597,7 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
         <label className="toggle-row span-2"><span><strong>跳过证书校验</strong><small>仅在确认服务端配置时使用</small></span><input type="checkbox" checked={!!editing?.skipCertVerify} onChange={(event) => updateEditing("skipCertVerify", event.target.checked)} /></label>
       </div>
       <p className="form-hint"><Pencil size={15} />协议链接导入会自动填充更多专属参数；未填写的可选字段不会写入导出配置。</p>
-    </Drawer>
+    </Modal>
 
     <Drawer open={!!batchDraft} onClose={() => setBatchDraft(null)} title={`批量整理 ${selected.size} 个节点`} footer={<><button className="secondary-button" onClick={() => setBatchDraft(null)}>取消</button><button className="primary-button" onClick={() => void applyBatch()}><WandSparkles size={16} />应用整理</button></>}>
       {batchDraft && <div className="form-grid batch-node-form">
@@ -507,19 +637,18 @@ async function copyNodeLink(node: ManagedNode, onMessage: (message: string) => v
   }
 }
 
-function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, probeBusy, flagBusy, onSelect, onToggle, onProbe, onFlag, onEdit, onCopyLink, onDelete }: {
+function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, probeBusy, onSelect, onToggle, onProbe, onFlagClick, onRename, onCopyLink, onDelete }: {
   node: ManagedNode;
   sourceName?: string;
   selected: boolean;
   inProject: boolean;
   diagnostic?: NodeDiagnostic;
   probeBusy: boolean;
-  flagBusy: boolean;
   onSelect: (checked: boolean) => void;
   onToggle: () => void;
   onProbe: () => void;
-  onFlag: () => void;
-  onEdit: () => void;
+  onFlagClick: () => void;
+  onRename: () => void;
   onCopyLink: () => void;
   onDelete: () => void;
 }) {
@@ -533,7 +662,7 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
       <span className="entity-icon"><Server size={15} /></span>
       <span className="node-name-stack">
         <strong title={node.name} style={{ display: "inline-flex", alignItems: "center", maxWidth: "100%" }}>
-          <FormattedNodeName name={node.name} />
+          <FormattedNodeName name={node.name} onFlagClick={onFlagClick} />
         </strong>
         {inProject && <small className="node-in-project-badge"><CheckCircle2 size={11} /> 当前项目</small>}
         {diagnostic && (diagnostic.exitIp || diagnostic.country) && <small className="node-diagnostic location" title={diagnostic.countryIp || diagnostic.resolvedAddress || undefined}><MapPin size={11} />{diagnostic.country ? `${diagnostic.country}${diagnostic.countryIp ? ` · ${diagnostic.countryIp}` : ""}` : `出口 ${diagnostic.exitIp}`}</small>}
@@ -563,14 +692,10 @@ function SortableNodeRow({ node, sourceName, selected, inProject, diagnostic, pr
           <span className="node-btn-text">测速</span>
         )}
       </button>
-      <button className="node-tool-btn" disabled={flagBusy} onClick={onFlag} title="根据 IP 自动匹配国旗" aria-label={`为 ${node.name} 添加国家国旗`}>
-        {flagBusy ? <LoaderCircle className="spin" size={14} /> : <Flag size={14} />}
-        <span className="node-btn-text">国旗</span>
-      </button>
       <button className="node-icon-action-btn" onClick={onCopyLink} title="复制节点链接" aria-label={`复制 ${node.name} 的协议链接`}>
         <Copy size={14} />
       </button>
-      <button className="node-icon-action-btn" onClick={onEdit} title="编辑节点" aria-label={`编辑 ${node.name}`}>
+      <button className="node-icon-action-btn" onClick={onRename} title="重命名节点" aria-label={`重命名 ${node.name}`}>
         <Pencil size={14} />
       </button>
       <button className="node-icon-action-btn danger" onClick={onDelete} title="删除节点" aria-label={`删除 ${node.name}`}>

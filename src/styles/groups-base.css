@@ -130,6 +130,7 @@
   grid-template-columns: var(--col-overview, 240px) var(--col-pool, 320px) minmax(360px, 1.3fr) var(--col-inspector, 280px);
   align-items: start;
   gap: 16px;
+  padding-bottom: 40px;
   transition: all var(--duration-base) var(--ease-silk);
 }
 
@@ -204,7 +205,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: calc(100dvh - 180px);
+  max-height: min(820px, calc(100dvh - 120px));
   position: sticky;
   top: 84px;
 }
@@ -719,7 +720,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: calc(100dvh - 180px);
+  max-height: min(820px, calc(100dvh - 120px));
   position: sticky;
   top: 84px;
 }
@@ -999,7 +1000,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: calc(100dvh - 180px);
+  max-height: min(820px, calc(100dvh - 120px));
   position: sticky;
   top: 84px;
 }

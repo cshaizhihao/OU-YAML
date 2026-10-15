@@ -282,20 +282,20 @@ textarea:disabled {
   background: var(--danger-soft);
 }
 
-/* 弹窗与抽屉 */
-.drawer, .confirm-dialog {
+/* 弹窗系统 */
+.modal-dialog, .drawer, .confirm-dialog {
   color: var(--ink);
   border: 1px solid var(--line-strong);
   background: var(--canvas-elevated);
   box-shadow: var(--shadow-dialog);
 }
 
-.drawer > header, .drawer > footer {
+.modal-dialog > header, .drawer > header, .modal-dialog > footer, .drawer > footer {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.02);
 }
 
-.confirm-dialog h2, .drawer > header h2 {
+.confirm-dialog h2, .modal-dialog > header h2, .drawer > header h2 {
   color: #ffffff;
 }
 

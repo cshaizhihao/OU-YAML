@@ -209,13 +209,93 @@ export function CountryFlag({ code, size = "md" }: { code?: string | null; size?
   );
 }
 
+export const COMMON_FLAG_LIST: Array<{ code: string; name: string; emoji: string }> = [
+  { code: "HK", name: "中国香港", emoji: "🇭🇰" },
+  { code: "TW", name: "中国台湾", emoji: "🇹🇼" },
+  { code: "JP", name: "日本", emoji: "🇯🇵" },
+  { code: "SG", name: "新加坡", emoji: "🇸🇬" },
+  { code: "US", name: "美国", emoji: "🇺🇸" },
+  { code: "KR", name: "韩国", emoji: "🇰🇷" },
+  { code: "DE", name: "德国", emoji: "🇩🇪" },
+  { code: "GB", name: "英国", emoji: "🇬🇧" },
+  { code: "FR", name: "法国", emoji: "🇫🇷" },
+  { code: "RU", name: "俄罗斯", emoji: "🇷🇺" },
+  { code: "CA", name: "加拿大", emoji: "🇨🇦" },
+  { code: "AU", name: "澳大利亚", emoji: "🇦🇺" },
+  { code: "CN", name: "中国大陆", emoji: "🇨🇳" },
+  { code: "IN", name: "印度", emoji: "🇮🇳" },
+];
+
+export function replaceNodeCountry(oldName: string, newCode: string | null): string {
+  const { cleanName } = parseNodeCountry(oldName);
+  if (!newCode) return cleanName;
+  return `[${newCode.toUpperCase()}] · ${cleanName}`;
+}
+
 // 智能格式化节点名称，消除 Windows 黑框并渲染真实 SVG 国旗
-export function FormattedNodeName({ name, className = "" }: { name: string; className?: string }) {
+export function FormattedNodeName({
+  name,
+  className = "",
+  onFlagClick,
+}: {
+  name: string;
+  className?: string;
+  onFlagClick?: (event: React.MouseEvent) => void;
+}) {
   const { countryCode, cleanName } = parseNodeCountry(name);
 
   return (
-    <span className={`formatted-node-name ${className}`} style={{ display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", overflow: "hidden" }}>
-      {countryCode && <CountryFlag code={countryCode} />}
+    <span className={`formatted-node-name ${className}`} style={{ display: "inline-flex", alignItems: "center", gap: "7px", maxWidth: "100%", overflow: "hidden" }}>
+      {countryCode ? (
+        onFlagClick ? (
+          <button
+            type="button"
+            className="node-flag-trigger"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFlagClick(e);
+            }}
+            title={`当前国家/地区：${countryCode}，点击更换`}
+            style={{
+              background: "transparent",
+              border: 0,
+              padding: 0,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              lineHeight: 1,
+            }}
+          >
+            <CountryFlag code={countryCode} />
+          </button>
+        ) : (
+          <CountryFlag code={countryCode} />
+        )
+      ) : onFlagClick ? (
+        <button
+          type="button"
+          className="node-flag-trigger empty-flag"
+          onClick={(e) => {
+            e.stopPropagation();
+            onFlagClick(e);
+          }}
+          title="点击选择或识别国家/地区国旗"
+          style={{
+            background: "rgba(255, 255, 255, 0.06)",
+            border: "1px dashed var(--line-strong)",
+            borderRadius: "4px",
+            padding: "2px 5px",
+            fontSize: "10.5px",
+            color: "var(--ink-faint)",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            lineHeight: 1,
+          }}
+        >
+          🏳️ 选地区
+        </button>
+      ) : null}
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={name}>
         {cleanName}
       </span>
