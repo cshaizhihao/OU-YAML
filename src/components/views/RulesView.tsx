@@ -90,7 +90,10 @@ export function RulesView({ config, onChange }: { config: MihomoConfig; onChange
         <button className="primary-button" type="submit">添加网站规则</button>
         <div className="scenario-options"><label><input type="checkbox" checked={includeSubdomains} onChange={(event) => setIncludeSubdomains(event.target.checked)} />包含子域名</label><button className="text-button" type="button" onClick={() => { try { const result = explainDomain(config.rules, domain); setExplanation(`${result.uncertain.length ? `前面有 ${result.uncertain.join("、")} 规则，需要实际 IP、分类库或进程信息才能确定。仅按域名推演：` : "按域名匹配："}${result.rule ? `${ruleTypeLabel(result.rule.type)} → ${ruleTargetLabel(result.rule.target)}` : "没有匹配规则"}`); } catch (error) { setExplanation((error as Error).message); } }}>检查匹配结果</button></div>
       </form>
-      {explanation && <p role="status">{explanation}</p>}
+      {explanation && <div className="route-simulation-card" role="status" style={{ marginTop: "12px", padding: "12px 16px", borderRadius: "10px", background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.35)", color: "var(--ink)", display: "flex", alignItems: "center", gap: "10px", animation: "content-arrive 200ms ease" }}>
+        <Sparkles size={16} style={{ color: "var(--accent-hover)", flexShrink: 0 }} />
+        <span style={{ fontSize: "13px", lineHeight: "1.4" }}>{explanation}</span>
+      </div>}
     </section>
 
     <div className="rules-toolbar">
