@@ -308,12 +308,13 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   async function selectManualFlag(node: ManagedNode, code: string | null) {
     const newName = replaceNodeCountry(node.name, code);
     try {
-      await api.updateManagedNode(node.id, { name: newName });
+      await api.updateManagedNode(node.id, { ...node, name: newName });
       await onProjectReload();
       setFlagPickerNode(null);
       await load(true);
       onMessage(code ? `已将节点地区更新为 [${code}]` : "已清除节点地区国旗");
     } catch (err) {
+      setFlagPickerNode(null);
       onMessage(err instanceof Error ? err.message : "更新地区失败");
     }
   }
