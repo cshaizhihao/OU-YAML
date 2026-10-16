@@ -258,6 +258,55 @@ db.prepare("UPDATE users SET is_admin = 1 WHERE id = (SELECT id FROM users ORDER
 const projectColumns = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
 if (!projectColumns.some((column) => column.name === "target_format")) db.exec("ALTER TABLE projects ADD COLUMN target_format TEXT NOT NULL DEFAULT 'mihomo'");
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`);
+
+export function getSystemSetting(key: string): string | null {
+  const row = db.prepare("SELECT value FROM system_settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row ? row.value : null;
+}
+
+export function setSystemSetting(key: string, value: string): void {
+  db.prepare(`
+    INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(key, value, new Date().toISOString());
+}
+
+export interface TurnstileConfig {
+  enabled: boolean;
+  siteKey: string;
+  secretKey: string;
+}
+
+export function getTurnstileConfig(): TurnstileConfig {
+  const raw = getSystemSetting("cf_turnstile");
+  if (!raw) return { enabled: false, siteKey: "", secretKey: "" };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      enabled: !!parsed.enabled,
+      siteKey: String(parsed.siteKey || ""),
+      secretKey: String(parsed.secretKey || ""),
+    };
+  } catch {
+    return { enabled: false, siteKey: "", secretKey: "" };
+  }
+}
+
+export function setTurnstileConfig(config: TurnstileConfig): void {
+  setSystemSetting("cf_turnstile", JSON.stringify({
+    enabled: !!config.enabled,
+    siteKey: (config.siteKey || "").trim(),
+    secretKey: (config.secretKey || "").trim(),
+  }));
+}
+
 export async function ensureAdmin() {
   const username = process.env.ADMIN_USERNAME || "admin";
   const password = process.env.ADMIN_PASSWORD_B64

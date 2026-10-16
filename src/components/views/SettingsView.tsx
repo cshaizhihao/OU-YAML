@@ -5,6 +5,8 @@ import {
   ChevronUp,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   FolderGit2,
   HardDrive,
   KeyRound,
@@ -18,7 +20,7 @@ import {
   TerminalSquare,
   Upload,
 } from "lucide-react";
-import { api, type UpdateInfo, type UpdateStatus } from "../../api";
+import { api, type TurnstileSettings, type UpdateInfo, type UpdateStatus } from "../../api";
 import type { MihomoConfig, Project } from "../../shared/types";
 import { ConfirmDialog } from "../Dialog";
 
@@ -47,6 +49,15 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
   const [confirmUpdate, setConfirmUpdate] = useState(false);
   const [updateLog, setUpdateLog] = useState("");
   const [showUpdateLog, setShowUpdateLog] = useState(false);
+  const [turnstileConfig, setTurnstileConfig] = useState<TurnstileSettings>({
+    enabled: false,
+    siteKey: "",
+    secretKey: "",
+    hasSecretKey: false,
+  });
+  const [turnstileBusy, setTurnstileBusy] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [showTurnstileHelp, setShowTurnstileHelp] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const previousUpdateStatus = useRef<UpdateStatus["status"]>("idle");
 
@@ -157,10 +168,45 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
     }
   }
 
+  async function saveTurnstile(event: FormEvent) {
+    event.preventDefault();
+    if (turnstileConfig.enabled && !turnstileConfig.siteKey.trim()) {
+      onMessage("启用验证盾前，必须填写 Cloudflare Site Key");
+      return;
+    }
+    if (turnstileConfig.enabled && !turnstileConfig.secretKey.trim() && !turnstileConfig.hasSecretKey) {
+      onMessage("启用验证盾前，必须填写 Cloudflare Secret Key");
+      return;
+    }
+    setTurnstileBusy(true);
+    try {
+      await api.saveTurnstileSettings({
+        enabled: turnstileConfig.enabled,
+        siteKey: turnstileConfig.siteKey.trim(),
+        secretKey: turnstileConfig.secretKey.trim(),
+      });
+      onMessage("Cloudflare Turnstile 人机验证盾设置已成功更新");
+      const fresh = await api.getTurnstileSettings();
+      setTurnstileConfig(fresh);
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "保存 Turnstile 设置失败");
+    } finally {
+      setTurnstileBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (isAdmin) {
       void checkUpdate(true);
       void refreshUpdateStatus();
+      void (async () => {
+        try {
+          const cfg = await api.getTurnstileSettings();
+          setTurnstileConfig(cfg);
+        } catch {
+          /* 忽略非关键错误 */
+        }
+      })();
     }
   }, [isAdmin, updateChannel]);
 
@@ -385,7 +431,138 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
         </div>
       </section>
 
-      {/* 5. 网页在线更新（仅管理员专享） */}
+      {/* 5. Cloudflare Turnstile 人机验证盾 (仅管理员专享) */}
+      {isAdmin && (
+        <section className="settings-card">
+          <header className="settings-card-header">
+            <div className="settings-card-title-group">
+              <span className="settings-card-icon" style={{ background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", borderColor: "rgba(245, 158, 11, 0.3)" }}>
+                <ShieldCheck size={18} />
+              </span>
+              <div>
+                <h2>Cloudflare Turnstile 人机验证盾</h2>
+                <p>自主接入 Cloudflare 官方人机防御，全自动抵御撞库与恶意注册攻击</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: "999px",
+                background: turnstileConfig.enabled && turnstileConfig.siteKey ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                border: `1px solid ${turnstileConfig.enabled && turnstileConfig.siteKey ? "rgba(16, 185, 129, 0.3)" : "var(--line)"}`,
+                color: turnstileConfig.enabled && turnstileConfig.siteKey ? "#6ee7b7" : "var(--ink-faint)"
+              }}>
+                {turnstileConfig.enabled && turnstileConfig.siteKey ? "防护运行中" : "未开启防护"}
+              </span>
+              <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: "rgba(56,189,248,0.15)", border: "1px solid rgba(56,189,248,0.35)", color: "#38bdf8" }}>
+                管理员专属
+              </span>
+            </div>
+          </header>
+
+          <form className="settings-form" onSubmit={saveTurnstile}>
+            <div className="toggle-stack">
+              <label className="toggle-row" style={{ cursor: "pointer" }}>
+                <span>
+                  <strong>开启登录与注册人机验证防护</strong>
+                  <small style={{ display: "block", color: "var(--ink-faint)", fontSize: "12px", marginTop: "2px" }}>
+                    开启后，用户在登录和注册时必须通过 Cloudflare 智能无感/交互验证；未配置或不可用时自动优雅降级放行
+                  </small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={turnstileConfig.enabled}
+                  onChange={(e) => setTurnstileConfig((c) => ({ ...c, enabled: e.target.checked }))}
+                />
+              </label>
+            </div>
+
+            <div className="settings-form two-columns">
+              <label>
+                Site Key (站点密钥 / 前端公共密钥)
+                <input
+                  type="text"
+                  placeholder="例如：0x4AAAAAAAx..."
+                  value={turnstileConfig.siteKey}
+                  onChange={(e) => setTurnstileConfig((c) => ({ ...c, siteKey: e.target.value }))}
+                />
+                <small style={{ color: "var(--ink-faint)", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
+                  在 Cloudflare 控制台 Turnstile 站点获取，用于前端渲染人机验证小组件
+                </small>
+              </label>
+
+              <label>
+                Secret Key (通信密钥 / 后端校验私钥)
+                <div className="password-field" style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <input
+                    type={showSecretKey ? "text" : "password"}
+                    placeholder={turnstileConfig.hasSecretKey ? "密钥已安全保存 (留空保持原样)" : "例如：0x4AAAAAAAx..."}
+                    value={turnstileConfig.secretKey}
+                    onChange={(e) => setTurnstileConfig((c) => ({ ...c, secretKey: e.target.value }))}
+                    style={{ width: "100%", paddingRight: "36px" }}
+                  />
+                  <button
+                    type="button"
+                    className="icon-button compact"
+                    onClick={() => setShowSecretKey(!showSecretKey)}
+                    aria-label={showSecretKey ? "隐藏密钥" : "显示密钥"}
+                    style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none" }}
+                  >
+                    {showSecretKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <small style={{ color: "var(--ink-faint)", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
+                  {turnstileConfig.hasSecretKey ? "✓ 后端已安全保存密钥；如需更换直接输入新密钥即可" : "用于后端向 Cloudflare 校验 Token 有效性，绝不对外公开"}
+                </small>
+              </label>
+            </div>
+
+            <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px dashed rgba(255, 255, 255, 0.12)", borderRadius: "var(--radius-md)", padding: "12px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  💡 如何在 Cloudflare 免费获取 Turnstile 密钥？
+                </span>
+                <button
+                  type="button"
+                  className="text-button"
+                  style={{ fontSize: "12px" }}
+                  onClick={() => setShowTurnstileHelp(!showTurnstileHelp)}
+                >
+                  {showTurnstileHelp ? "收起指引" : "查看获取步骤"}
+                </button>
+              </div>
+
+              {showTurnstileHelp && (
+                <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--ink-faint)", lineHeight: 1.6, borderTop: "1px solid var(--line)", paddingTop: "10px" }}>
+                  <ol style={{ paddingLeft: "18px", margin: 0, display: "grid", gap: "6px" }}>
+                    <li>
+                      访问并在 Cloudflare 仪表盘登录：
+                      <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" style={{ color: "var(--accent-hover)", textDecoration: "underline", marginLeft: "4px" }}>
+                        Cloudflare Turnstile 控制台 <ExternalLink size={11} style={{ display: "inline" }} />
+                      </a>
+                    </li>
+                    <li>点击 <strong>添加站点 (Add site)</strong>，站点名称可输入 <code>OU-YAML</code>。</li>
+                    <li>在“网域 (Domain)”中填入您的服务器 IP（如 <code>216.195.195.160</code>）或绑定的域名。本地调试亦可添加 <code>localhost</code>。</li>
+                    <li>小组件模式推荐选择 <strong>托管 (Managed)</strong>（智能评估威胁，大多数正常访问无感通过）。</li>
+                    <li>创建完成后，将生成的 <strong>Site Key</strong> 和 <strong>Secret Key</strong> 复制填入上方输入框，勾选开启并点击“保存验证盾配置”。</li>
+                  </ol>
+                </div>
+              )}
+            </div>
+
+            <div className="settings-actions">
+              <button className="primary-button" type="submit" disabled={turnstileBusy}>
+                {turnstileBusy ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />}
+                保存验证盾配置
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {/* 6. 网页在线更新（仅管理员专享） */}
       {isAdmin && (
         <section className="settings-card">
           <header className="settings-card-header">

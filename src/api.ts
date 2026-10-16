@@ -81,13 +81,18 @@ async function request<T>(url: string, options?: RequestInit, schema?: z.ZodType
   return body as T;
 }
 
+export type TurnstileSettings = { enabled: boolean; siteKey: string; secretKey: string; hasSecretKey: boolean };
+
 export const api = {
   previewImport: (content: string, remote = false, format: "auto" | "links" | TargetFormat = "auto", options: { userAgent?: string; skipCertVerify?: boolean } = {}) => request<ImportPreview>("/api/tools/import-preview", { method: "POST", body: JSON.stringify({ content, remote, format, ...options }) }),
   me: () => request<{ username: string | null; isAdmin: boolean }>("/api/auth/me"),
-  login: (username: string, password: string) => request<SessionUser>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
-  register: (username: string, password: string) => request<SessionUser>("/api/auth/register", { method: "POST", body: JSON.stringify({ username, password }) }),
+  getSecurityConfig: () => request<{ turnstileEnabled: boolean; siteKey: string }>("/api/auth/security-config"),
+  login: (username: string, password: string, cfToken?: string) => request<SessionUser>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password, cfToken }) }),
+  register: (username: string, password: string, cfToken?: string) => request<SessionUser>("/api/auth/register", { method: "POST", body: JSON.stringify({ username, password, cfToken }) }),
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   changePassword: (currentPassword: string, newPassword: string) => request<void>("/api/account/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+  getTurnstileSettings: () => request<TurnstileSettings>("/api/admin/security/turnstile"),
+  saveTurnstileSettings: (data: { enabled: boolean; siteKey: string; secretKey: string }) => request<{ saved: boolean }>("/api/admin/security/turnstile", { method: "PUT", body: JSON.stringify(data) }),
   listUsers: () => request<UserAccount[]>("/api/admin/users"),
   createUser: (username: string, password: string, isAdmin: boolean) => request<UserAccount>("/api/admin/users", { method: "POST", body: JSON.stringify({ username, password, isAdmin }) }),
   updateUser: (id: string, data: { isAdmin: boolean; disabled: boolean; password?: string }) => request<UserAccount>(`/api/admin/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),

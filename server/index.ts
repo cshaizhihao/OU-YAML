@@ -7,7 +7,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { db, ensureAdmin, hashToken, snapshotProject } from "./db";
+import { db, ensureAdmin, hashToken, snapshotProject, getTurnstileConfig, setTurnstileConfig } from "./db";
+import { verifyTurnstileToken } from "./turnstile";
 import { exportMihomoYaml, validateConfig } from "../src/shared/mihomo";
 import { exportSingBoxJson } from "../src/shared/singbox";
 import { createEmptyConfig, type MihomoConfig, type SessionUser, type Subscription, type TargetFormat, type UserAccount } from "../src/shared/types";
@@ -39,7 +40,17 @@ const usesHttps = process.env.COOKIE_SECURE === "true";
 app.disable("x-powered-by");
 app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
 app.use(helmet({
-  contentSecurityPolicy: isProduction ? { directives: { upgradeInsecureRequests: usesHttps ? [] : null } } : false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+      frameSrc: ["'self'", "https://challenges.cloudflare.com"],
+      connectSrc: ["'self'", "https://challenges.cloudflare.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      upgradeInsecureRequests: usesHttps ? [] : null,
+    },
+  },
   ...(!usesHttps ? { strictTransportSecurity: false, crossOriginOpenerPolicy: false, originAgentCluster: false } : {}),
 }));
 app.use(csrfOriginGuard);
@@ -51,7 +62,11 @@ const loginLimit = z.coerce.number().int().min(10).max(200).catch(10).parse(proc
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: loginLimit, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "登录请求过于频繁，请稍后重试" } });
 const importLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "订阅请求过于频繁，请一分钟后重试" } });
 const nodeProbeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 240, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "节点检测请求过于频繁，请稍后再试" } });
-const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(256) });
+const loginSchema = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().min(1).max(256),
+  cfToken: z.string().optional(),
+});
 const userSchema = z.object({
   username: z.string().trim().regex(/^[a-zA-Z0-9._-]{3,64}$/),
   password: z.string().min(10).max(256),
@@ -209,9 +224,21 @@ async function refreshNodeSource(userId: string, sourceId: string) {
   return task;
 }
 
+app.get("/api/auth/security-config", (_req, res) => {
+  const config = getTurnstileConfig();
+  return res.json({
+    turnstileEnabled: config.enabled && !!config.siteKey && !!config.secretKey,
+    siteKey: config.siteKey || "",
+  });
+});
+
 app.post("/api/auth/login", loginLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "请输入账号和密码" });
+
+  const cfCheck = await verifyTurnstileToken(parsed.data.cfToken, req.ip);
+  if (!cfCheck.success) return res.status(403).json({ error: cfCheck.error });
+
   const user = db.prepare("SELECT id, username, password_hash, is_admin, is_disabled FROM users WHERE username = ?").get(parsed.data.username) as { id: string; username: string; password_hash: string; is_admin: number; is_disabled: number } | undefined;
   if (!user || user.is_disabled || !await bcrypt.compare(parsed.data.password, user.password_hash)) return res.status(401).json({ error: "账号或密码错误" });
   const token = randomBytes(32).toString("base64url");
@@ -228,8 +255,12 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
   const parsed = z.object({
     username: z.string().trim().regex(/^[a-zA-Z0-9._-]{3,64}$/, "账号需为 3-64 位字母、数字或 ._-"),
     password: z.string().min(10, "密码至少需要 10 位").max(256),
+    cfToken: z.string().optional(),
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || "注册信息无效" });
+
+  const cfCheck = await verifyTurnstileToken(parsed.data.cfToken, req.ip);
+  if (!cfCheck.success) return res.status(403).json({ error: cfCheck.error });
 
   const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(parsed.data.username);
   if (existing) return res.status(409).json({ error: "该账号名称已被占用，请换一个" });
@@ -362,6 +393,45 @@ app.delete("/api/admin/users/:id", requireAuth, requireAdmin, (req, res) => {
   }
   db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
   res.status(204).end();
+});
+
+app.get("/api/admin/security/turnstile", requireAuth, requireAdmin, (_req, res) => {
+  const config = getTurnstileConfig();
+  res.json({
+    enabled: config.enabled,
+    siteKey: config.siteKey,
+    secretKey: config.secretKey ? `${config.secretKey.slice(0, 6)}******` : "",
+    hasSecretKey: !!config.secretKey,
+  });
+});
+
+app.put("/api/admin/security/turnstile", requireAuth, requireAdmin, (req, res) => {
+  const schema = z.object({
+    enabled: z.boolean(),
+    siteKey: z.string().trim().max(256),
+    secretKey: z.string().trim().max(256),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "安全设置参数格式无效" });
+
+  const current = getTurnstileConfig();
+  const nextSecret = parsed.data.secretKey.includes("******")
+    ? current.secretKey
+    : (parsed.data.secretKey || current.secretKey);
+
+  setTurnstileConfig({
+    enabled: parsed.data.enabled,
+    siteKey: parsed.data.siteKey,
+    secretKey: nextSecret,
+  });
+
+  recordAudit(req.user!.id, "update_turnstile_settings", "system_settings", "cf_turnstile", {
+    enabled: parsed.data.enabled,
+    hasSiteKey: !!parsed.data.siteKey,
+    hasSecretKey: !!nextSecret,
+  });
+
+  return res.json({ saved: true });
 });
 
 app.get("/api/admin/update/check", requireAuth, requireAdmin, async (req, res) => {

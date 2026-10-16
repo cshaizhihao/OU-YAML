@@ -1,7 +1,26 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, UserPlus, LogIn, Sparkles } from "lucide-react";
 import { api } from "../api";
 import type { SessionUser } from "../shared/types";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: string | HTMLElement,
+        options: {
+          sitekey: string;
+          theme?: "light" | "dark" | "auto";
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+        }
+      ) => string;
+      reset: (widgetId?: string) => void;
+      remove: (widgetId: string) => void;
+    };
+  }
+}
 
 export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
   const [tab, setTab] = useState<"login" | "register">("login");
@@ -11,10 +30,116 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [cfConfig, setCfConfig] = useState<{ turnstileEnabled: boolean; siteKey: string } | null>(null);
+  const [cfToken, setCfToken] = useState("");
+  const turnstileContainerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const sec = await api.getSecurityConfig();
+        if (active) setCfConfig(sec);
+      } catch {
+        /* 忽略网络瞬时问题 */
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  function resetTurnstile() {
+    if (widgetIdRef.current && window.turnstile) {
+      try { window.turnstile.reset(widgetIdRef.current); } catch {}
+    }
+    setCfToken("");
+  }
+
+  useEffect(() => {
+    if (!cfConfig?.turnstileEnabled || !cfConfig.siteKey) return;
+
+    let destroyed = false;
+    const SCRIPT_ID = "cf-turnstile-script";
+
+    function mountWidget() {
+      if (destroyed || !turnstileContainerRef.current || !window.turnstile) return;
+      if (widgetIdRef.current) {
+        try { window.turnstile.remove(widgetIdRef.current); } catch {}
+        widgetIdRef.current = null;
+      }
+      try {
+        const id = window.turnstile.render(turnstileContainerRef.current, {
+          sitekey: cfConfig.siteKey,
+          theme: "dark",
+          callback: (token: string) => {
+            if (!destroyed) {
+              setCfToken(token);
+              setError("");
+            }
+          },
+          "expired-callback": () => {
+            if (!destroyed) setCfToken("");
+          },
+          "error-callback": () => {
+            if (!destroyed) {
+              setCfToken("");
+              setError("人机安全校验初始化受限，请稍后刷新重试");
+            }
+          },
+        });
+        widgetIdRef.current = id;
+      } catch (e) {
+        console.warn("Turnstile render error:", e);
+      }
+    }
+
+    if (!document.getElementById(SCRIPT_ID)) {
+      const script = document.createElement("script");
+      script.id = SCRIPT_ID;
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        const timer = setInterval(() => {
+          if (window.turnstile) {
+            clearInterval(timer);
+            mountWidget();
+          }
+        }, 100);
+        setTimeout(() => clearInterval(timer), 5000);
+      };
+      document.head.appendChild(script);
+    } else {
+      if (window.turnstile) {
+        mountWidget();
+      } else {
+        const timer = setInterval(() => {
+          if (window.turnstile) {
+            clearInterval(timer);
+            mountWidget();
+          }
+        }, 100);
+        setTimeout(() => clearInterval(timer), 5000);
+      }
+    }
+
+    return () => {
+      destroyed = true;
+      if (widgetIdRef.current && window.turnstile) {
+        try { window.turnstile.remove(widgetIdRef.current); } catch {}
+        widgetIdRef.current = null;
+      }
+    };
+  }, [cfConfig?.turnstileEnabled, cfConfig?.siteKey]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+
+    if (cfConfig?.turnstileEnabled && !cfToken) {
+      setError("请先通过下方 Cloudflare 人机安全验证");
+      return;
+    }
 
     if (tab === "register") {
       if (password !== confirmPassword) {
@@ -27,9 +152,10 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
       }
       setBusy(true);
       try {
-        const result = await api.register(username, password);
+        const result = await api.register(username, password, cfToken || undefined);
         onLogin(result);
       } catch (value) {
+        resetTurnstile();
         setError(value instanceof Error ? value.message : "注册失败，请稍后重试");
       } finally {
         setBusy(false);
@@ -39,9 +165,10 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
 
     setBusy(true);
     try {
-      const result = await api.login(username, password);
+      const result = await api.login(username, password, cfToken || undefined);
       onLogin(result);
     } catch (value) {
+      resetTurnstile();
       setError(value instanceof Error ? value.message : "登录失败");
     } finally {
       setBusy(false);
@@ -87,7 +214,7 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
             <button
               type="button"
               className={`login-tab-btn${tab === "login" ? " active" : ""}`}
-              onClick={() => { setTab("login"); setError(""); }}
+              onClick={() => { setTab("login"); setError(""); resetTurnstile(); }}
               role="tab"
               aria-selected={tab === "login"}
             >
@@ -96,7 +223,7 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
             <button
               type="button"
               className={`login-tab-btn${tab === "register" ? " active" : ""}`}
-              onClick={() => { setTab("register"); setError(""); setUsername(""); setPassword(""); setConfirmPassword(""); }}
+              onClick={() => { setTab("register"); setError(""); setUsername(""); setPassword(""); setConfirmPassword(""); resetTurnstile(); }}
               role="tab"
               aria-selected={tab === "register"}
             >
@@ -161,6 +288,12 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
                 />
               </div>
             </label>
+          )}
+
+          {cfConfig?.turnstileEnabled && (
+            <div className="login-turnstile-container">
+              <div ref={turnstileContainerRef} id="cf-turnstile-box" />
+            </div>
           )}
 
           {error && <div className="form-error" role="alert">{error}</div>}
