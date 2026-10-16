@@ -484,7 +484,7 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
                 Site Key (站点密钥 / 前端公共密钥)
                 <input
                   type="text"
-                  placeholder="例如：0x4AAAAAAAx..."
+                  placeholder="例如：0x4AAAAAAAxSiteKey..."
                   value={turnstileConfig.siteKey}
                   onChange={(e) => setTurnstileConfig((c) => ({ ...c, siteKey: e.target.value }))}
                 />
@@ -498,7 +498,7 @@ export function SettingsView({ project, isAdmin, onChange, onReload, onMessage }
                 <div className="password-field" style={{ position: "relative", display: "flex", alignItems: "center" }}>
                   <input
                     type={showSecretKey ? "text" : "password"}
-                    placeholder={turnstileConfig.hasSecretKey ? "密钥已安全保存 (留空保持原样)" : "例如：0x4AAAAAAAx..."}
+                    placeholder={turnstileConfig.hasSecretKey ? "密钥已安全保存 (留空保持原样)" : "例如：0x4AAAAAAAxSecretKey..."}
                     value={turnstileConfig.secretKey}
                     onChange={(e) => setTurnstileConfig((c) => ({ ...c, secretKey: e.target.value }))}
                     style={{ width: "100%", paddingRight: "36px" }}
