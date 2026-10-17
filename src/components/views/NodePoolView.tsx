@@ -11,6 +11,7 @@ import type { MihomoConfig, ProxyNode } from "../../shared/types";
 import { copyText } from "../../shared/clipboard";
 import { serializeShareLink } from "../../shared/links";
 import { guideTargets } from "../../guides/registry";
+import { createId } from "../../shared/id";
 import { Modal, Drawer, ConfirmDialog } from "../Dialog";
 import { CountryFlag, FormattedNodeName, COMMON_FLAG_LIST, replaceNodeCountry } from "../CountryFlag";
 
@@ -295,7 +296,9 @@ export function NodePoolView({ config, onConfig, onProjectReload, onMessage, onO
   async function saveRename() {
     if (!renamingNode || !renamingNode.name.trim()) return;
     try {
-      await api.updateManagedNode(renamingNode.id, { ...renamingNode, name: renamingNode.name.trim() });
+      const current = nodes.find((node) => node.id === renamingNode.id);
+      if (!current) throw new Error("节点已不存在，请刷新节点库后重试");
+      await api.updateManagedNode(current.id, { ...current, name: renamingNode.name.trim() });
       await onProjectReload();
       setRenamingNode(null);
       await load(true);

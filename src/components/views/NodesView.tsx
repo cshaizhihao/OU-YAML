@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, KeyRound, MoreHorizontal, Network, Pencil, Plus, Search, Server, Trash2 } from "lucide-react";
 import type { MihomoConfig, ProxyNode, ProxyType } from "../../shared/types";
 import { createId } from "../../shared/id";
-import { ConfirmDialog, Modal } from "../Dialog";
+import { ConfirmDialog, Drawer, Modal } from "../Dialog";
 import { CountryFlag, FormattedNodeName, COMMON_FLAG_LIST, replaceNodeCountry } from "../CountryFlag";
 
 const types: ProxyType[] = ["ss", "ssr", "vmess", "vless", "trojan", "snell", "socks5", "http", "hysteria2", "tuic", "wireguard"];

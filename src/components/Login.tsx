@@ -57,6 +57,7 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
 
   useEffect(() => {
     if (!cfConfig?.turnstileEnabled || !cfConfig.siteKey) return;
+    const siteKey = cfConfig.siteKey;
 
     let destroyed = false;
     const SCRIPT_ID = "cf-turnstile-script";
@@ -69,7 +70,7 @@ export function Login({ onLogin }: { onLogin: (user: SessionUser) => void }) {
       }
       try {
         const id = window.turnstile.render(turnstileContainerRef.current, {
-          sitekey: cfConfig.siteKey,
+          sitekey: siteKey,
           theme: "dark",
           callback: (token: string) => {
             if (!destroyed) {

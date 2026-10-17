@@ -15,7 +15,7 @@ test("用户注册与权限分离集成测试", async (t) => {
   db.prepare("INSERT INTO users (id, username, password_hash, is_admin, is_disabled, created_at) VALUES (?, ?, ?, 0, 0, ?)")
     .run(id, username, passwordHash, now);
 
-  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as { id: string; username: string; is_admin: number; is_disabled: number };
+  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as { id: string; username: string; password_hash: string; is_admin: number; is_disabled: number };
   assert.equal(row.username, username);
   assert.equal(row.is_admin, 0, "注册用户必须默认为非管理员普通用户");
   assert.equal(row.is_disabled, 0, "注册用户必须默认为启用状态");

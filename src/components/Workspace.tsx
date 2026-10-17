@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Boxes, CheckCircle2, ChevronDown, CircleHelp, Database, Download, FileCode2, FolderPlus, Gauge, Group, History, LayoutDashboard, Library, LoaderCircle, LogOut, Menu, Rocket, Rss, Save, ScrollText, Settings, ShieldCheck, TerminalSquare, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, ChevronDown, CircleHelp, Database, Download, FileCode2, FolderPlus, Gauge, Group, History, LayoutDashboard, Library, LoaderCircle, LogOut, MoreHorizontal, Rocket, Rss, Save, ScrollText, Settings, ShieldCheck, TerminalSquare, Upload, XCircle } from "lucide-react";
 import { api } from "../api";
 import { exportMihomoYaml, validateConfig } from "../shared/mihomo";
 import { exportSingBoxJson } from "../shared/singbox";
@@ -90,7 +90,6 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState("");
   const [showIssues, setShowIssues] = useState(false);
-  const [mobileNav, setMobileNav] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [kernelBusy, setKernelBusy] = useState(false);
   const [kernelResult, setKernelResult] = useState<KernelValidationResult | null>(null);
@@ -171,7 +170,6 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
     if (window.location.pathname === routes[next] && !window.location.search) return true;
     if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return false;
     setView(next);
-    setMobileNav(false);
     window.history[replace ? "replaceState" : "pushState"]({}, "", routes[next]);
     currentUrl.current = routes[next];
     setRouteRevision((value) => value + 1);
@@ -181,7 +179,6 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   function editSubscription(id: string, tab: SubscriptionEditorTab) {
     if (!window.dispatchEvent(new Event("ou-yaml:before-navigate", { cancelable: true }))) return;
     setView("subscription");
-    setMobileNav(false);
     const address = `${routes.subscription}?id=${encodeURIComponent(id)}&tab=${tab}`;
     window.history.pushState({}, "", address);
     currentUrl.current = address;
@@ -349,31 +346,26 @@ export function Workspace({ user, onLogout }: { user: SessionUser; onLogout: () 
   const tabs = ["groups", "rules", "preview", "history"].includes(view) ? workspaceTabs : ["generator", "links"].includes(view) ? publishTabs : view === "settings" || view === "admin" ? [{ id: "settings" as View, label: "系统设置", icon: Settings }, ...(user.isAdmin ? [{ id: "admin" as View, label: "用户管理", icon: ShieldCheck }] : [])] : [];
 
   return <div className="workspace">
-    <aside className={mobileNav ? "sidebar mobile-open" : "sidebar"}>
-      <div className="sidebar-brand"><div className="brand-mark"><img src="/brand/ou-yaml-logo.png" alt="OU-YAML" /></div><div><strong>OU-YAML</strong><small>Configuration Studio</small></div><button className="icon-button mobile-only" onClick={() => setMobileNav(false)} aria-label="关闭导航"><XCircle size={20} /></button></div>
-      <nav aria-label="主要导航" data-guide-id={guideTargets.mainNavigation}>{primaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)} aria-label={label} title={`${label}：${hint}`}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span>{id === "nodes" && <b>{project.config.proxies.length}</b>}</button>)}<span className="sidebar-section-label">更多工具</span>{secondaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "nav-item active" : "nav-item"} onClick={() => navigate(id)} aria-label={label} title={`${label}：${hint}`}><Icon size={19} /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</nav>
-      <button className="sidebar-help" data-guide-id={guideTargets.helpButton} aria-label="打开新手教程" onClick={guide.openCenter}><CircleHelp size={17} /><span><strong>新手教程</strong><small>从导入到发布，按步骤完成。</small></span></button>
-      <div className="sidebar-foot"><div className="user-chip"><span>{user.username.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.isAdmin ? "管理员" : "用户"}</small></div></div><button className="icon-button" title="退出登录" aria-label="退出登录" onClick={() => void logout()}><LogOut size={18} /></button></div>
-    </aside>
-    {mobileNav && <button className="mobile-nav-backdrop" onClick={() => setMobileNav(false)} aria-label="关闭导航菜单" />}
-
     <main className={`main-shell${view === "groups" ? " group-workspace" : view === "rules" ? " rules-workspace" : view === "subscription" ? " subscription-workspace" : ""}`}>
-      {view !== "subscription" && <header className="topbar">
-        <button className="icon-button mobile-only" onClick={() => setMobileNav(true)} aria-label="打开导航"><Menu size={20} /></button>
+      <header className="topbar">
+        <div className="topbar-brand"><div className="brand-mark"><img src="/brand/ou-yaml-logo.png" alt="OU-YAML" /></div><div><strong>OU-YAML</strong><small>Nightflight 1.0</small></div></div>
         <div className="project-select-wrap" data-guide-id={guideTargets.projectSelector}><select aria-label="当前配置" title={project.name} value={project.id} onChange={(event) => void chooseProject(event.target.value)}>{projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={15} /></div>
         <button className="icon-button new-project-action" onClick={() => void createProject()} title="新建配置" aria-label="新建配置"><FolderPlus size={18} /></button>
-        <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />草稿保存中</> : status === "dirty" ? <><Save size={15} />等待保存</> : status === "error" ? <><XCircle size={15} />草稿保存失败</> : <><CheckCircle2 size={15} />草稿已保存</>}</div>
-        {status === "error" && <button className="text-button" onClick={() => { statusRef.current = "dirty"; setStatus("dirty"); }}>重试保存草稿</button>}
+        <nav className="top-nav" aria-label="主要导航" data-guide-id={guideTargets.mainNavigation}>{primaryNav.map(({ id, label, hint, icon: Icon, match }) => <button key={id} className={match.includes(view) ? "active" : ""} onClick={() => navigate(id)} aria-label={label} title={`${label}：${hint}`}><Icon size={15} /><span>{id === "home" ? "总览" : id === "sources" ? "订阅" : id === "nodes" ? "节点库" : id === "groups" ? "策略组" : id === "rules" ? "分流规则" : id === "generator" ? "发布诊断" : label}</span>{id === "nodes" && <b>{project.config.proxies.length}</b>}</button>)}
+          <details className="top-more"><summary aria-label="更多工具" title="更多工具"><MoreHorizontal size={17} /></summary><div>{secondaryNav.map(({ id, label, hint, icon: Icon }) => <button key={id} onClick={() => navigate(id)} title={hint}><Icon size={16} />{label}</button>)}<button onClick={() => navigate("preview")}><FileCode2 size={16} />预览校验</button><button onClick={() => navigate("history")}><History size={16} />历史版本</button>{user.isAdmin && <button onClick={() => navigate("admin")}><ShieldCheck size={16} />用户管理</button>}<button onClick={guide.openCenter}><CircleHelp size={16} />新手教程</button></div></details>
+        </nav>
+        <div className="save-state" aria-live="polite">{status === "saving" ? <><Save className="spin" size={15} />保存中</> : status === "dirty" ? <><Save size={15} />待保存</> : status === "error" ? <><XCircle size={15} />保存失败</> : <><CheckCircle2 size={15} />已同步</>}</div>
+        {status === "error" && <button className="text-button" onClick={() => { statusRef.current = "dirty"; setStatus("dirty"); }}>重试</button>}
         <div className="top-actions">
           <button className="secondary-button top-import-action" onClick={() => setShowImport(true)} aria-label="导入配置" title="导入配置"><Upload size={17} /><span>导入配置</span></button>
           <select className="format-select" value={project.targetFormat} onChange={(event) => updateProject((current) => ({ ...current, targetFormat: event.target.value as TargetFormat }))} aria-label="导出格式"><option value="mihomo">YAML</option><option value="sing-box">JSON</option></select>
           <button className="primary-button" onClick={() => void download()} disabled={errors > 0} aria-label="导出" title="导出当前配置"><Download size={17} /><span>导出</span></button>
         </div>
-      </header>}
+        <div className="top-user"><span>{user.username.slice(0, 1).toUpperCase()}</span><button className="icon-button compact" title="退出登录" aria-label="退出登录" onClick={() => void logout()}><LogOut size={17} /></button></div>
+      </header>
       <div className={`mobile-guide-slot${view === "home" ? " mobile-guide-home" : ""}`}><GuideTrigger controller={guide} className="mobile-guide-trigger" /></div>
 
       <div className="page-heading">
-        {view === "subscription" && <button className="icon-button mobile-only" onClick={() => setMobileNav(true)} aria-label="打开导航"><Menu size={20} /></button>}
         <div><div className="eyebrow">{meta.eyebrow}</div><h1>{meta.title}</h1><p>{meta.description}</p></div>
         {view !== "subscription" && view !== "home" && <button className={errors ? "validation-pill error" : issues.length ? "validation-pill warning" : "validation-pill ok"} onClick={() => setShowIssues(!showIssues)}>{errors ? <XCircle size={17} /> : issues.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}{errors ? `${errors} 个错误` : issues.length ? `${issues.length} 个提醒` : "配置正常"}</button>}
       </div>
