@@ -73,6 +73,29 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .config-lines { border-color: rgba(229,162,155,.4); }
 .config-lines i { background: var(--accent); box-shadow: 0 0 10px rgba(229,162,155,.7); }
 .login-form-wrap { background: radial-gradient(circle at 60% 30%, rgba(229,162,155,.08), transparent 45%); }
+.subscription-home { gap: 20px; }
+.home-tasks { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.home-tasks > button { min-height: 82px; padding: 16px 18px; border-radius: 14px; background: rgba(37,35,38,.72); border-color: var(--line); box-shadow: var(--shadow-card); }
+.home-tasks > button::after { background: radial-gradient(circle at 100% 100%, rgba(229,162,155,.14), transparent 62%); }
+.home-tasks > button:hover { background: rgba(52,48,53,.9); border-color: rgba(229,162,155,.42); }
+.home-tasks > button > svg:first-child { color: var(--accent); background: var(--accent-soft); border-color: rgba(229,162,155,.28); }
+.home-tasks strong, .home-subscription-card h3, .home-subscriptions-heading h2 { color: var(--ink); }
+.home-tasks small, .home-subscriptions-heading p { color: var(--ink-soft); }
+.home-subscription-grid { gap: 14px; }
+.home-subscription-card { padding: 20px; border-radius: 16px; background: linear-gradient(145deg, rgba(52,48,53,.82), rgba(30,28,31,.9)); }
+.home-subscription-card::before { background: linear-gradient(90deg, var(--accent), var(--accent-warm)); }
+.subscription-icon { color: var(--accent); background: var(--accent-soft); border-color: rgba(229,162,155,.26); }
+.subscription-health.ok, .subscription-health.success { color: #e5d6d4; background: rgba(185,161,173,.13); border-color: rgba(185,161,173,.3); }
+.subscription-health.warning { color: #f3d4a9; background: rgba(228,182,129,.12); border-color: rgba(228,182,129,.28); }
+.subscription-health.danger, .subscription-health.error { color: #f0b7b7; background: rgba(200,121,130,.13); border-color: rgba(200,121,130,.3); }
+.quick-setup { border-radius: 16px; background: linear-gradient(145deg, rgba(52,48,53,.88), rgba(30,28,31,.94)); }
+.quick-hero { background: radial-gradient(circle at 90% 15%, rgba(229,162,155,.15), transparent 45%); }
+.quick-steps button.active, .quick-presets button.active { color: var(--ink); background: linear-gradient(135deg, rgba(229,162,155,.24), rgba(154,123,136,.14)); border-color: rgba(229,162,155,.52); box-shadow: 0 8px 24px -12px rgba(229,162,155,.65); }
+.quick-steps button.active b { color: #291e20; background: var(--accent); box-shadow: 0 0 12px rgba(229,162,155,.6); }
+.quick-presets button:hover { background: rgba(229,162,155,.1); border-color: rgba(229,162,155,.38); }
+.quick-result code { color: var(--accent-hover); background: rgba(23,23,25,.9); }
+.publish-workflow { border-color: var(--line); background: rgba(37,35,38,.58); }
+@media (max-width: 760px) { .home-tasks { grid-template-columns: 1fr; } .home-tasks > button { min-height: 68px; } .quick-hero, .quick-body { padding-inline: 18px; } .quick-steps { padding-inline: 18px; overflow-x: auto; } .quick-steps button { min-width: 170px; } }
 @media (max-width: 1100px) { .top-nav button { padding-inline: 7px; } .top-nav button span { display: none; } .top-nav button svg { width: 17px; height: 17px; } .topbar-brand { min-width: 132px; } }
 @media (max-width: 760px) { .topbar { height: auto; min-height: 62px; flex-wrap: wrap; padding: 8px max(12px, env(safe-area-inset-left)) 7px max(12px, env(safe-area-inset-right)); } .topbar-brand { flex: 1 1 auto; } .topbar .project-select-wrap { order: 3; flex: 1 1 180px; width: auto; } .top-nav { order: 4; width: 100%; height: 38px; border-top: 1px solid var(--line); } .top-nav button { display: inline-flex; padding-inline: 12px; } .top-nav button span { display: inline; } .top-actions { margin-left: auto; } .top-actions .top-import-action span, .top-actions .primary-button span { display: none; } .top-user { order: 2; } .page-heading, .content-area { width: calc(100% - 28px); padding-left: 0; padding-right: 0; } .groups-content, .rules-workspace .content-area { width: 100%; } }
 @media (max-width: 420px) { .topbar-brand small, .topbar .save-state, .new-project-action { display: none; } .topbar-brand { min-width: 0; } .topbar .project-select-wrap { flex-basis: 150px; } .page-heading h1 { font-size: 22px; } }
