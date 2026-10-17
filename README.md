@@ -1,16 +1,15 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/cshaizhihao/OU-YAML/main/public/brand/ou-yaml-logo.png" alt="OU-YAML Logo" width="176" />
   <h1>OU-YAML</h1>
-  <p><strong>把零散节点，整理成清晰、可靠、可持续更新的配置订阅</strong></p>
-  <p>Cyber Obsidian Glassmorphism 现代科技美学的可视化节点、策略组、规则与订阅发布工作台</p>
+  <p><strong>把零散节点，编排成可持续更新的代理配置</strong></p>
+  <p>Nightflight 夜航控制台：面向 Mihomo 与 sing-box 的可视化订阅工作台</p>
   <p>
     <a href="https://github.com/cshaizhihao/OU-YAML">项目主页</a> ·
     <a href="https://github.com/cshaizhihao/OU-YAML/releases">版本发布</a> ·
     <a href="./CHANGELOG.md">更新记录</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-2.1.0-6366F1?style=flat-square" alt="version" />
-    <img src="https://img.shields.io/badge/UI-V2.1.0-06B6D4?style=flat-square" alt="UI baseline" />
+    <img src="https://img.shields.io/badge/UI-Nightflight-7EF0C8?style=flat-square" alt="Nightflight UI" />
     <img src="https://img.shields.io/badge/Node.js-22%2B-247B78?style=flat-square" alt="Node.js" />
     <img src="https://img.shields.io/badge/Mihomo-supported-D5962A?style=flat-square" alt="Mihomo" />
     <img src="https://img.shields.io/badge/sing--box-supported-76547D?style=flat-square" alt="sing-box" />
@@ -18,6 +17,32 @@
   </p>
   <p>作者：<code>nodeseek@cshaizhihao</code></p>
 </div>
+
+## Nightflight UI
+
+当前界面采用「夜航控制台」视觉方向：深墨绿底色、电光薄荷主色与珊瑚橙状态色，搭配网格背景、环境光、轨道进度和轻量悬停动效。布局使用安全区内边距与可滚动内容区，桌面、平板和手机都能完整操作。
+
+本次界面更新围绕四个方向展开：
+
+- **类**：以订阅、节点、分组、规则、发布五个核心对象组织工作台。
+- **简介**：首页突出配置健康度、下一步工作流和关键数量。
+- **功能**：保留导入、节点筛选、策略组编排、规则模板、预览校验和稳定链接发布闭环。
+- **美观**：统一颜色 token、材质、焦点状态、按钮反馈、响应式边距和 reduced-motion 支持。
+
+在线部署示例：<https://yaml.seekping.com/>（请勿将管理员凭据、订阅令牌或服务器密钥提交到仓库）。
+
+## Nightflight UI
+
+当前版本将 OU-YAML 重新整理为一套更有辨识度的「夜航控制台」视觉系统：深墨绿底色、电光薄荷主色与珊瑚橙状态色，搭配网格星图背景、环境光、轨道进度和克制的悬停动效。布局使用安全区内边距与可滚动内容区，桌面、平板和手机都能完整操作，不依赖固定宽度裁切内容。
+
+这次更新集中在四个方向：
+
+- **类**：以订阅、节点、分组、规则、发布五个核心对象组织工作台，减少无关跳转。
+- **简介**：首页先显示当前配置健康度、下一步工作流和关键数量，复杂能力按需展开。
+- **功能**：导入、节点筛选、策略组编排、规则模板、预览校验和稳定链接发布保持完整闭环。
+- **美观**：统一颜色 token、玻璃材质、焦点状态、按钮反馈、响应式边距和 reduced-motion 支持。
+
+在线部署示例：<https://yaml.seekping.com/>（请使用你自己的管理员账号，不要把账号、订阅令牌或服务器密钥写入仓库）。
 
 ## 🌿 项目介绍
 
