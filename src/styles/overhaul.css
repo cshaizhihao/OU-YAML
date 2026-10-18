@@ -171,6 +171,24 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   background: linear-gradient(145deg, rgba(52,48,53,.88), rgba(30,28,31,.94));
   box-shadow: var(--shadow-card);
 }
+
+/* Publish diagnostics and generation desk share the same warm cockpit language. */
+.generator-layout, .publish-workflow, .published-result, .generator-choice, .generator-preview, .diagnostic-panel {
+  border-color: var(--line);
+  background: linear-gradient(145deg, rgba(52,48,53,.88), rgba(30,28,31,.94));
+  box-shadow: var(--shadow-card);
+  backdrop-filter: var(--glass-blur);
+}
+.generator-layout { border-radius: 16px; }
+.generator-choice.active, .generator-choice:hover { border-color: rgba(229,162,155,.44); background: rgba(229,162,155,.1); }
+.generator-choice strong, .published-result strong { color: var(--ink); }
+.generator-choice small, .published-result small { color: var(--ink-soft); }
+.published-result code, .generator-preview pre { color: var(--accent-hover); background: rgba(23,23,25,.88); border-color: var(--line); }
+.publish-workflow { border-radius: 16px; }
+.publish-workflow .step.active { color: var(--ink); border-color: rgba(229,162,155,.42); background: rgba(229,162,155,.1); }
+.publish-workflow .step-number { color: #291e20; background: var(--accent); }
+.diagnostic-panel .status-ok { color: #d8c5c8; }
+.diagnostic-panel .status-warning { color: var(--accent-warm); }
 .rule-scenario { padding: 16px; border-radius: 16px; }
 .rule-scenario h2 { color: var(--ink); letter-spacing: -.02em; }
 .scenario-fields > label, .rule-sentence-builder > label, .rule-advanced-grid > label { color: var(--ink-soft); }
