@@ -189,6 +189,60 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .publish-workflow .step-number { color: #291e20; background: var(--accent); }
 .diagnostic-panel .status-ok { color: #d8c5c8; }
 .diagnostic-panel .status-warning { color: var(--accent-warm); }
+
+/* Remaining product surfaces: one visual system across sources, subscriptions, settings and auth. */
+.source-manager-toolbar, .source-card, .source-editor, .subscription-editor-shell, .subscription-list, .template-card, .history-list, .settings-section {
+  border-color: var(--line);
+  background: linear-gradient(145deg, rgba(52,48,53,.88), rgba(30,28,31,.94));
+  box-shadow: var(--shadow-card);
+  backdrop-filter: var(--glass-blur);
+}
+.source-manager-toolbar, .source-card, .source-editor, .subscription-editor-shell, .settings-section { border-radius: 16px; }
+.source-card { transition: transform 180ms var(--ease-silk), border-color 180ms var(--ease-silk), box-shadow 180ms var(--ease-silk); }
+.source-card:hover, .template-card:hover { transform: translateY(-4px); border-color: rgba(229,162,155,.42); box-shadow: var(--shadow-hover); }
+.source-card::before { background: var(--accent); box-shadow: 0 0 14px rgba(229,162,155,.55); }
+.source-card.has-error::before { background: var(--danger); box-shadow: 0 0 14px rgba(200,121,130,.55); }
+.source-card-icon, .subscription-icon { color: var(--accent); background: var(--accent-soft); border-color: rgba(229,162,155,.28); }
+.source-card h2, .source-card strong, .template-card h2 { color: var(--ink); }
+.source-card-address, .source-editor textarea, .template-card code { color: var(--ink-soft); background: rgba(23,23,25,.72); border-color: var(--line); }
+.source-card-metrics { border-color: var(--line); }
+.source-card-success { color: #d8c5c8; }
+.source-recovery { background: rgba(200,121,130,.08); border-color: rgba(200,121,130,.28); }
+.source-diagnostics { color: var(--ink-soft); background: rgba(23,23,25,.75); border-color: var(--line); }
+.subscription-editor-shell, .subscription-list, .settings-section, .history-list { overflow: hidden; }
+.subscription-row, .history-row, .template-card { border-color: var(--line); background: rgba(23,23,25,.45); transition: background 180ms var(--ease-silk), transform 180ms var(--ease-silk); }
+.subscription-row:hover, .history-row:hover { background: rgba(229,162,155,.07); }
+.history-icon { color: var(--accent); background: var(--canvas); border-color: rgba(229,162,155,.4); box-shadow: 0 0 20px -8px rgba(229,162,155,.8); }
+.history-line { background: rgba(229,162,155,.28); }
+.history-main h2, .settings-section h2, .settings-section h3 { color: var(--ink); }
+.history-main span, .history-counts, .settings-section p { color: var(--ink-soft); }
+.template-card::before { background: linear-gradient(180deg,var(--accent),var(--accent-warm)); }
+.template-card-meta { border-color: var(--line); }
+.settings-section details, .settings-section .update-log, .settings-section pre { border-color: var(--line); background: rgba(23,23,25,.68); }
+.settings-section .danger-zone { border-color: rgba(200,121,130,.36); background: rgba(200,121,130,.07); }
+.settings-section .success, .settings-section .status-ok { color: #d8c5c8; }
+.login-page { background: #171719; }
+.login-brand { border-color: var(--line); background: radial-gradient(circle at 18% 22%, rgba(229,162,155,.18), transparent 34%), radial-gradient(circle at 80% 78%, rgba(154,123,136,.15), transparent 36%), linear-gradient(145deg,#30282c,#171719 76%); }
+.login-brand::before, .login-brand::after { background: radial-gradient(circle, rgba(229,162,155,.2), transparent 70%); filter: blur(48px); }
+.login-brand h1 { background: linear-gradient(135deg,#f4eee7 0%,#d8c5c8 55%,#e5a29b 100%); -webkit-background-clip:text; }
+.login-brand p, .config-lines { color: var(--ink-soft); }
+.config-lines { background: rgba(23,23,25,.68); border-color: rgba(229,162,155,.34); }
+.config-lines i { background: var(--accent); box-shadow: 0 0 10px rgba(229,162,155,.75); }
+.login-form-wrap { background: radial-gradient(circle at 50% 50%,rgba(229,162,155,.09),transparent 60%); }
+.login-form-wrap::before { background: radial-gradient(circle,rgba(154,123,136,.14),transparent 70%); }
+.login-form { border-color: var(--line-strong); background: rgba(37,35,38,.88); box-shadow: var(--shadow-card), 0 0 30px -10px rgba(229,162,155,.3); }
+.login-form input:-webkit-autofill, .login-form input:-webkit-autofill:hover, .login-form input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 1000px #252326 inset !important; }
+@media (max-width: 760px) {
+  .source-card-grid { grid-template-columns: 1fr; gap: 12px; }
+  .source-manager-toolbar { align-items: stretch; flex-direction: column; }
+  .source-manager-toolbar .row-actions { justify-content: stretch; }
+  .source-manager-toolbar .row-actions > button { flex: 1; }
+  .login-page { grid-template-columns: 1fr; }
+  .login-brand { min-height: 260px; padding: 28px 22px; }
+  .login-brand .config-lines { display: none; }
+  .login-form-wrap { padding: 24px 14px 36px; }
+  .login-form { padding: 28px 20px; }
+}
 .rule-scenario { padding: 16px; border-radius: 16px; }
 .rule-scenario h2 { color: var(--ink); letter-spacing: -.02em; }
 .scenario-fields > label, .rule-sentence-builder > label, .rule-advanced-grid > label { color: var(--ink-soft); }
