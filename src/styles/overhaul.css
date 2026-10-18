@@ -163,3 +163,46 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   .group-overview, .node-pool, .group-canvas, .group-inspector { min-height: 0; height: auto; max-height: none; }
   .group-canvas { padding: 9px; }
 }
+
+/* Rules studio: turn the editor into a calm routing desk instead of a generic purple form. */
+.rules-editor { padding-bottom: 18px; }
+.rule-scenario, .rules-table-wrap, .beginner-rule-card, .rule-issues, .rule-batch-bar, .editor-mode-switch, .rule-advanced-details {
+  border-color: var(--line);
+  background: linear-gradient(145deg, rgba(52,48,53,.88), rgba(30,28,31,.94));
+  box-shadow: var(--shadow-card);
+}
+.rule-scenario { padding: 16px; border-radius: 16px; }
+.rule-scenario h2 { color: var(--ink); letter-spacing: -.02em; }
+.scenario-fields > label, .rule-sentence-builder > label, .rule-advanced-grid > label { color: var(--ink-soft); }
+.scenario-options { color: var(--ink-soft); }
+.route-simulation-card { background: rgba(229,162,155,.1) !important; border-color: rgba(229,162,155,.3) !important; }
+.route-simulation-card svg { color: var(--accent) !important; }
+.rules-toolbar { padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: rgba(37,35,38,.72); }
+.editor-mode-switch { background: rgba(23,23,25,.6); }
+.editor-mode-switch button.active { color: #291e20; background: var(--accent); box-shadow: none; }
+.rule-overview { padding: 4px 2px; color: var(--ink-faint); }
+.rule-overview .ready { color: #d8c5c8; }
+.rule-overview .warning, .rule-issues summary { color: var(--accent-warm); }
+.rule-issues { color: var(--ink-soft); }
+.rule-batch-bar { border-color: rgba(229,162,155,.4); background: rgba(229,162,155,.1); }
+.beginner-rule-card { transition: transform 180ms var(--ease-silk), border-color 180ms var(--ease-silk), box-shadow 180ms var(--ease-silk); }
+.beginner-rule-card:hover, .beginner-rule-card.expanded { transform: translateY(-2px); border-color: rgba(229,162,155,.48); box-shadow: var(--shadow-hover); }
+.beginner-rule-card.match-rule { border-color: rgba(185,161,173,.55); }
+.rule-order { color: var(--accent); background: var(--accent-soft); }
+.rule-summary strong { color: var(--ink); }
+.rule-summary small, .rule-explanation, .rule-advanced-details > summary { color: var(--ink-soft); }
+.rule-inline-editor { border-color: var(--line); background: rgba(23,23,25,.46); }
+.rule-advanced-details { box-shadow: none; }
+.rule-advanced-grid code, .rules-help code { color: var(--accent-hover); background: rgba(23,23,25,.88); }
+.rules-table tr { color: var(--ink); background: rgba(23,23,25,.48); }
+.rules-table tr:hover { background: rgba(229,162,155,.07); }
+.rules-table input:not(.table-check), .rules-table select { color: var(--ink); border-color: var(--line); background: rgba(4,17,15,.55); }
+.rules-table input:focus, .rules-table select:focus { border-color: var(--accent); }
+@media (max-width: 760px) {
+  .rules-toolbar { grid-template-columns: 1fr; }
+  .rules-toolbar > .toolbar-actions { justify-content: stretch; }
+  .rules-toolbar > .toolbar-actions > button { flex: 1; }
+  .rule-scenario { padding: 13px; }
+  .scenario-fields { grid-template-columns: 1fr; }
+  .scenario-options { align-items: flex-start; flex-direction: column; }
+}
